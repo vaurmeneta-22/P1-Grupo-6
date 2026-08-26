@@ -1,0 +1,14 @@
+{
+  "description": "Geometría del Edificio de Ingeniería",
+  "units": "m",
+  "floors": 5,
+  "floor_height": 3.0,
+  "grid_x": [0, 4, 8, 12],
+  "grid_y": [0, 5, 10],
+  "nodes": {},
+  "elements": {},
+  "supports": {},
+  "diaphragms": {},
+  "sections": {},
+  "materials": {}
+}

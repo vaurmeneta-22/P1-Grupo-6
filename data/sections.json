@@ -1,0 +1,16 @@
+{
+  "column_30x30": {
+    "type": "rectangular",
+    "width": 0.30,
+    "height": 0.30,
+    "units": "m",
+    "material": "concrete"
+  },
+  "beam_25x50": {
+    "type": "rectangular",
+    "width": 0.25,
+    "height": 0.50,
+    "units": "m",
+    "material": "concrete"
+  }
+}

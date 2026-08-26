@@ -1,0 +1,14 @@
+{
+  "concrete": {
+    "fck": 25,
+    "units": "MPa",
+    "E": 25000,
+    "density": 2400
+  },
+  "steel": {
+    "fy": 420,
+    "units": "MPa",
+    "E": 200000,
+    "density": 7850
+  }
+}
