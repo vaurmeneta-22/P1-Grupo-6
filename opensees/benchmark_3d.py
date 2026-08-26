@@ -156,24 +156,42 @@ print("\n8 elementos definidos: 4 columnas + 4 vigas")
 # 9. CARGAS - Patron G (carga muerta)
 # ============================================================
 
-# Losa unidireccional en Y -> vigas en X (elems 5, 6) reciben la carga
-# Cada viga recibe Ly/2 de ancho tributario
-trib_x = Ly / 2  # 4.45 m
-w_G = q_G * trib_x  # 27.72 kN/m
+# Losa bidireccional, reparto a 45 grados a las 4 vigas perimetrales
+# h = mitad del vano menor = Ly/2 = 4.45 m
+h_trib = min(Lx, Ly) / 2  # 4.45 m
 
-print(f"\nCarga G:")
+# Viga X (elems 5, 6): carga trapecial
+# Area trapecial = (Lx + (Lx - 2*h)) / 2 * h
+trap_area_x = (Lx + (Lx - 2 * h_trib)) / 2 * h_trib
+F_viga_x = q_G * trap_area_x  # carga total por viga X
+w_eq_x = F_viga_x / Lx  # carga uniforme equivalente
+
+# Viga Y (elems 7, 8): carga triangular
+# Area triangular = Ly * h / 2
+tri_area_y = Ly * h_trib / 2
+F_viga_y = q_G * tri_area_y  # carga total por viga Y
+w_eq_y = F_viga_y / Ly  # carga uniforme equivalente
+
+# Verificacion: suma total debe ser q_G * Lx * Ly
+F_total_check = 2 * F_viga_x + 2 * F_viga_y
+
+print(f"\nCarga G - Losa bidireccional (reparto 45 grados):")
 print(f"  q_G = {q_G:.2f} kN/m2")
-print(f"  Tributario por viga X: {trib_x:.2f} m")
-print(f"  w_G = {w_G:.2f} kN/m (distribuida sobre vigas 5 y 6)")
+print(f"  h_trib = {h_trib:.2f} m (mitad del vano menor)")
+print(f"  Viga X: area trapecial = {trap_area_x:.2f} m2, F = {F_viga_x:.2f} kN, w_eq = {w_eq_x:.2f} kN/m")
+print(f"  Viga Y: area triangular = {tri_area_y:.2f} m2, F = {F_viga_y:.2f} kN, w_eq = {w_eq_y:.2f} kN/m")
+print(f"  Verificacion total: {F_total_check:.2f} kN = q_G x Lx x Ly = {q_G * Lx * Ly:.2f} kN")
 
 ops.timeSeries('Linear', 1)
 ops.pattern('Plain', 1, 1)
 
-# Carga distribuida en vigas X (elems 5 y 6)
+# Carga distribuida en las 4 vigas perimetrales
 # local_z = global_Z para vigas con vecxz=(0,0,1)
 # wz negativo = carga hacia abajo (-Z global)
-ops.eleLoad('-ele', 5, '-type', '-beamUniform', 0.0, -w_G)
-ops.eleLoad('-ele', 6, '-type', '-beamUniform', 0.0, -w_G)
+ops.eleLoad('-ele', 5, '-type', '-beamUniform', 0.0, -w_eq_x)
+ops.eleLoad('-ele', 6, '-type', '-beamUniform', 0.0, -w_eq_x)
+ops.eleLoad('-ele', 7, '-type', '-beamUniform', 0.0, -w_eq_y)
+ops.eleLoad('-ele', 8, '-type', '-beamUniform', 0.0, -w_eq_y)
 
 # ============================================================
 # 10. ANALISIS - CARGA G
@@ -287,13 +305,14 @@ for i in [1, 2, 3, 4]:
 # 13. VERIFICACION DE EQUILIBRIO
 # ============================================================
 
-F_total = q_G * Lx * Ly  # w_G * Lx * 2 = q_G * trib_x * Lx * 2 = q_G * Ly * Lx
+F_total = q_G * Lx * Ly
 
 print("\n" + "=" * 60)
 print("VERIFICACION DE EQUILIBRIO")
 print("=" * 60)
 print(f"Carga aplicada: q_G x Lx x Ly = {q_G:.2f} x {Lx:.1f} x {Ly:.1f} = {F_total:.2f} kN")
-print(f"  (w_G x Lx x 2 vigas = {w_G:.2f} x {Lx:.1f} x 2 = {w_G*Lx*2:.2f} kN)")
+print(f"  Vigas X: 2 x {F_viga_x:.2f} = {2*F_viga_x:.2f} kN")
+print(f"  Vigas Y: 2 x {F_viga_y:.2f} = {2*F_viga_y:.2f} kN")
 print(f"Suma reacciones: {R_total:.2f} kN")
 print(f"Error: {abs(R_total - F_total):.2e} kN")
 
@@ -322,8 +341,9 @@ output = {
     "materials": {"E": E, "G": G, "fck": 35e3, "fy": 420e3},
     "loads": {
         "q_G": round(q_G, 4), "q_SC": round(q_sc, 4),
-        "trib_x": trib_x, "w_G": round(w_G, 4),
-        "type": "distributed (eleLoad beamUniform on beam elements 5 and 6)"
+        "h_trib": h_trib,
+        "w_eq_x": round(w_eq_x, 4), "w_eq_y": round(w_eq_y, 4),
+        "type": "bidirectional 45deg, equivalent uniform (eleLoad beamUniform)"
     },
     "nodes": {},
     "elements": {},
