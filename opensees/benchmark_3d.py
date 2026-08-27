@@ -137,18 +137,18 @@ ops.section('Elastic', 2, E, A_vig, Iy_vig, Iz_vig, G, J_vig)
 # ============================================================
 
 # Columnas (base -> cabeza)
-ops.element('elasticBeamColumn', 1, 1, 5, E, A_col, Iy_col, Iz_col, G, J_col, 1)
-ops.element('elasticBeamColumn', 2, 2, 6, E, A_col, Iy_col, Iz_col, G, J_col, 1)
-ops.element('elasticBeamColumn', 3, 3, 7, E, A_col, Iy_col, Iz_col, G, J_col, 1)
-ops.element('elasticBeamColumn', 4, 4, 8, E, A_col, Iy_col, Iz_col, G, J_col, 1)
+ops.element('elasticBeamColumn', 1, 1, 5, A_col, E, G, J_col, Iy_col, Iz_col, 1)
+ops.element('elasticBeamColumn', 2, 2, 6, A_col, E, G, J_col, Iy_col, Iz_col, 1)
+ops.element('elasticBeamColumn', 3, 3, 7, A_col, E, G, J_col, Iy_col, Iz_col, 1)
+ops.element('elasticBeamColumn', 4, 4, 8, A_col, E, G, J_col, Iy_col, Iz_col, 1)
 
 # Vigas en X
-ops.element('elasticBeamColumn', 5, 5, 6, E, A_vig, Iy_vig, Iz_vig, G, J_vig, 2)
-ops.element('elasticBeamColumn', 6, 7, 8, E, A_vig, Iy_vig, Iz_vig, G, J_vig, 2)
+ops.element('elasticBeamColumn', 5, 5, 6, A_vig, E, G, J_vig, Iy_vig, Iz_vig, 2)
+ops.element('elasticBeamColumn', 6, 7, 8, A_vig, E, G, J_vig, Iy_vig, Iz_vig, 2)
 
 # Vigas en Y
-ops.element('elasticBeamColumn', 7, 5, 7, E, A_vig, Iy_vig, Iz_vig, G, J_vig, 2)
-ops.element('elasticBeamColumn', 8, 6, 8, E, A_vig, Iy_vig, Iz_vig, G, J_vig, 2)
+ops.element('elasticBeamColumn', 7, 5, 7, A_vig, E, G, J_vig, Iy_vig, Iz_vig, 2)
+ops.element('elasticBeamColumn', 8, 6, 8, A_vig, E, G, J_vig, Iy_vig, Iz_vig, 2)
 
 print("\n8 elementos definidos: 4 columnas + 4 vigas")
 
