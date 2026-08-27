@@ -44,7 +44,7 @@ G = E / (2 * (1 + nu))  # kN/m2
 q_pp = 375 * 9.81 / 1000   # 3.68 kN/m2
 q_pmad = 260 * 9.81 / 1000 # 2.55 kN/m2
 q_sc = 300 * 9.81 / 1000   # 2.94 kN/m2
-q_G = q_pp + q_pmad         # 6.23 kN/m2
+q_G = q_pp + q_pmad + q_sc        
 
 print("=" * 60)
 print("BENCHMARK 3D - MARCO 1V x 1V")
