@@ -201,7 +201,23 @@ for w in WALLS:
                 A_w, w["E"], G_w, J_w, Iy_w, Iz_w, 1)
 
 # ============================================================
-# 9. CARGAS - Patron G (carga muerta)
+# 9. DIAFRAGMA RIGIDO DEL PISO
+# ============================================================
+# Un diafragma rigido por piso. Constriñe en el plano (ux, uy, rz) de todos los
+# nodos del piso al nodo maestro. La direccion perpendicular al plano del
+# diafragma es Z (dirn=3). Se deja libre uz, rx, ry (flexion vertical).
+#
+# El nodo maestro debe ser un nodo ESTRUCTURAL (con rigidez propia): se usa el
+# nodo 9 (union central inferior, conectado a las vigas 5, 6 y 11). Un nodo
+# maestro "flotante" (sin elementos) deja DOF singulares y el analisis falla.
+MASTER = 9
+master_x, master_y, _ = ops.nodeCoord(MASTER)
+ops.rigidDiaphragm(3, MASTER, 5, 6, 7, 8, 10)
+print(f"\nDiafragma rigido en z={H_eje:.2f} m: master nodo {MASTER} "
+      f"({master_x:.2f}, {master_y:.2f}), esclavos 5,6,7,8,10")
+
+# ============================================================
+# 10. CARGAS - Patron G (carga muerta)
 # ============================================================
 
 # Losa bidireccional dividida en 2 paños (104 y 105), reparto a 45 grados.
@@ -259,12 +275,14 @@ for eid, w in w_loads.items():
     ops.eleLoad('-ele', eid, '-type', '-beamUniform', 0.0, -w)
 
 # ============================================================
-# 10. ANALISIS - CARGA G
+# 11. ANALISIS - CARGA G
 # ============================================================
 
 ops.system('BandSPD')
 ops.numberer('RCM')
-ops.constraints('Plain')
+# Se requiere Transformation (no Plain) para eliminar correctamente los DOF
+# esclavos del diafragma rigido (ux, uy, rz de los nodos del piso).
+ops.constraints('Transformation')
 ops.integrator('LoadControl', 1.0)
 ops.algorithm('Linear')
 ops.analysis('Static')
@@ -279,7 +297,7 @@ ops.reactions()
 print("\n[OK] Analisis completado")
 
 # ============================================================
-# 11. EJES LOCALES (para transformar eleForce global -> local)
+# 12. EJES LOCALES (para transformar eleForce global -> local)
 # ============================================================
 
 def compute_local_axes(i_node, j_node, vecxz):
@@ -331,7 +349,7 @@ for eid, ed in elem_data.items():
     local_axes[eid] = (lx, ly, lz)
 
 # ============================================================
-# 12. RESULTADOS — CARGA G
+# 13. RESULTADOS — CARGA G
 # ============================================================
 
 print("\n--- DESPLAZAMIENTOS ---")
@@ -370,7 +388,44 @@ for i in [1, 2, 3, 4]:
     print(f"  R nodo {i}: Fx={r[0]:.2f}, Fy={r[1]:.2f}, Fz={r[2]:.2f}")
 
 # ============================================================
-# 13. VERIFICACION DE EQUILIBRIO
+# 14. VERIFICACION DE COMPATIBILIDAD DEL DIAFRAGMA
+# ============================================================
+# El diafragma rigido impone que todos los nodos del piso se muevan en planta
+# como un disco rigido con el movimiento del nodo maestro (ux_m, uy_m, rz_m):
+#   ux_i = ux_m - rz_m*(y_i - y_m)
+#   uy_i = uy_m + rz_m*(x_i - x_m)
+# Se comparan los desplazamientos reales de cada nodo esclavo contra esa
+# prediccion rigida; deben coincidir (error ~ maquina).
+
+print("\n" + "=" * 60)
+print("VERIFICACION DE COMPATIBILIDAD DEL DIAFRAGMA")
+print("=" * 60)
+d_m = ops.nodeDisp(MASTER)
+ux_m, uy_m, rz_m = d_m[0], d_m[1], d_m[5]
+master_x, master_y, _ = ops.nodeCoord(MASTER)
+print(f"  Master nodo {MASTER} (x={master_x:.2f}, y={master_y:.2f}): "
+      f"ux={ux_m*1000:.5f} mm, uy={uy_m*1000:.5f} mm, rz={rz_m:.3e} rad")
+
+max_err = 0.0
+for n in [5, 6, 7, 8, 10]:
+    x, y, _ = ops.nodeCoord(n)
+    d = ops.nodeDisp(n)
+    ux_pred = ux_m - rz_m * (y - master_y)
+    uy_pred = uy_m + rz_m * (x - master_x)
+    errx = d[0] - ux_pred
+    erry = d[1] - uy_pred
+    err = max(abs(errx), abs(erry))
+    max_err = max(max_err, err)
+    print(f"  Nodo {n}: ux={d[0]*1000:.5f} mm (pred {ux_pred*1000:.5f}), "
+          f"uy={d[1]*1000:.5f} mm (pred {uy_pred*1000:.5f}), err={err:.3e} m")
+
+if max_err < 1e-9:
+    print("[OK] DIAFRAGMA COMPATIBLE: todos los nodos del piso se mueven como un disco rigido")
+else:
+    print("[ERROR] DIAFRAGMA INCOMPATIBLE")
+
+# ============================================================
+# 15. VERIFICACION DE EQUILIBRIO
 # ============================================================
 
 F_total = q_G * Lx * Ly
@@ -390,7 +445,7 @@ else:
     print("[ERROR] EQUILIBRIO NO VERIFICADO")
 
 # ============================================================
-# 14. EXPORTAR
+# 16. EXPORTAR
 # ============================================================
 
 output = {
@@ -475,7 +530,7 @@ print(f"Reacciones:  {R_total:.2f} kN")
 print(f"Desplaz max: uz = {disp[5][2]*1000:.4f} mm")
 
 # ============================================================
-# 15. TABLA RESUMEN DE LAS 7 VIGAS DEL PISO
+# 17. TABLA RESUMEN DE LAS 7 VIGAS DEL PISO
 # ============================================================
 beam_labels = {
     5: "Viga inferior izq",  6: "Viga inferior der",
