@@ -48,7 +48,60 @@
     "w_eq_y_central": 32.9792,
     "W_losas": 816.3392,
     "W_vigas": 816.3392,
+    "sum_trib_area": 89.0,
+    "A_floor": 89.0,
     "type": "bidirectional 45deg, 2 pa\u00f1os (104/105), equivalent uniform (eleLoad beamUniform)"
+  },
+  "loads_by_element": {
+    "5": {
+      "tipo": "X i izq",
+      "length": 5.0,
+      "area_tributaria_m2": 6.25,
+      "load_from_slab_kN": 57.327188,
+      "w_eq_kN_m": 11.465438
+    },
+    "6": {
+      "tipo": "X i der",
+      "length": 5.0,
+      "area_tributaria_m2": 6.25,
+      "load_from_slab_kN": 57.327188,
+      "w_eq_kN_m": 11.465438
+    },
+    "7": {
+      "tipo": "X s izq",
+      "length": 5.0,
+      "area_tributaria_m2": 6.25,
+      "load_from_slab_kN": 57.327188,
+      "w_eq_kN_m": 11.465438
+    },
+    "8": {
+      "tipo": "X s der",
+      "length": 5.0,
+      "area_tributaria_m2": 6.25,
+      "load_from_slab_kN": 57.327188,
+      "w_eq_kN_m": 11.465438
+    },
+    "9": {
+      "tipo": "Y lat izq",
+      "length": 8.9,
+      "area_tributaria_m2": 16.0,
+      "load_from_slab_kN": 146.7576,
+      "w_eq_kN_m": 16.489618
+    },
+    "10": {
+      "tipo": "Y lat der",
+      "length": 8.9,
+      "area_tributaria_m2": 16.0,
+      "load_from_slab_kN": 146.7576,
+      "w_eq_kN_m": 16.489618
+    },
+    "11": {
+      "tipo": "Y central",
+      "length": 8.9,
+      "area_tributaria_m2": 32.0,
+      "load_from_slab_kN": 293.5152,
+      "w_eq_kN_m": 32.979236
+    }
   },
   "nodes": {
     "1": {

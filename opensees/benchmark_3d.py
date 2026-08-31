@@ -246,31 +246,42 @@ W_losas = q_G * Lx * Ly                       # q_G * 89.0 m2
 W_vigas = 4 * F_viga_x + 2 * F_viga_y_lat + 1 * F_viga_y_cen
 diff = W_vigas - W_losas
 
+# Áreas tributarias EXPLICITAS por viga (para el inspector y la demo).
+# ancho_trib equival = area_trib / longitud (ancho de franja que le toca a la viga)
+tributary = {
+    5:  {"tipo": "X i izq",   "L": Lx_elem, "area": tri_area_x,     "F": F_viga_x,     "w": w_eq_x},
+    6:  {"tipo": "X i der",   "L": Lx_elem, "area": tri_area_x,     "F": F_viga_x,     "w": w_eq_x},
+    7:  {"tipo": "X s izq",   "L": Lx_elem, "area": tri_area_x,     "F": F_viga_x,     "w": w_eq_x},
+    8:  {"tipo": "X s der",   "L": Lx_elem, "area": tri_area_x,     "F": F_viga_x,     "w": w_eq_x},
+    9:  {"tipo": "Y lat izq", "L": Sy,      "area": trap_area_y_lat, "F": F_viga_y_lat, "w": w_eq_y_lat},
+    10: {"tipo": "Y lat der", "L": Sy,      "area": trap_area_y_lat, "F": F_viga_y_lat, "w": w_eq_y_lat},
+    11: {"tipo": "Y central", "L": Sy,      "area": trap_area_y_cen, "F": F_viga_y_cen, "w": w_eq_y_cen},
+}
+sum_trib_area = sum(t["area"] for t in tributary.values())
+sum_trib_F = sum(t["F"] for t in tributary.values())
+
 print(f"\nCarga G - 2 losas (104 y 105), reparto 45 grados:")
 print(f"  Losa 104 = 5.00 x 8.90 m ; Losa 105 = 5.00 x 8.90 m")
 print(f"  q_G = {q_G:.2f} kN/m2, h_trib (por paño) = {h_trib:.2f} m")
-print(f"  Viga X (4 elems 5.00 m): area triangular/elem = {tri_area_x:.2f} m2, w_eq = {w_eq_x:.2f} kN/m")
-print(f"  Viga lateral Y: area trapecial = {trap_area_y_lat:.2f} m2, w_eq = {w_eq_y_lat:.2f} kN/m")
-print(f"  Viga central Y: area trapecial (2 paños) = {trap_area_y_cen:.2f} m2, w_eq = {w_eq_y_cen:.2f} kN/m")
-print(f"\n--- COMPROBACION DE CARGAS ---")
-print(f"  Carga total teorica de las losas      : {W_losas:.4f} kN")
-print(f"  Carga total distribuida entre las vigas: {W_vigas:.4f} kN")
-print(f"  Diferencia                             : {diff:.4e} kN")
+print(f"\n  {'Elem':<6}{'Direc':<12}{'L (m)':<7}{'Area trib (m2)':<15}{'Ancho eq (m)':<13}{'Carga losa (kN)':<16}{'w (kN/m)':<11}")
+for eid in [5, 6, 7, 8, 9, 10, 11]:
+    t = tributary[eid]
+    b_eq = t["area"] / t["L"]
+    print(f"  {eid:<6}{t['tipo']:<12}{t['L']:<7.3f}{t['area']:<15.3f}{b_eq:<13.3f}{t['F']:<16.3f}{t['w']:<11.4f}")
+print(f"\n--- COMPROBACION DE CARGAS / AREAS TRIBUTARIAS ---")
+print(f"  Area de losa total (Lx x Ly)            : {Lx*Ly:.4f} m2")
+print(f"  Suma de areas tributarias de las vigas  : {sum_trib_area:.4f} m2")
+print(f"  Diferencia de areas                     : {sum_trib_area - Lx*Ly:.4e} m2")
+print(f"  Carga total teorica de las losas        : {W_losas:.4f} kN")
+print(f"  Carga total distribuida entre las vigas : {W_vigas:.4f} kN")
+print(f"  Diferencia de cargas                    : {diff:.4e} kN")
 
 ops.timeSeries('Linear', 1)
 ops.pattern('Plain', 1, 1)
 
 # Carga distribuida en las 7 vigas del piso
 # local_z = global_Z para vigas con vecxz=(0,0,1); wz negativo = carga hacia abajo
-w_loads = {
-    5: w_eq_x,        # inferior izq
-    6: w_eq_x,        # inferior der
-    7: w_eq_x,        # superior izq
-    8: w_eq_x,        # superior der
-    9: w_eq_y_lat,    # lateral izq
-    10: w_eq_y_lat,   # lateral der
-    11: w_eq_y_cen,   # central (doble aporte)
-}
+w_loads = {eid: tributary[eid]["w"] for eid in [5, 6, 7, 8, 9, 10, 11]}
 for eid, w in w_loads.items():
     ops.eleLoad('-ele', eid, '-type', '-beamUniform', 0.0, -w)
 
@@ -471,7 +482,18 @@ output = {
         "w_eq_y_central": round(w_eq_y_cen, 4),
         "W_losas": round(W_losas, 4),
         "W_vigas": round(W_vigas, 4),
+        "sum_trib_area": round(sum_trib_area, 4),
+        "A_floor": round(Lx * Ly, 4),
         "type": "bidirectional 45deg, 2 paños (104/105), equivalent uniform (eleLoad beamUniform)"
+    },
+    "loads_by_element": {
+        str(eid): {
+            "tipo": tributary[eid]["tipo"],
+            "length": round(tributary[eid]["L"], 6),
+            "area_tributaria_m2": round(tributary[eid]["area"], 6),
+            "load_from_slab_kN": round(tributary[eid]["F"], 6),
+            "w_eq_kN_m": round(tributary[eid]["w"], 6),
+        } for eid in [5, 6, 7, 8, 9, 10, 11]
     },
     "nodes": {},
     "elements": {},
@@ -538,14 +560,14 @@ beam_labels = {
     9: "Viga lateral izq",  10: "Viga lateral der",
     11: "Viga central Y",
 }
-print("\n" + "=" * 78)
+print("\n" + "=" * 92)
 print("TABLA DE VIGAS DEL PISO (carga uniforme aplicada por elemento)")
-print("=" * 78)
-print(f"{'Elem':<6}{'Tipo':<24}{'Nod ini':<9}{'Nod fin':<9}{'Long (m)':<10}{'Carga (kN/m)':<14}")
+print("=" * 92)
+print(f"{'Elem':<6}{'Tipo':<24}{'Nod ini':<9}{'Nod fin':<9}{'Long (m)':<10}{'A.trib (m2)':<12}{'kN losa':<10}{'w (kN/m)':<12}")
 for eid in [5, 6, 7, 8, 9, 10, 11]:
     n0, n1 = elem_data[eid]["nodes"]
     xi, yi, zi = ops.nodeCoord(n0); xj, yj, zj = ops.nodeCoord(n1)
     import math
     L = math.sqrt((xj-xi)**2 + (yj-yi)**2 + (zj-zi)**2)
-    w = w_loads[eid]
-    print(f"{eid:<6}{beam_labels[eid]:<24}{n0:<9}{n1:<9}{L:<10.3f}{w:<14.4f}")
+    t = tributary[eid]
+    print(f"{eid:<6}{beam_labels[eid]:<24}{n0:<9}{n1:<9}{L:<10.3f}{t['area']:<12.3f}{t['F']:<10.3f}{t['w']:<12.4f}")
