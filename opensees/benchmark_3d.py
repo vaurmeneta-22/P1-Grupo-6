@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-Benchmark 3D - Marco 1 vano x 1 vano
+Benchmark 3D - Marco con viga central (2 paños de losa)
 Grupo 6 - Semana 1 - LAB
 
 Geometria:
   1000 cm x 890 cm (a ejes)
-  4 columnas 70x70 cm, altura eje viga = 356 cm
-  4 vigas 60x80 cm
+  4 columnas 70x70 cm en las esquinas, altura eje viga = 356 cm
+  7 vigas 60x80 cm (perimetrales + viga central en Y en x = 5.00 m)
   Apoyos empotrados en las 4 esquinas
-  Losa 15 cm descargada sobre vigas en X
+  Losa dividida en 2 paños: 104 (5.00 x 8.90) y 105 (5.00 x 8.90)
+  La viga central NO tiene columnas (nodos centrales solo de conexion)
 
 Materiales:
   f'c = 35 MPa, E = 27.8 GPa
@@ -32,6 +33,8 @@ Lx = 10.0        # vano en X (m)
 Ly = 8.9         # vano en Y (m)
 H_eje = 3.56     # altura del eje de viga (m) = 396 - 40 cm
 
+Lx_mid = Lx / 2.0   # x = 5.00 m: ubicacion de la viga central en Y
+
 b_col = 0.70     # columna ancho (m)
 h_col = 0.70     # columna alto (m)
 b_vig = 0.60     # viga ancho (m)
@@ -47,7 +50,7 @@ q_sc = 300 * 9.81 / 1000   # 2.94 kN/m2
 q_G = q_pp + q_pmad +q_sc        
 
 print("=" * 60)
-print("BENCHMARK 3D - MARCO 1V x 1V")
+print("BENCHMARK 3D - MARCO CON VIGA CENTRAL (2 PAÑOS DE LOSA)")
 print("=" * 60)
 print(f"Geometria: {Lx*100:.0f} cm x {Ly*100:.0f} cm")
 print(f"Altura eje viga: {H_eje*100:.0f} cm")
@@ -96,7 +99,12 @@ ops.node(6, Lx,   0.0,  H_eje)
 ops.node(7, 0.0,  Ly,   H_eje)
 ops.node(8, Lx,   Ly,   H_eje)
 
-for i in range(1, 9):
+# Nodos centrales a nivel de viga (x = Lx_mid = 5.00 m)
+# Solo conexion entre vigas. NO llevan columna.
+ops.node(9,  Lx_mid, 0.0, H_eje)
+ops.node(10, Lx_mid, Ly,  H_eje)
+
+for i in range(1, 11):
     x, y, z = ops.nodeCoord(i)
     print(f"  Nodo {i}: ({x:.2f}, {y:.2f}, {z:.2f})")
 
@@ -142,56 +150,113 @@ ops.element('elasticBeamColumn', 2, 2, 6, A_col, E, G, J_col, Iy_col, Iz_col, 1)
 ops.element('elasticBeamColumn', 3, 3, 7, A_col, E, G, J_col, Iy_col, Iz_col, 1)
 ops.element('elasticBeamColumn', 4, 4, 8, A_col, E, G, J_col, Iy_col, Iz_col, 1)
 
-# Vigas en X
-ops.element('elasticBeamColumn', 5, 5, 6, A_vig, E, G, J_vig, Iy_vig, Iz_vig, 2)
-ops.element('elasticBeamColumn', 6, 7, 8, A_vig, E, G, J_vig, Iy_vig, Iz_vig, 2)
+# Vigas (elementos 5 a 11). Las vigas de 10.00 m se dividen en dos de 5.00 m
+# por la viga central (x = Lx_mid).
 
-# Vigas en Y
-ops.element('elasticBeamColumn', 7, 5, 7, A_vig, E, G, J_vig, Iy_vig, Iz_vig, 2)
-ops.element('elasticBeamColumn', 8, 6, 8, A_vig, E, G, J_vig, Iy_vig, Iz_vig, 2)
+# Vigas inferiores (y = 0.00 m)
+ops.element('elasticBeamColumn', 5, 5, 9,  A_vig, E, G, J_vig, Iy_vig, Iz_vig, 2)  # inf izq (0->5)
+ops.element('elasticBeamColumn', 6, 9, 6,  A_vig, E, G, J_vig, Iy_vig, Iz_vig, 2)  # inf der (5->10)
 
-print("\n8 elementos definidos: 4 columnas + 4 vigas")
+# Vigas superiores (y = 8.90 m)
+ops.element('elasticBeamColumn', 7, 7, 10, A_vig, E, G, J_vig, Iy_vig, Iz_vig, 2)  # sup izq (0->5)
+ops.element('elasticBeamColumn', 8, 10, 8, A_vig, E, G, J_vig, Iy_vig, Iz_vig, 2)  # sup der (5->10)
+
+# Vigas laterales (en Y, x = 0 y x = 10)
+ops.element('elasticBeamColumn', 9, 5, 7,  A_vig, E, G, J_vig, Iy_vig, Iz_vig, 2)  # lateral izq
+ops.element('elasticBeamColumn', 10, 6, 8, A_vig, E, G, J_vig, Iy_vig, Iz_vig, 2)  # lateral der
+
+# Viga central (en Y, x = Lx_mid = 5.00 m)
+ops.element('elasticBeamColumn', 11, 9, 10, A_vig, E, G, J_vig, Iy_vig, Iz_vig, 2)
+
+print("\n11 elementos definidos: 4 columnas + 7 vigas")
+
+# ============================================================
+# MUROS ESTRUCTURALES (preparacion - desactivados por defecto)
+# ============================================================
+# Se modelan como elementos 'equivalent wall' (elasticBeamColumn con seccion
+# de muro: rectangulo de L_f x t), segun la convencion del proyecto
+# (AGENTS.md). Son verticales (transf 1, igual que las columnas) y conectan
+# piso a piso entre dos nodos del eje del muro.
+#
+# Para activar un muro completo WALLS con un dict, por ejemplo:
+#   WALLS = [
+#       {"id": 20, "nodes": (9, 10), "L_f": 5.0, "t": 0.20,
+#        "E": 27.8e6, "nu": 0.2},
+#   ]
+# Los nodos ("nodes") DEBEN existir (uno por piso a lo largo del muro).
+# Mientras WALLS este vacio no se crea ningun muro y no hay conflicto de tags.
+WALLS = [
+    # {"id": 20, "nodes": (9, 10), "L_f": 5.0, "t": 0.20, "E": 27.8e6, "nu": 0.2},
+]
+
+for w in WALLS:
+    sec_id = 100 + w["id"]                     # tags de seccion de muro (evita conflictos)
+    A_w  = w["L_f"] * w["t"]
+    Iy_w = w["t"] * w["L_f"]**3 / 12.0         # flexion fuerte (en el plano del muro)
+    Iz_w = w["L_f"] * w["t"]**3 / 12.0         # flexion debil (fuera del plano)
+    G_w  = w["E"] / (2.0 * (1.0 + w["nu"]))
+    J_w  = 0.208 * w["t"] * w["L_f"]**3
+    ops.section('Elastic', sec_id, w["E"], A_w, Iy_w, Iz_w, G_w, J_w)
+    ops.element('elasticBeamColumn', w["id"], w["nodes"][0], w["nodes"][1],
+                A_w, w["E"], G_w, J_w, Iy_w, Iz_w, 1)
 
 # ============================================================
 # 9. CARGAS - Patron G (carga muerta)
 # ============================================================
 
-# Losa bidireccional, reparto a 45 grados a las 4 vigas perimetrales
-# h = mitad del vano menor = Ly/2 = 4.45 m
-h_trib = min(Lx, Ly) / 2  # 4.45 m
+# Losa bidireccional dividida en 2 paños (104 y 105), reparto a 45 grados.
+# Cada paño mide Sx x Sy = 5.00 x 8.90 m (Sx = Lx/2, Sy = Ly).
+# La viga central (x = 5.00 m) es borde de ambos paños y recibe de los dos lados.
+Sx = Lx / 2.0       # vano corto del paño (dimension X) = 5.00 m
+Sy = Ly             # vano largo del paño (dimension Y) = 8.90 m
+h_trib = Sx / 2.0   # reparto a 45 grados: mitad del vano menor del paño = 2.50 m
 
-# Viga X (elems 5, 6): carga trapecial
-# Area trapecial = (Lx + (Lx - 2*h)) / 2 * h
-trap_area_x = (Lx + (Lx - 2 * h_trib)) / 2 * h_trib
-F_viga_x = q_G * trap_area_x  # carga total por viga X
-w_eq_x = F_viga_x / Lx  # carga uniforme equivalente
+# Vigas que corren en X (superior/inferior, 4 elementos de 5.00 m): carga TRIANGULAR
+Lx_elem = Sx                    # 5.00 m
+tri_area_x = Lx_elem * h_trib / 2.0          # area por elemento = 6.25 m2
+F_viga_x = q_G * tri_area_x                  # carga total por elemento X
+w_eq_x = F_viga_x / Lx_elem                  # carga uniforme equivalente (kN/m)
 
-# Viga Y (elems 7, 8): carga triangular
-# Area triangular = Ly * h / 2
-tri_area_y = Ly * h_trib / 2
-F_viga_y = q_G * tri_area_y  # carga total por viga Y
-w_eq_y = F_viga_y / Ly  # carga uniforme equivalente
+# Vigas que corren en Y (laterales y central), largo Sy = 8.90 m: carga TRAPECIAL
+trap_area_y_lat = (Sy + (Sy - 2 * h_trib)) / 2.0 * h_trib   # area por lateral = 16.0 m2
+trap_area_y_cen = 2.0 * trap_area_y_lat                     # central: aporte de ambos paños = 32.0 m2
+F_viga_y_lat = q_G * trap_area_y_lat
+w_eq_y_lat = F_viga_y_lat / Sy
+F_viga_y_cen = q_G * trap_area_y_cen
+w_eq_y_cen = F_viga_y_cen / Sy
 
-# Verificacion: suma total debe ser q_G * Lx * Ly
-F_total_check = 2 * F_viga_x + 2 * F_viga_y
+# Comprobacion de conservacion de carga de las losas
+W_losas = q_G * Lx * Ly                       # q_G * 89.0 m2
+W_vigas = 4 * F_viga_x + 2 * F_viga_y_lat + 1 * F_viga_y_cen
+diff = W_vigas - W_losas
 
-print(f"\nCarga G - Losa bidireccional (reparto 45 grados):")
-print(f"  q_G = {q_G:.2f} kN/m2")
-print(f"  h_trib = {h_trib:.2f} m (mitad del vano menor)")
-print(f"  Viga X: area trapecial = {trap_area_x:.2f} m2, F = {F_viga_x:.2f} kN, w_eq = {w_eq_x:.2f} kN/m")
-print(f"  Viga Y: area triangular = {tri_area_y:.2f} m2, F = {F_viga_y:.2f} kN, w_eq = {w_eq_y:.2f} kN/m")
-print(f"  Verificacion total: {F_total_check:.2f} kN = q_G x Lx x Ly = {q_G * Lx * Ly:.2f} kN")
+print(f"\nCarga G - 2 losas (104 y 105), reparto 45 grados:")
+print(f"  Losa 104 = 5.00 x 8.90 m ; Losa 105 = 5.00 x 8.90 m")
+print(f"  q_G = {q_G:.2f} kN/m2, h_trib (por paño) = {h_trib:.2f} m")
+print(f"  Viga X (4 elems 5.00 m): area triangular/elem = {tri_area_x:.2f} m2, w_eq = {w_eq_x:.2f} kN/m")
+print(f"  Viga lateral Y: area trapecial = {trap_area_y_lat:.2f} m2, w_eq = {w_eq_y_lat:.2f} kN/m")
+print(f"  Viga central Y: area trapecial (2 paños) = {trap_area_y_cen:.2f} m2, w_eq = {w_eq_y_cen:.2f} kN/m")
+print(f"\n--- COMPROBACION DE CARGAS ---")
+print(f"  Carga total teorica de las losas      : {W_losas:.4f} kN")
+print(f"  Carga total distribuida entre las vigas: {W_vigas:.4f} kN")
+print(f"  Diferencia                             : {diff:.4e} kN")
 
 ops.timeSeries('Linear', 1)
 ops.pattern('Plain', 1, 1)
 
-# Carga distribuida en las 4 vigas perimetrales
-# local_z = global_Z para vigas con vecxz=(0,0,1)
-# wz negativo = carga hacia abajo (-Z global)
-ops.eleLoad('-ele', 5, '-type', '-beamUniform', 0.0, -w_eq_x)
-ops.eleLoad('-ele', 6, '-type', '-beamUniform', 0.0, -w_eq_x)
-ops.eleLoad('-ele', 7, '-type', '-beamUniform', 0.0, -w_eq_y)
-ops.eleLoad('-ele', 8, '-type', '-beamUniform', 0.0, -w_eq_y)
+# Carga distribuida en las 7 vigas del piso
+# local_z = global_Z para vigas con vecxz=(0,0,1); wz negativo = carga hacia abajo
+w_loads = {
+    5: w_eq_x,        # inferior izq
+    6: w_eq_x,        # inferior der
+    7: w_eq_x,        # superior izq
+    8: w_eq_x,        # superior der
+    9: w_eq_y_lat,    # lateral izq
+    10: w_eq_y_lat,   # lateral der
+    11: w_eq_y_cen,   # central (doble aporte)
+}
+for eid, w in w_loads.items():
+    ops.eleLoad('-ele', eid, '-type', '-beamUniform', 0.0, -w)
 
 # ============================================================
 # 10. ANALISIS - CARGA G
@@ -251,10 +316,13 @@ elem_data = {
     2: {"nodes": (2, 6), "vecxz": (1,0,0), "label": "Col 2"},
     3: {"nodes": (3, 7), "vecxz": (1,0,0), "label": "Col 3"},
     4: {"nodes": (4, 8), "vecxz": (1,0,0), "label": "Col 4"},
-    5: {"nodes": (5, 6), "vecxz": (0,0,1), "label": "Viga 5(5->6)"},
-    6: {"nodes": (7, 8), "vecxz": (0,0,1), "label": "Viga 6(7->8)"},
-    7: {"nodes": (5, 7), "vecxz": (0,0,1), "label": "Viga 7(5->7)"},
-    8: {"nodes": (6, 8), "vecxz": (0,0,1), "label": "Viga 8(6->8)"},
+    5:  {"nodes": (5, 9),  "vecxz": (0,0,1), "label": "Viga Inferior Izq (5->9)"},
+    6:  {"nodes": (9, 6),  "vecxz": (0,0,1), "label": "Viga Inferior Der (9->6)"},
+    7:  {"nodes": (7, 10), "vecxz": (0,0,1), "label": "Viga Superior Izq (7->10)"},
+    8:  {"nodes": (10, 8), "vecxz": (0,0,1), "label": "Viga Superior Der (10->8)"},
+    9:  {"nodes": (5, 7),  "vecxz": (0,0,1), "label": "Viga Lateral Izq (5->7)"},
+    10: {"nodes": (6, 8),  "vecxz": (0,0,1), "label": "Viga Lateral Der (6->8)"},
+    11: {"nodes": (9, 10), "vecxz": (0,0,1), "label": "Viga Central Y (9->10)"},
 }
 
 local_axes = {}
@@ -268,7 +336,7 @@ for eid, ed in elem_data.items():
 
 print("\n--- DESPLAZAMIENTOS ---")
 disp = {}
-for i in range(1, 9):
+for i in range(1, 11):
     d = ops.nodeDisp(i)
     disp[i] = d
     if i >= 5:
@@ -286,7 +354,7 @@ for i in [1, 2, 3, 4]:
 
 print("\n--- FUERZAS VIGAS (locales) ---")
 beam_forces = {}
-for i in [5, 6, 7, 8]:
+for i in [5, 6, 7, 8, 9, 10, 11]:
     f_global = list(ops.eleForce(i))
     lx, ly, lz = local_axes[i]
     f_local = global_to_local(f_global, lx, ly, lz)
@@ -311,8 +379,7 @@ print("\n" + "=" * 60)
 print("VERIFICACION DE EQUILIBRIO")
 print("=" * 60)
 print(f"Carga aplicada: q_G x Lx x Ly = {q_G:.2f} x {Lx:.1f} x {Ly:.1f} = {F_total:.2f} kN")
-print(f"  Vigas X: 2 x {F_viga_x:.2f} = {2*F_viga_x:.2f} kN")
-print(f"  Vigas Y: 2 x {F_viga_y:.2f} = {2*F_viga_y:.2f} kN")
+print(f"  Vigas (7 elems): 4 x {F_viga_x:.2f} + 2 x {F_viga_y_lat:.2f} + 1 x {F_viga_y_cen:.2f} = {W_vigas:.2f} kN")
 print(f"Suma reacciones: {R_total:.2f} kN")
 print(f"Error: {abs(R_total - F_total):.2e} kN")
 
@@ -328,7 +395,7 @@ else:
 
 output = {
     "model": {
-        "description": "Benchmark 3D - Marco 1v x 1v",
+        "description": "Benchmark 3D - Marco con viga central (2 paños de losa)",
         "ndm": 3,
         "ndf": 6,
         "units": {"length": "m", "force": "kN", "moment": "kN*m"}
@@ -336,14 +403,20 @@ output = {
     "geometry": {
         "Lx": Lx, "Ly": Ly, "H_eje": H_eje,
         "column": {"b": b_col, "h": h_col},
-        "beam": {"b": b_vig, "h": h_vig}
+        "beam": {"b": b_vig, "h": h_vig},
+        "slabs": {"104": {"Lx": Lx/2, "Ly": Ly}, "105": {"Lx": Lx/2, "Ly": Ly}},
+        "central_beam_x": Lx_mid
     },
     "materials": {"E": E, "G": G, "fck": 35e3, "fy": 420e3},
     "loads": {
         "q_G": round(q_G, 4), "q_SC": round(q_sc, 4),
-        "h_trib": h_trib,
-        "w_eq_x": round(w_eq_x, 4), "w_eq_y": round(w_eq_y, 4),
-        "type": "bidirectional 45deg, equivalent uniform (eleLoad beamUniform)"
+        "h_trib": round(h_trib, 4),
+        "w_eq_x": round(w_eq_x, 4),
+        "w_eq_y_lateral": round(w_eq_y_lat, 4),
+        "w_eq_y_central": round(w_eq_y_cen, 4),
+        "W_losas": round(W_losas, 4),
+        "W_vigas": round(W_vigas, 4),
+        "type": "bidirectional 45deg, 2 paños (104/105), equivalent uniform (eleLoad beamUniform)"
     },
     "nodes": {},
     "elements": {},
@@ -354,7 +427,7 @@ output = {
     }
 }
 
-for i in range(1, 9):
+for i in range(1, 11):
     x, y, z = ops.nodeCoord(i)
     fix = [1,1,1,1,1,1] if i <= 4 else [0,0,0,0,0,0]
     d = disp[i]
@@ -400,3 +473,24 @@ print(f"{'='*60}")
 print(f"Carga total: {F_total:.2f} kN")
 print(f"Reacciones:  {R_total:.2f} kN")
 print(f"Desplaz max: uz = {disp[5][2]*1000:.4f} mm")
+
+# ============================================================
+# 15. TABLA RESUMEN DE LAS 7 VIGAS DEL PISO
+# ============================================================
+beam_labels = {
+    5: "Viga inferior izq",  6: "Viga inferior der",
+    7: "Viga superior izq",  8: "Viga superior der",
+    9: "Viga lateral izq",  10: "Viga lateral der",
+    11: "Viga central Y",
+}
+print("\n" + "=" * 78)
+print("TABLA DE VIGAS DEL PISO (carga uniforme aplicada por elemento)")
+print("=" * 78)
+print(f"{'Elem':<6}{'Tipo':<24}{'Nod ini':<9}{'Nod fin':<9}{'Long (m)':<10}{'Carga (kN/m)':<14}")
+for eid in [5, 6, 7, 8, 9, 10, 11]:
+    n0, n1 = elem_data[eid]["nodes"]
+    xi, yi, zi = ops.nodeCoord(n0); xj, yj, zj = ops.nodeCoord(n1)
+    import math
+    L = math.sqrt((xj-xi)**2 + (yj-yi)**2 + (zj-zi)**2)
+    w = w_loads[eid]
+    print(f"{eid:<6}{beam_labels[eid]:<24}{n0:<9}{n1:<9}{L:<10.3f}{w:<14.4f}")
