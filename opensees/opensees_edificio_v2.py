@@ -370,12 +370,13 @@ def main():
 
     piso_vertical = []
     n_losa = 0
+    ya_soportado = set(support_tags) | set(floating_supports)
     for (rx, ry, rz), tag in pos_key.items():
         x_cm, y_cm, z_cm = rx / CM_TO_M, ry / CM_TO_M, rz / CM_TO_M
         if z_cm < 356.0:         # subterraneo: lo maneja (a)/columnas/muros
             continue
-        if tag in support_tags:
-            continue
+        if tag in ya_soportado:
+            continue               # ya apoyo real o master de (a): no duplicar
         prev = [p for p in sorted(col_tops.keys()) if p < z_cm - 0.1]
         has_col = False
         if prev:
@@ -385,16 +386,13 @@ def main():
             continue               # tiene columna bajo
         if muro_cubre(x_cm, y_cm, z_cm):
             continue               # dentro de un muro
-        try:
-            # Suelo vertical: uz + minimo rx,ry. Verificado: solo uz deja el
-            # mecanismo de giro fuera del plano (matriz singular, analyze -3);
-            # rx/ry son los DOF que quitan ese modo y generan PAR, no reaccion
-            # lateral. ux/uy/rz los condiciona el diafragma del piso.
-            ops.fix(tag, 0, 0, 1, 1, 1, 0)
-            piso_vertical.append(tag)
-            n_losa += 1
-        except Exception:
-            pass                   # ya apoyado (master de (a), etc.)
+        # Suelo vertical: uz + minimo rx,ry. Solo uz deja el mecanismo de giro
+        # fuera del plano (matriz singular, analyze -3); rx/ry son los DOF que
+        # quitan ese modo y generan PAR, no reaccion lateral. ux/uy/rz los
+        # condiciona el diafragma del piso.
+        ops.fix(tag, 0, 0, 1, 1, 1, 0)
+        piso_vertical.append(tag)
+        n_losa += 1
     piso_vertical = sorted(set(piso_vertical))
 
     if floating_supports or piso_vertical:
