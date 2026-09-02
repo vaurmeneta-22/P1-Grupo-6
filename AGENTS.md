@@ -16,6 +16,13 @@ SI. Siempre: kN, m, kg, Pa, N·m. Todos los campos JSON deben tener unidades exp
 - Slabs are NOT modeled with FE.
 - Floor gravity load = slab self weight + uniform finishes → q_G.
 - Slab loads transferred through tributary areas (explicit, mandatory).
+- Since slabs are not modeled, cantilever/edge slab-frame nodes at floors without a
+  column or wall directly below get a vertical support (uz, rx, ry restrained) that
+  represents the slab's vertical holding. Applied uniformly to ALL floor nodes meeting
+  that condition, so structurally identical edge nodes (e.g. 43/76/109 on x=−2500) are
+  treated exactly the same (user directive: "no node left isolated; tie it to the
+  nearest one / treat like 43/109"). One vertical support is also added per connected
+  component that has no foundation, on its most-connected node.
 - RC capacity analysis (fiber sections) is SEPARATE from the global model.
 - Fiber sections for M-phi and P-M curves.
 
