@@ -1,0 +1,72 @@
+using UnityEngine;
+
+public class CameraController : MonoBehaviour
+{
+    public Transform target;
+    public float distance = 20f;
+    public float rotationSpeed = 3f;
+    public float panSpeed = 0.02f;
+    public float zoomSpeed = 1f;
+    public float minDistance = 2f;
+    public float maxDistance = 120f;
+
+    private float rotX = 30f;
+    private float rotY = -30f;
+    private Vector3 panOffset = Vector3.zero;
+
+    void Start()
+    {
+        if (target == null)
+        {
+            target = new GameObject("CameraTarget").transform;
+            target.position = new Vector3(25f, 9f, 8f);
+        }
+
+        // Sincronizar con la posicion inicial que haya puesto el loader
+        Vector3 toTarget = target.position - transform.position;
+        distance = Mathf.Clamp(toTarget.magnitude, minDistance, maxDistance);
+        if (toTarget.sqrMagnitude > 0.0001f)
+        {
+            Vector3 dir = toTarget.normalized;
+            rotX = Mathf.Asin(Mathf.Clamp(dir.y, -1f, 1f)) * Mathf.Rad2Deg;
+            rotY = -Mathf.Atan2(dir.x, -dir.z) * Mathf.Rad2Deg;
+        }
+        UpdatePosition();
+    }
+
+    void Update()
+    {
+        if (Input.GetMouseButton(0))
+        {
+            rotY += Input.GetAxis("Mouse X") * rotationSpeed;
+            rotX -= Input.GetAxis("Mouse Y") * rotationSpeed;
+            rotX = Mathf.Clamp(rotX, -89f, 89f);
+            UpdatePosition();
+        }
+
+        if (Input.GetMouseButton(1))
+        {
+            Vector3 right = transform.right;
+            Vector3 up = transform.up;
+            panOffset -= right * Input.GetAxis("Mouse X") * panSpeed * distance;
+            panOffset += up * Input.GetAxis("Mouse Y") * panSpeed * distance;
+            UpdatePosition();
+        }
+
+        float scroll = Input.GetAxis("Mouse ScrollWheel");
+        if (Mathf.Abs(scroll) > 0.001f)
+        {
+            distance -= scroll * zoomSpeed * distance;
+            distance = Mathf.Clamp(distance, minDistance, maxDistance);
+            UpdatePosition();
+        }
+    }
+
+    void UpdatePosition()
+    {
+        Quaternion rotation = Quaternion.Euler(rotX, rotY, 0);
+        Vector3 position = target.position + panOffset + rotation * new Vector3(0, 0, -distance);
+        transform.position = position;
+        transform.LookAt(target.position + panOffset);
+    }
+}
