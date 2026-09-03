@@ -1,4 +1,4 @@
-﻿id,piso,x_cm,y_cm,z_cm,ux_mm,uy_mm,uz_mm,u_planta_mm,rx_rad,ry_rad,rz_rad
+id,piso,x_cm,y_cm,z_cm,ux_mm,uy_mm,uz_mm,u_planta_mm,rx_rad,ry_rad,rz_rad
 1,Subterraneo,0,0,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
 2,Subterraneo,0,725.0,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
 3,Subterraneo,0,1615.0,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0

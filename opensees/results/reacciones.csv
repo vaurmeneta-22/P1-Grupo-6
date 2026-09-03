@@ -1,4 +1,4 @@
-﻿id,piso,x_cm,y_cm,z_cm,Fx_kN,Fy_kN,Fz_kN,Mx_kNm,My_kNm,Mz_kNm
+id,piso,x_cm,y_cm,z_cm,Fx_kN,Fy_kN,Fz_kN,Mx_kNm,My_kNm,Mz_kNm
 1,Subterraneo,0,0,0,0.515009,0.373231,20.535077,-0.664351,0.916715,-0.013772
 2,Subterraneo,0,725.0,0,0.605913,0.373231,20.535077,-0.664351,1.078526,-0.013772
 3,Subterraneo,0,1615.0,0,0.717507,0.373231,20.535077,-0.664351,1.277162,-0.013772

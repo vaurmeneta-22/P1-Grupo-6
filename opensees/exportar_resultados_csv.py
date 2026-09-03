@@ -107,7 +107,7 @@ def main():
     # ---------- 1. Desplazamientos ----------
     disp = data["displacements_m"]
     out1 = os.path.join(RESULTS, "desplazamientos.csv")
-    with open(out1, "w", newline="", encoding="utf-8-sig") as f:
+    with open(out1, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["id", "piso", "x_cm", "y_cm", "z_cm",
                     "ux_mm", "uy_mm", "uz_mm", "u_planta_mm",
@@ -131,7 +131,7 @@ def main():
     # ---------- 2. Reacciones ----------
     reac = data["reactions_kN"]
     out2 = os.path.join(RESULTS, "reacciones.csv")
-    with open(out2, "w", newline="", encoding="utf-8-sig") as f:
+    with open(out2, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["id", "piso", "x_cm", "y_cm", "z_cm",
                     "Fx_kN", "Fy_kN", "Fz_kN", "Mx_kNm", "My_kNm", "Mz_kNm"])
@@ -174,7 +174,7 @@ def main():
 
     forces = data["element_forces_global"]
     out3 = os.path.join(RESULTS, "fuerzas_elementos.csv")
-    with open(out3, "w", newline="", encoding="utf-8-sig") as f:
+    with open(out3, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["id", "tipo", "seccion", "b_cm", "h_cm", "A_m2",
                     "nodo_i", "nodo_j",

@@ -1,4 +1,4 @@
-﻿id,tipo,seccion,b_cm,h_cm,A_m2,nodo_i,nodo_j,xi_cm,yi_cm,zi_cm,xj_cm,yj_cm,zj_cm,L_m,Fx_kN,Fy_kN,Fz_kN,Mx_kNm,My_kNm,Mz_kNm
+id,tipo,seccion,b_cm,h_cm,A_m2,nodo_i,nodo_j,xi_cm,yi_cm,zi_cm,xj_cm,yj_cm,zj_cm,L_m,Fx_kN,Fy_kN,Fz_kN,Mx_kNm,My_kNm,Mz_kNm
 1,column,70x70,70.0,70.0,0.49,1,7,0,0,0,0,0,356.0,3.56,0.515009,0.373231,0.0,-0.664351,0.916715,-0.013772
 2,column,70x70,70.0,70.0,0.49,4,10,-1000,0,0,-1000,0,356.0,3.56,0.515009,0.498617,0.0,-0.887538,0.916715,-0.013772
 3,column,70x70,70.0,70.0,0.49,2,8,0,725.0,0,0,725.0,356.0,3.56,0.605913,0.373231,0.0,-0.664351,1.078526,-0.013772
