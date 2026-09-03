@@ -18,6 +18,31 @@ Laboratorio estructural digital que combina:
 | AR | AR Foundation + Image Tracking |
 | Datos | JSON (contrato OpenSees↔Unity) |
 
+## Funcionalidades del visor Unity
+
+El visor replica las interacciones del `edificio_3d.html`:
+
+- **5 diafragmas rígidos** (niveles 3.56, 7.12, 10.68, 14.24 y 17.8 m) por la huella real de piso: plano casi transparente con borde cian y triangulación de polígono cóncavo (tecla `D`).
+- **Capas alternables por familia** a través de teclas, igual que el panel de checkboxes del HTML.
+- **Inspector por clic**: al hacer clic sobre una viga, columna, muro o losa se muestra un panel con sus propiedades y, en vigas, el área tributaria y las **cargas** G (permanente) y Q (sobrecarga) calculadas en el análisis.
+- **Modo hormigón** (`H`): pinta todo el edificio en tonos de concreto (fundaciones más oscuras).
+
+### Atajos de teclado
+
+| Tecla | Acción |
+|-------|--------|
+| `C` | Alternar columnas |
+| `X` | Alternar vigas X |
+| `Y` | Alternar vigas Y |
+| `W` | Alternar muros |
+| `L` | Alternar lozas |
+| `P` | Alternar apoyos (fundaciones) |
+| `N` | Alternar nodos |
+| `E` | Alternar solo los ejes |
+| `D` | Alternar diafragmas rígidos |
+| `H` | Modo hormigón (concreto claro / fundaciones oscuras) |
+| Clic izquierdo | Inspector de propiedades y cargas del elemento |
+
 ## Estructura
 
 ```
@@ -31,8 +56,9 @@ Laboratorio estructural digital que combina:
 │   └── results/          # Resultados exportados (JSON)
 ├── Unity/                # Proyecto Unity
 │   └── Assets/
-│       ├── Scripts/      # EdificioLoader.cs, CameraController.cs
-│       └── StreamingAssets/Edificio.json   # Copia que Unity lee en runtime
+│       ├── Scripts/      # EdificioLoader.cs, CameraController.cs,
+│       │                 # DiaphragmData.cs, ElementTag.cs, TributaryInspector.cs
+│       └── StreamingAssets/   # Edificio.json + tributary_map.js (leídos en runtime)
 ├── data/                 # Datos compartidos (geometría, materiales, secciones)
 ├── tests/                # Verificaciones
 ├── scripts/              # Utilidades (scripts/html_to_json.py)
@@ -70,9 +96,11 @@ python benchmark_3d.py
 ### Unity
 1. Abrir `Unity/` como proyecto en Unity Hub (requiere Unity 6 / 6000.x).
 2. Al abrir por primera vez Unity regenera `Library/` y los paquetes (toma unos minutos).
-3. Pulsar Play para ver el edificio: columnas, vigas, muros y lozas.
+3. Pulsar Play para ver el edificio: columnas, vigas, muros, lozas y los 5 diafragmas.
+4. Hacer clic en un elemento para abrir su inspector (propiedades y cargas tributarias G/Q en las vigas).
+5. Usar las teclas de la tabla anterior para alternar capas, ejes y el modo hormigón.
 
-Si se actualizó `Edificio.json`, copiarlo a `Unity/Assets/StreamingAssets/Edificio.json` (o seguir el flujo del visor con `html_to_json.py`).
+Si se actualizó `Edificio.json`, copiarlo a `Unity/Assets/StreamingAssets/Edificio.json` (o seguir el flujo del visor con `html_to_json.py`). El inspector por clic lee sus cargas desde `StreamingAssets/tributary_map.js` (generado por el análisis tributario); ambos deben estar sincronizados con el `Edificio.json`.
 
 ## Verificaciones
 
