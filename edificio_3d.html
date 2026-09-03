@@ -1464,6 +1464,9 @@ spherical.theta -= dx * 0.01;
   // GAMMA_CONC unificada (24 kN/m3 x 9.81 => 23.544 kN/m3). Peso propio de viga
   // = gamma * (b*h m) * L.
   const GAMMA_CONC = 23.544;
+  // Mismas convenciones que opensees_edificio_v2.py (solo presentacion):
+  const TERMINACIONES_KNM2 = 2.0;   // terminaciones uniformes sobre losa (G)
+  const SOBRECARGA_KNM2 = 2.0;      // sobrecarga de uso sobre losa (Q)
 
   function nombrePiso(yi) {
     if (yi < 3.56) return 'Subterraneo';
@@ -1569,13 +1572,32 @@ spherical.theta -= dx * 0.01;
       .distanceTo(new THREE.Vector3(ud.xi, ud.yi, ud.zi));
     const direction = (ud.type === 'beam_x') ? 'X (plano) y fija' : 'Y (plano) x fija';
     const b = ud.b, h = ud.h;
-    // peso propio de la viga (gamma * b*h * L)
-    const selfW = GAMMA_CONC * b * h * L;
-    // total por componente: losa(terminaciones incorporadas) + linea + pp
-    const WgL = t.Wg, WqL = t.Wq;
-    const WgLin = t.pG * L, WqLin = t.pQ * L;
-    const WgTot = WgL + WgLin + selfW;
-    const WqTot = WqL + WqLin;
+
+    // --- PRINCIPIO: W_G = q_G_superficial * At  y  p_G = W_G / L, son la
+    // MISMACARGA expresada de dos formas. NUNCA se suman W y p*L.
+    // W_G  proviene de cargas_para_vigas(): W_G = w_m2 * At,  p_G = w_m2*At/L.
+    const W_G = t.Wg;          // carga tributaria TOTAL de losa (kN)  = q_G*At
+    const W_Q = t.Wq;          // carga tributaria de sobrecarga (kN)  = q_Q*At
+    const p_G = t.pG;          // equivalente lineal G (kN/m)  = W_G / L
+    const p_Q = t.pQ;          // equivalente lineal Q (kN/m)  = W_Q / L
+
+    // q_G superficial total (kN/m2) = W_G / At. Lo descomponemos en peso
+    // estructural de losa + terminaciones (mismas convenciones de v2).
+    const At = t.A;
+    const qG_total_m2 = At > 0 ? (W_G / At) : 0;
+    const losa_estructural_m2 = Math.max(0, qG_total_m2 - TERMINACIONES_KNM2);
+    const term_m2 = TERMINACIONES_KNM2;
+
+    // Peso propio de la viga (gamma * b*h * L), aplicado NODALMENTE en OpenSees
+    // (W/2 en cada extremo), UNA sola vez, solo en el caso G.
+    const W_PP = GAMMA_CONC * b * h * L;
+    const p_PP = L > 0 ? (W_PP / L) : 0;
+
+    // Totales REALES aplicados:
+    const W_G_total = W_G + W_PP;          // losa + terminaciones + peso propio viga
+    const p_G_total = (W_G_total / L);     // equivalente lineal
+    // Q NO incluye peso propio (sobrecarga sola):
+    const W_Q_total = W_Q;
 
     const esc = (v) => v.toFixed(2);
     return [
@@ -1585,16 +1607,32 @@ spherical.theta -= dx * 0.01;
       'Direccion: ' + direction,
       'Longitud: ' + esc(L) + ' m',
       'Seccion: ' + t.sec + ' (' + (b*100).toFixed(0) + 'x' + (h*100).toFixed(0) + ' cm)',
-      'Area tributaria At: ' + esc(t.A) + ' m2   (ancho ' + esc(L > 0 ? t.A/L : 0) + ' m)',
+      'Area tributaria At: ' + esc(At) + ' m2',
+      'Ancho tributario (At/L): ' + esc(L > 0 ? At/L : 0) + ' m',
       '',
-      'CARGA G (losa+terminaciones 2.0 kN/m2):',
-      '  q_losa W=' + esc(WgL) + ' kN  |  q_lin p=' + esc(t.pG) + ' kN/m (' + esc(WgLin) + ' kN)',
-      'CARGA Q (sobrecarga 2.0 kN/m2):',
-      '  q_losa W=' + esc(WqL) + ' kN  |  q_lin p=' + esc(t.pQ) + ' kN/m (' + esc(WqLin) + ' kN)',
-      'Peso propio viga (' + t.sec + ', L=' + esc(L) + ' m): ' + esc(selfW) + ' kN',
+      'CARGA PERMANENTE G (sobre losa):',
+      '  Losa estructural (' + Math.round(losa_estructural_m2/ (GAMMA_CONC/1000.0)) + ' cm): ' + esc(losa_estructural_m2) + ' kN/m2',
+      '  Terminaciones: ' + esc(term_m2) + ' kN/m2',
+      '  q_G superficial total: ' + esc(qG_total_m2) + ' kN/m2',
+      '  W_G tributario (q_G * At): ' + esc(W_G) + ' kN',
+      '  p_G equivalente (W_G / L): ' + esc(p_G) + ' kN/m   (= ' + esc(W_G) + ' kN  sobre la viga)',
       '',
-      'TOTAL G = ' + esc(WgTot) + ' kN   (losa ' + esc(WgL) + ' + linea ' + esc(WgLin) + ' + pp ' + esc(selfW) + ')',
-      'TOTAL Q = ' + esc(WqTot) + ' kN   (losa ' + esc(WqL) + ' + linea ' + esc(WqLin) + ')'
+      'PESO PROPIO DE LA VIGA:',
+      '  W_PP (gamma x b x h x L): ' + esc(W_PP) + ' kN',
+      '  p_PP equivalente (W_PP / L): ' + esc(p_PP) + ' kN/m',
+      '',
+      'TOTAL G (aplicado a la viga):',
+      '  W_G,total = W_G + W_PP = ' + esc(W_G_total) + ' kN',
+      '  p_G,total (W_G,total / L) = ' + esc(p_G_total) + ' kN/m',
+      '',
+      'CARGA VARIABLE Q (sobre losa):',
+      '  q_Q: ' + esc(SOBRECARGA_KNM2) + ' kN/m2',
+      '  W_Q tributario (q_Q * At): ' + esc(W_Q) + ' kN',
+      '  p_Q equivalente (W_Q / L): ' + esc(p_Q) + ' kN/m',
+      '  TOTAL Q = W_Q = ' + esc(W_Q_total) + ' kN',
+      '',
+      'NOTA: p_G y p_Q son representaciones EQUIVALENTES de W (misma carga, ' +
+      'no se suman). El peso propio de la viga se aplica NODALMENTE en OpenSees (una sola vez).'
     ];
   }
 
