@@ -36,7 +36,11 @@ import os
 import math
 
 # Modulo local de areas tributarias (mismo directorio)
-from areas_tributarias import cargas_para_vigas, cargar_contrato
+from areas_tributarias import (
+    cargas_para_vigas,
+    cargar_contrato,
+    verificar_areas_tributarias,
+)
 
 # ---------------------------------------------------------------------------
 # CONFIG
@@ -61,6 +65,20 @@ E_CONC = 25.0e6            # kN/m2 (25 GPa)
 NU = 0.2
 G_CONC = E_CONC / (2.0 * (1.0 + NU))
 GAMMA_CONC = 2400.0 * 9.81 / 1000.0   # kN/m3 = 23.544
+
+# ---------------------------------------------------------------------------
+# CARGAS GRAVITACIONALES por m2 de LOSA (kN/m2)
+#   q_G = peso propio de losa (gamma*t) + TERMINACIONES
+#   q_Q = SOBRECARGA (caso de uso / SÍSMICO - Q)
+# Los valores de terminaciones y sobrecarga vienen del enunciado/planos;
+# ajustar aqui segun el modelo real.
+# ---------------------------------------------------------------------------
+TERMINACIONES_KNM2 = 2.0      # terminaciones uniformes sobre losa (kN/m2)
+SOBRECARGA_KNM2 = 2.0         # sobrecarga de uso sobre losa (kN/m2)
+
+# Casos a correr (G = gravedad completa, Q = sobrecarga sola)
+RUN_CASE_G = True
+RUN_CASE_Q = True
 
 
 def load_json(path):
@@ -106,7 +124,12 @@ def sec_rect(b, h):
     return A, Iy, Iz, J
 
 
-def main():
+def run_case(case_name="G"):
+    """Arma el modelo completo del edificio (536 nodos), aplica un caso de carga
+    gravitacional y verifica. `case_name`:
+      - 'G': q_G = peso propio de losa + TERMINACIONES + peso propio estructural
+      - 'Q': q_Q = SOBRECARGA sola
+    Cada caso se construye desde cero (ops.wipe) para asegurar estado limpio."""
     data = load_json(JSON_PATH)
 
     nodes_json = data["nodes"]
@@ -415,6 +438,8 @@ def main():
     #    Maestro = nodo no-soporte con mayor grado de conexion en el piso.
     #    Esclavos = resto de nodos del piso (excepto soportes y maestro).
     # ------------------------------------------------------------------
+    diaphragm_flag = False   # una bandera por piso creado (para compatibilidad)
+    diaphragm_sets = []      # (master, z_m, [slaves]) para verificacion de compatibilidad
     if USE_DIAPHRAGM:
         # agrupar por NIVEL EXACTO (misma z) -> el rigidDiaphragm exige
         # que maestro y esclavos esten en el mismo plano xy.
@@ -439,6 +464,8 @@ def main():
                 continue
             # dirn=3 => plano 1-2 (ux, uy, rz) constrenido al maestro
             ops.rigidDiaphragm(3, master, *slaves)
+            diaphragm_flag = True
+            diaphragm_sets.append((master, z, slaves))
             print(f"  [DIAFRAGMA] {fl:12s} z={z:6.2f} m: master={master} "
                   f"esclavos={len(slaves)}")
     else:
@@ -468,19 +495,56 @@ def main():
         nodal.setdefault(i, [0.0, 0.0, 0.0])[2] -= half
         nodal.setdefault(j, [0.0, 0.0, 0.0])[2] -= half
 
+    self_weight_kN = total_W      # peso propio de elementos estructurales (kN)
+
+    nodes_map = {n["id"]: n for n in nodes_json}
+
+    # Tributario de REFERENCIA (q_G completo: PP losa + terminaciones), para el
+    # Inspector y la verificacion de areas/conservacion (independiente del caso).
+    cargas_losa_qG = cargas_para_vigas(JSON_PATH, nodes_map,
+                                       extra_kn_m2=TERMINACIONES_KNM2,
+                                       include_self_weight=True)
+
+    # Tributario EXPLICITO por viga (para el Tributary Area Inspector)
+    tributary_by_viga = {}
+    for tag, meta in elem_meta.items():
+        if meta["type"] not in ("beam_x", "beam_y"):
+            continue
+        c = cargas_losa_qG.get(tag) or {"p": 0.0, "A": 0.0, "W": 0.0}
+        cQ = cargas_para_vigas(JSON_PATH, nodes_map,
+                               extra_kn_m2=SOBRECARGA_KNM2,
+                               include_self_weight=False).get(tag) or \
+             {"p": 0.0, "A": 0.0, "W": 0.0}
+        tributary_by_viga[str(tag)] = {
+            "type": meta["type"],
+            "section": meta["section"],
+            "area_tributaria_m2": round(c["A"], 6),
+            "W_losa_G_kN": round(c["W"], 6),
+            "p_G_kN_m": round(c["p"], 6),
+            "W_losa_Q_kN": round(cQ["W"], 6),
+            "p_Q_kN_m": round(cQ["p"], 6),
+        }
+
+    # ------------------------------------------------------------------
+    # CARGA DEL CASO (G o Q)
+    # ------------------------------------------------------------------
+    if case_name == "G":
+        cargas_losa = cargas_losa_qG
+        apply_selfweight = True
+    else:                       # Q: sobrecarga sola
+        cargas_losa = cargas_para_vigas(JSON_PATH, nodes_map,
+                                        extra_kn_m2=SOBRECARGA_KNM2,
+                                        include_self_weight=False)
+        apply_selfweight = False
+
     ops.timeSeries("Linear", 1)
     ops.pattern("Plain", 1, 1)
-    for tag, (fx, fy, fz) in nodal.items():
-        ops.load(tag, fx, fy, fz, 0.0, 0.0, 0.0)
+    if apply_selfweight:
+        for tag, (fx, fy, fz) in nodal.items():
+            ops.load(tag, fx, fy, fz, 0.0, 0.0, 0.0)
 
     print(f"  Peso propio (elementos estructurales): {total_W:.2f} kN")
 
-    # ------------------------------------------------------------------
-    # 9b. CARGA DE LOSA por AREAS TRIBUTARIAS (metodo 45°)
-    #      La carga de cada loza (solo PESO PROPIO por ahora, gamma*t) se
-    #      transfiere como carga uniforme sobre las vigas de borde.
-    # ------------------------------------------------------------------
-    cargas_losa = cargas_para_vigas(JSON_PATH, {n["id"]: n for n in nodes_json})
     total_losa = 0.0
     n_viga_cargada = 0
     for tag, meta in elem_meta.items():
@@ -493,18 +557,18 @@ def main():
         xi, yi, zi = node_xyz(i)
         xj, yj, zj = node_xyz(j)
         L = math.sqrt((xj - xi) ** 2 + (yj - yi) ** 2 + (zj - zi) ** 2)
-        # carga lineal uniforme transversal en -z global (gravedad)
         ops.eleLoad("-ele", tag, "-type", "beamUniform", 0.0, -p)
         total_losa += p * L
         n_viga_cargada += 1
 
-    total_W += total_losa
+    total_W_apply = self_weight_kN if apply_selfweight else 0.0
+    total_W_apply += total_losa
     print(f"  Carga de losa (areas tributarias)  : {total_losa:.2f} kN  "
           f"({n_viga_cargada} vigas)")
-    print(f"  CARGA G TOTAL                    : {total_W:.2f} kN")
+    print(f"  CARGA {case_name} TOTAL                  : {total_W_apply:.2f} kN")
 
     # ------------------------------------------------------------------
-    # 10. ANALISIS ESTATICO LINEAL
+    # ANALISIS ESTATICO LINEAL
     # ------------------------------------------------------------------
     ops.system("BandSPD")
     ops.numberer("RCM")
@@ -514,51 +578,90 @@ def main():
     ops.analysis("Static")
 
     ok = ops.analyze(1)
-    print(f"\n  analyze() -> {ok}")
-    if ok != 0:
-        print("  [ERROR] El analisis fallo. Revisar modelo (diafragma, "
-              "muros, secciones).")
-        return
-
     ops.reactions()
+    print(f"  analyze() -> {ok}")
+    if ok != 0:
+        print("  [ERROR] El analisis fallo. Revisar modelo (diafragma, muros, secciones).")
+        return None
 
     # ------------------------------------------------------------------
-    # 11. VERIFICACION DE EQUILIBRIO  (Sigma F + Sigma R = 0)
+    # VERIFICACIONES
     # ------------------------------------------------------------------
-    Rx = Ry = Rz = 0.0
+    print("-" * 70)
+    print(f"VERIFICACIONES DEL EDIFICIO REAL — caso {case_name}")
+
     in_model = set(ops.getNodeTags())
     all_support_tags = sorted(
         (set(support_tags) | set(floating_supports) | set(piso_vertical)) &
         in_model)
+
+    # (a) Equilibrio global: Sigma F + Sigma R = 0
+    Rx = Ry = Rz = 0.0
     for tag in all_support_tags:
         r = ops.nodeReaction(tag)
         Rx += r[0]; Ry += r[1]; Rz += r[2]
-
-    err = abs((total_W - Rz) / total_W) if total_W else 0.0
-    print("-" * 70)
-    print("VERIFICACION DE EQUILIBRIO")
-    print(f"  Carga aplicada (G = peso propio + losa) : {total_W:12.3f} kN")
-    print(f"  Suma reacciones Rx / Ry / Rz       : {Rx:9.3f} / {Ry:9.3f} / {Rz:12.3f} kN")
-    print(f"  |W - Rz| / W = {err:.3e}")
+    err = abs((total_W_apply - Rz) / total_W_apply) if total_W_apply else 0.0
     ok_eq = err < 1e-6
-    print(f"  {'[OK] EQUILIBRIO VERIFICADO' if ok_eq else '[ERROR] EQUILIBRIO NO VERIFICADO'}")
+    print(f"    . Equilibrio {case_name}: SigmaX={Rx:9.3f}  SigmaY={Ry:9.3f}  "
+          f"SigmaZ={Rz:12.3f}  W={total_W_apply:12.3f}  err={err:.3e}  "
+          f"({'OK' if ok_eq else 'NO'})")
+
+    # (b) Areas tributarias + conservacion (referencia q_G)
+    ok_areas, res_areas = verificar_areas_tributarias(
+        JSON_PATH, nodes_map, extra_kn_m2=TERMINACIONES_KNM2,
+        include_self_weight=True)
+    print(f"    . Carga de losa q_G: W_losas={res_areas['W_losas_kN']:.1f} kN, "
+          f"W_vigas(transf)={res_areas['W_vigas_kN']:.1f} kN, "
+          f"conservacion rel={res_areas['conservacion_rel']:.3e} "
+          f"({'OK' if res_areas['conservacion_rel'] < 1e-10 else 'NO'})")
+    print(f"      Suma areas trib: A_lozas={res_areas['A_lozas_total_m2']:.2f} m2, "
+          f"A_trib(vigas)={res_areas['A_trib_total_m2']:.2f} m2, "
+          f"diferencia rel={res_areas['area_rel']:.3e} "
+          f"({'OK' if res_areas['area_rel'] < 1e-10 else 'NO'})")
+
+    # (c) Carga de losa por piso (q_G)
+    por_piso = {}
+    for e in elements:
+        if e["type"] != "loza":
+            continue
+        fl = floor_of(e["yi"])
+        A = (max(e["xi"], e["xj"]) - min(e["xi"], e["xj"])) / 100.0 * \
+            (max(e["zi"], e["zj"]) - min(e["zi"], e["zj"])) / 100.0
+        w_m2 = GAMMA_CONC * (e.get("t", 25.0) / 100.0) + TERMINACIONES_KNM2
+        por_piso[fl] = por_piso.get(fl, 0.0) + w_m2 * A
+    print("    . Carga de losa (q_G) por piso (kN):")
+    for fl, W in sorted(por_piso.items()):
+        print(f"        {fl:12s}: {W:.2f} kN")
+
+    # (d) Compatibilidad del diafragma rigido
+    dmax = 0.0
+    for master, zm, slaves in diaphragm_sets:
+        dm = ops.nodeDisp(master)
+        ux_m, uy_m, rz_m = dm[0], dm[1], dm[5]
+        xm, ym, _ = ops.nodeCoord(master)
+        for s in slaves:
+            x, y, _ = ops.nodeCoord(s)
+            d = ops.nodeDisp(s)
+            e1 = abs(d[0] - (ux_m - rz_m * (y - ym)))
+            e2 = abs(d[1] - (uy_m + rz_m * (x - xm)))
+            dmax = max(dmax, e1, e2)
+    ok_dia = dmax < 1e-9
+    print(f"    . Diafragma rigido: compat. err max={dmax:.3e}  "
+          f"({'OK' if ok_dia else 'NO'}), {len(diaphragm_sets)} pisos con diafragma")
 
     # ------------------------------------------------------------------
-    # 12. RESULTADOS -> JSON
+    # RESULTADOS -> JSON
     # ------------------------------------------------------------------
     disp = {}
-    for tag in pos_key.values():        # contrato estructurales + nodos muro
+    for tag in pos_key.values():
         d = ops.nodeDisp(tag)
         disp[str(tag)] = [round(v, 10) for v in d]
-
     reactions = {}
     for tag in all_support_tags:
         r = ops.nodeReaction(tag)
         reactions[str(tag)] = [round(v, 10) for v in r]
-
     forces = {}
     for tag, meta in elem_meta.items():
-        # eleForce global (primeros 6 = nodo i en global)
         fg = list(ops.eleForce(tag))[:6]
         forces[str(tag)] = {
             "type": meta["type"],
@@ -568,32 +671,45 @@ def main():
 
     result = {
         "model": data["model"],
+        "case": case_name,
         "units_internal": {"length": "m", "force": "kN"},
         "summary": {
             "nodes_total": n_nodes_total,
             "elements_structural": n_created,
-            "loads": {
-                "self_weight_kN": round(total_W - total_losa, 4),
-                "losa_tributaria_kN": round(total_losa, 4),
-                "Carga_G_total_kN": round(total_W, 4),
-            },
-            "equilibrium_ok": bool(ok_eq),
-            "equilibrium_error": round(err, 12),
+            "self_weight_kN": round(self_weight_kN, 4),
+            "losa_tributaria_kN": round(total_losa, 4),
+            f"Carga_{case_name}_total_kN": round(total_W_apply, 4),
         },
+        "verifications": {
+            "carga_losa_por_piso_kN": {fl: round(W, 4) for fl, W in por_piso.items()},
+            "suma_areas_tributarias_m2": round(res_areas["A_trib_total_m2"], 4),
+            "area_lozas_total_m2": round(res_areas["A_lozas_total_m2"], 4),
+            "area_rel_error": round(res_areas["area_rel"], 12),
+            "conservacion_carga_rel": round(res_areas["conservacion_rel"], 12),
+            "equilibrio_error": round(err, 12),
+            "diafragma_compatibilidad_err_max_m": round(dmax, 12),
+            "todas_ok": bool(ok_eq and ok_areas and ok_dia),
+        },
+        "tributary_by_viga": tributary_by_viga,
         "displacements_m": disp,
         "reactions_kN": reactions,
         "element_forces_global": forces,
     }
 
     os.makedirs(BASE, exist_ok=True)
-    with open(OUT_JSON, "w", encoding="utf-8") as f:
+    out = OUT_JSON if case_name == "G" else OUT_JSON.replace(
+        "edificio_full_results.json", "edificio_full_results_Q.json")
+    with open(out, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
-    print(f"\n[OK] Resultados exportados a: {OUT_JSON}")
+    print(f"\n[OK] Resultados exportados a: {out}")
+    return result
 
-    print("\n  NOTA: resultados internos en m y kN (no cm).")
-    print("  Carga G = peso propio estructural + peso propio de losa (tributarias).")
-    print("  Pendiente: terminaciones G, sobrecarga Q, casos EX/EY + superposicion,")
-    print("  y validar eje fuerte de muros.")
+
+def main():
+    # Cada caso se construye desde cero (ops.wipe en run_case) para estado limpio.
+    run_case("G")
+    if RUN_CASE_Q:
+        run_case("Q")
 
 
 if __name__ == "__main__":
