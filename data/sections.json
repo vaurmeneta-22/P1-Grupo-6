@@ -1,16 +1,172 @@
 {
-  "column_30x30": {
+  "column_70x70": {
     "type": "rectangular",
-    "width": 0.30,
-    "height": 0.30,
     "units": "m",
-    "material": "concrete"
+    "material": "concrete",
+    "width": 0.7,
+    "height": 0.7
   },
-  "beam_25x50": {
+  "beam_x_60x80": {
     "type": "rectangular",
-    "width": 0.25,
-    "height": 0.50,
     "units": "m",
-    "material": "concrete"
+    "material": "concrete",
+    "width": 0.6,
+    "height": 0.8
+  },
+  "beam_y_60x80": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "width": 0.6,
+    "height": 0.8
+  },
+  "beam_y_40x60": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "width": 0.4,
+    "height": 0.6
+  },
+  "beam_x_30x45": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "width": 0.3,
+    "height": 0.45
+  },
+  "wall_60x291.5": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "width": 0.6,
+    "height": 2.915
+  },
+  "wall_30x356": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "width": 0.3,
+    "height": 3.56
+  },
+  "wall_60x292": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "width": 0.6,
+    "height": 2.92
+  },
+  "wall_25x795": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "width": 0.25,
+    "height": 7.95
+  },
+  "wall_25x585": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "width": 0.25,
+    "height": 5.85
+  },
+  "wall_30x2695": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "width": 2.695,
+    "height": 0.3
+  },
+  "wall_25x282": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "width": 0.25,
+    "height": 2.82
+  },
+  "beam_y_80x80": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "width": 0.8,
+    "height": 0.8
+  },
+  "wall_30x725": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "width": 0.3,
+    "height": 7.25
+  },
+  "wall_30x1000": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "width": 0.3,
+    "height": 3.56
+  },
+  "wall_30x890": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "width": 0.3,
+    "height": 8.9
+  },
+  "wall_30x615": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "width": 0.3,
+    "height": 6.15
+  },
+  "wall_25x158": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "width": 0.25,
+    "height": 1.58
+  },
+  "wall_25x365": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "width": 0.25,
+    "height": 3.56
+  },
+  "wall_30x225": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "width": 0.3,
+    "height": 2.25
+  },
+  "wall_30x310": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "width": 0.3,
+    "height": 3.56
+  },
+  "loza_loza15": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "thickness": 0.15,
+    "width": 0.0,
+    "height": 0.0
+  },
+  "loza_loza12": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "thickness": 0.12,
+    "width": 0.0,
+    "height": 0.0
+  },
+  "beam_x_30x80": {
+    "type": "rectangular",
+    "units": "m",
+    "material": "concrete",
+    "width": 0.3,
+    "height": 0.8
   }
 }

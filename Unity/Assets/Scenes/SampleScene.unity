@@ -270,12 +270,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CameraController
   target: {fileID: 0}
-  distance: 20
+  distance: 60
   rotationSpeed: 3
   panSpeed: 0.02
   zoomSpeed: 1
   minDistance: 2
-  maxDistance: 60
+  maxDistance: 200
+  initialDistance: 60
+  initialRotX: 30
+  initialRotY: -30
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0

@@ -8,11 +8,33 @@ public class CameraController : MonoBehaviour
     public float panSpeed = 0.02f;
     public float zoomSpeed = 1f;
     public float minDistance = 2f;
-    public float maxDistance = 120f;
+    public float maxDistance = 200f;
+
+    [Header("Encuadre inicial al cargar el modelo")]
+    public float initialDistance = 60f;
+    public float initialRotX = 30f;
+    public float initialRotY = -30f;
 
     private float rotX = 30f;
     private float rotY = -30f;
     private Vector3 panOffset = Vector3.zero;
+
+    // La camara orbital apunta al centro real del modelo. La llama EdificioLoader
+    // desde su propio Start(), de forma que el encuadre no depende del orden de
+    // ejecucion de los Start() entre ambos scripts.
+    public void TargetModelCenter(Vector3 center)
+    {
+        if (target == null)
+        {
+            target = new GameObject("CameraTarget").transform;
+        }
+        target.position = center;
+        panOffset = Vector3.zero;
+        rotX = initialRotX;
+        rotY = initialRotY;
+        distance = Mathf.Clamp(initialDistance, minDistance, maxDistance);
+        UpdatePosition();
+    }
 
     void Start()
     {
@@ -20,18 +42,18 @@ public class CameraController : MonoBehaviour
         {
             target = new GameObject("CameraTarget").transform;
             target.position = new Vector3(25f, 9f, 8f);
-        }
 
-        // Sincronizar con la posicion inicial que haya puesto el loader
-        Vector3 toTarget = target.position - transform.position;
-        distance = Mathf.Clamp(toTarget.magnitude, minDistance, maxDistance);
-        if (toTarget.sqrMagnitude > 0.0001f)
-        {
-            Vector3 dir = toTarget.normalized;
-            rotX = Mathf.Asin(Mathf.Clamp(dir.y, -1f, 1f)) * Mathf.Rad2Deg;
-            rotY = -Mathf.Atan2(dir.x, -dir.z) * Mathf.Rad2Deg;
+            // Solo aqui (sin EdificioLoader) se sincroniza con la posicion inicial.
+            Vector3 toTarget = target.position - transform.position;
+            distance = Mathf.Clamp(toTarget.magnitude, minDistance, maxDistance);
+            if (toTarget.sqrMagnitude > 0.0001f)
+            {
+                Vector3 dir = toTarget.normalized;
+                rotX = Mathf.Asin(Mathf.Clamp(dir.y, -1f, 1f)) * Mathf.Rad2Deg;
+                rotY = -Mathf.Atan2(dir.x, -dir.z) * Mathf.Rad2Deg;
+            }
+            UpdatePosition();
         }
-        UpdatePosition();
     }
 
     void Update()
