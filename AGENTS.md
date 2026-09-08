@@ -31,7 +31,13 @@ SI. Siempre: kN, m, kg, Pa, N·m. Todos los campos JSON deben tener unidades exp
 - Q: live load (same tributary geometry, different intensity q_Q)
 - EX: seismic lateral in X
 - EY: seismic lateral in Y
+- Seismic mass: W_sismico = G + 0.50·Q; F_sismo = α·W_sismico (α=0.20, confirmar con profesor)
 - Superposition: R = λ_G·R_G + λ_Q·R_Q + λ_EX·R_EX + λ_EY·R_EY
+
+## Run command
+- Run all cases: `python opensees_edificio_v2.py`
+- Run single case: `python opensees_edificio_v2.py --case G` (or Q, EX, EY)
+- Output: `opensees/results/edificio_full_results.json` (G), `*_Q.json`, `*_EX.json`, `*_EY.json`
 
 ## Architecture
 - OpenSeesPy owns structural analysis.

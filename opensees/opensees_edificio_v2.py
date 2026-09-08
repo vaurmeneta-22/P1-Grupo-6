@@ -76,9 +76,27 @@ GAMMA_CONC = 2400.0 * 9.81 / 1000.0   # kN/m3 = 23.544
 TERMINACIONES_KNM2 = 2.0      # terminaciones uniformes sobre losa (kN/m2)
 SOBRECARGA_KNM2 = 2.0         # sobrecarga de uso sobre losa (kN/m2)
 
-# Casos a correr (G = gravedad completa, Q = sobrecarga sola)
+# Aceleracion de gravedad (unidades SI, coherente con kN y m).
+g = 9.81         # m/s^2
+
+# ---------------------------------------------------------------------------
+# SISMO PSEUDOESTATICO (Semana 3 - Parte B)
+# ---------------------------------------------------------------------------
+# El sismo se modela como una fuerza lateral aplicada en el centro de masa de
+# cada piso (nodo master del diafragma rigido). Patron/parametros definitivos
+# a definir por el profesor.
+#   F_sismo = alpha_sismo * W_sismico            con W_sismico = G + 0.50*Q
+#   equivalente:  F_sismo = masa_piso * (alpha_sismo * g)
+# Masa sismica por piso:  m = W_sismico / g
+ALPHA_SISMO = 0.20        # PARAMETRO A CONFIRMAR CON EL PROFESOR (NCh433 ~20% g)
+FRAC_LIVE_SISMIC = 0.50   # fraccion de sobrecarga de uso considerada como masa sismica
+
+# Casos a correr (G = gravedad completa, Q = sobrecarga sola,
+# EX/EY = sismo pseudostatico en X / Y)
 RUN_CASE_G = True
 RUN_CASE_Q = True
+RUN_CASE_EX = True
+RUN_CASE_EY = True
 
 
 def load_json(path):
@@ -478,6 +496,10 @@ def run_case(case_name="G"):
     # ------------------------------------------------------------------
     nodal = {}            # node tag -> (fx, fy, fz)
     total_W = 0.0
+    # Peso propio de elementos estructurales desglosado por piso (para masa
+    # sismica). Cada elemento reparte W/2 en cada extremo; ese medio se asigna
+    # al piso del nodo extremo (según su altura). Uso de z en cm para floor_of.
+    self_weight_by_floor = {}
 
     def node_xyz(tag):
         return ops.nodeCoord(tag)[:3]
@@ -494,6 +516,9 @@ def run_case(case_name="G"):
         k = (round(xi, 6), round(yi, 6), round(zi, 6))
         nodal.setdefault(i, [0.0, 0.0, 0.0])[2] -= half
         nodal.setdefault(j, [0.0, 0.0, 0.0])[2] -= half
+        # desglose por piso (nodo i)
+        fl_i = floor_of(zi * 100.0)
+        self_weight_by_floor[fl_i] = self_weight_by_floor.get(fl_i, 0.0) + half
 
     self_weight_kN = total_W      # peso propio de elementos estructurales (kN)
 
@@ -526,16 +551,28 @@ def run_case(case_name="G"):
         }
 
     # ------------------------------------------------------------------
-    # CARGA DEL CASO (G o Q)
+    # CARGA DEL CASO (G / Q / EX / EY)
+    #   - G : peso propio estructural + q_G de losa (terminaciones + PP) por tributarias
+    #   - Q : solo q_Q de losa (sobrecarga) por tributarias, misma geometria que G
+    #   - EX/EY : carga lateral sismica en el centro de masa de cada piso (master
+    #             del diafragma). Sin cargas gravitacionales en este caso base.
+    # Cada caso se carga en un pattern independiente; ops.wipe() al inicio de cada
+    # run_case garantiza que no queden residuos del caso anterior (sin mezclar G y Q).
     # ------------------------------------------------------------------
     if case_name == "G":
         cargas_losa = cargas_losa_qG
         apply_selfweight = True
-    else:                       # Q: sobrecarga sola
+        is_lateral = False
+    elif case_name == "Q":
         cargas_losa = cargas_para_vigas(JSON_PATH, nodes_map,
                                         extra_kn_m2=SOBRECARGA_KNM2,
                                         include_self_weight=False)
         apply_selfweight = False
+        is_lateral = False
+    else:                       # EX o EY: caso sismico lateral
+        cargas_losa = {}
+        apply_selfweight = False
+        is_lateral = True
 
     ops.timeSeries("Linear", 1)
     ops.pattern("Plain", 1, 1)
@@ -567,6 +604,98 @@ def run_case(case_name="G"):
           f"({n_viga_cargada} vigas)")
     print(f"  CARGA {case_name} TOTAL                  : {total_W_apply:.2f} kN")
 
+    # ==================================================================
+    # MASA SISMICA Y CARGA LATERAL (casos EX / EY)
+    # ==================================================================
+    # Datos para la defensa (verificaciones) también usados en G y Q.
+    # La carga lateral sismica se aplica en el CENTRO DE MASA de cada piso,
+    # representado por el nodo MASTER del diafragma rigido de ese piso
+    # (ops.rigidDiaphragm acopla ux, uy, rz de todos los nodos del piso al
+    # master, de modo que una fuerza en el master se distribuye por todo el
+    # piso como cuerpo rigido). Por eso la fuerza se aplica ahi y el Rz del
+    # master reporta directamente la torsion de piso.
+    piso_to_master = {}
+    for master, zm, slaves in diaphragm_sets:
+        z_cm = zm / CM_TO_M
+        piso_to_master[floor_of(z_cm)] = master
+
+    # Carga de LOSA por piso, desglosada en G (PP+terminaciones) y Q (sobrecarga).
+    # (Usa la misma geometria tributaria: solo difiere la intensidad por m2.)
+    def losa_por_piso(w_m2_fn):
+        acc = {}
+        for e in elements:
+            if e["type"] != "loza":
+                continue
+            fl = floor_of(e["yi"])
+            A = (max(e["xi"], e["xj"]) - min(e["xi"], e["xj"])) / 100.0 * \
+                (max(e["zi"], e["zj"]) - min(e["zi"], e["zj"])) / 100.0
+            acc[fl] = acc.get(fl, 0.0) + w_m2_fn(e) * A
+        return acc
+
+    losa_G_by_floor = losa_por_piso(
+        lambda e: GAMMA_CONC * (e.get("t", 25.0) / 100.0) + TERMINACIONES_KNM2)
+    losa_Q_by_floor = losa_por_piso(lambda e: SOBRECARGA_KNM2)  # solo sobrecarga
+
+    # G y Q totales por piso:
+    #   G_floor = peso propio estructural del piso + losa G
+    #   Q_floor = losa Q (sobrecarga) del piso
+    G_floor = {}
+    Q_floor = {}
+    for fl in set(list(self_weight_by_floor) + list(losa_G_by_floor)):
+        G_floor[fl] = self_weight_by_floor.get(fl, 0.0) + losa_G_by_floor.get(fl, 0.0)
+        Q_floor[fl] = losa_Q_by_floor.get(fl, 0.0)
+
+    G_total = sum(G_floor.values())
+    Q_total = sum(Q_floor.values())
+    W_sismico_total = G_total + FRAC_LIVE_SISMIC * Q_total
+
+    if is_lateral:
+        # Masa sismica reconstruida por piso; luego colapsada en un solo piso
+        # si el modelo es de un piso (pero el codigo queda preparado para N pisos).
+        seismic = {}
+        for fl in G_floor:
+            W_floor = G_floor[fl] + FRAC_LIVE_SISMIC * Q_floor[fl]
+            seismic[fl] = {
+                "G_floor": G_floor[fl],
+                "Q_floor": Q_floor[fl],
+                "W_sismico_floor": W_floor,
+                "massa_piso": W_floor / g,          # masa [t] (kN/(m/s^2))
+                "F_floor": ALPHA_SISMO * W_floor,    # fuerza lateral en ese piso
+                "master": piso_to_master.get(fl),
+            }
+
+        print(f"\n  === MASA SISMICA (G + {FRAC_LIVE_SISMIC:.0%} Q) ===  "
+              f"alpha_sismo={ALPHA_SISMO:.2f}")
+        for fl in sorted(seismic):
+            s = seismic[fl]
+            print(f"    {fl:12s}: G={s['G_floor']:10.2f}  Q={s['Q_floor']:9.2f}  "
+                  f"W={s['W_sismico_floor']:10.2f}  m={s['massa_piso']:9.1f} t  "
+                  f"F={s['F_floor']:9.2f} kN  master={s['master']}")
+
+        # Aplicar la fuerza lateral en el centro de masa (master) de cada piso.
+        # EX: Fy=0, Fx=+F ; EY: Fx=0, Fy=+F   (sentido positivo del eje global).
+        dirx = 1 if case_name == "EX" else 0
+        diry = 1 if case_name == "EY" else 0
+        F_total_lateral = 0.0
+        for fl, s in seismic.items():
+            if s["master"] is None:
+                continue
+            F = s["F_floor"]
+            ops.load(s["master"], dirx * F, diry * F, 0.0, 0.0, 0.0, 0.0)
+            F_total_lateral += F
+        total_W_apply = F_total_lateral
+        print(f"  SISMO {case_name}: F_total aplicada = {F_total_lateral:.2f} kN "
+              f"sobre {len([s for s in seismic.values() if s['master']])} pisos")
+        print(f"  CARGA {case_name} TOTAL (corte basal esperado) : {total_W_apply:.2f} kN")
+
+    # Para la auditoria/conservacion (caso G y Q):
+    seismic_summary = {
+        "G_floor": G_floor, "Q_floor": Q_floor,
+        "G_total": G_total, "Q_total": Q_total,
+        "W_sismico_total": W_sismico_total,
+        "piso_to_master": piso_to_master,
+    }
+
     # ------------------------------------------------------------------
     # ANALISIS ESTATICO LINEAL
     # ------------------------------------------------------------------
@@ -594,17 +723,39 @@ def run_case(case_name="G"):
     all_support_tags = sorted(
         (set(support_tags) | set(floating_supports) | set(piso_vertical)) &
         in_model)
+    # Apoyos verdaderamente fijos en todos los DOF (solo fundacion).
+    # Estos son los que reaccionan horizontalmente en sismo. Los floating y
+    # piso_vertical tienen ux/uy libres (0,0,1,1,1,0) y sus reacciones
+    # horizontales via nodeReaction incluyen fuerzas de constraint del diafragma
+    # que NO son reacciones fisicas de apoyo.
+    base_support_tags = sorted(set(support_tags) & in_model)
 
     # (a) Equilibrio global: Sigma F + Sigma R = 0
+    #     Para G/Q: comparar Rz vs total_W_apply (carga vertical).
+    #     Para EX/EY: comparar Rx/Ry vs F_lateral (carga horizontal).
     Rx = Ry = Rz = 0.0
     for tag in all_support_tags:
         r = ops.nodeReaction(tag)
         Rx += r[0]; Ry += r[1]; Rz += r[2]
-    err = abs((total_W_apply - Rz) / total_W_apply) if total_W_apply else 0.0
-    ok_eq = err < 1e-6
-    print(f"    . Equilibrio {case_name}: SigmaX={Rx:9.3f}  SigmaY={Ry:9.3f}  "
-          f"SigmaZ={Rz:12.3f}  W={total_W_apply:12.3f}  err={err:.3e}  "
-          f"({'OK' if ok_eq else 'NO'})")
+    if is_lateral:
+        F_applied = total_W_apply
+        dir_axis = 0 if case_name == "EX" else 1
+        # Para equilibrio lateral, usar SOLO apoyos de fundacion fijos.
+        R_base = 0.0
+        for tag in base_support_tags:
+            r = ops.nodeReaction(tag)
+            R_base += r[dir_axis]
+        err = abs((F_applied + R_base) / F_applied) if F_applied else 0.0
+        ok_eq = err < 1e-6
+        print(f"    . Equilibrio {case_name}: F_applied={F_applied:12.3f}  "
+              f"R_base({case_name[-1]})={R_base:12.3f}  err={err:.3e}  "
+              f"({'OK' if ok_eq else 'NO'})")
+    else:
+        err = abs((total_W_apply - Rz) / total_W_apply) if total_W_apply else 0.0
+        ok_eq = err < 1e-6
+        print(f"    . Equilibrio {case_name}: SigmaX={Rx:9.3f}  SigmaY={Ry:9.3f}  "
+              f"SigmaZ={Rz:12.3f}  W={total_W_apply:12.3f}  err={err:.3e}  "
+              f"({'OK' if ok_eq else 'NO'})")
 
     # (b) Areas tributarias + conservacion (referencia q_G)
     ok_areas, res_areas = verificar_areas_tributarias(
@@ -650,6 +801,86 @@ def run_case(case_name="G"):
           f"({'OK' if ok_dia else 'NO'}), {len(diaphragm_sets)} pisos con diafragma")
 
     # ------------------------------------------------------------------
+    # AUDITORIA ESPECIFICA DE CARGA VIVA Q (Parte A)
+    # ------------------------------------------------------------------
+    # Verifica conservacion:  Σ(Q transferida a vigas) ≈ q_Q * A_total_losa.
+    # La carga viva usa EXACTAMENTE la misma geometria tributaria que G, por lo
+    # que el doble conteo se evita usando q_Q (sin incluir peso propio de losa)
+    # sobre las mismas areas tributarias. Q queda en un pattern independiente.
+    if case_name == "Q":
+        # Area total de losa (m2) desde el contrato:
+        A_total = 0.0
+        for e in elements:
+            if e["type"] != "loza":
+                continue
+            A_total += (max(e["xi"], e["xj"]) - min(e["xi"], e["xj"])) / 100.0 * \
+                       (max(e["zi"], e["zj"]) - min(e["zi"], e["zj"])) / 100.0
+        Q_teorica = SOBRECARGA_KNM2 * A_total
+        Q_transferida = total_losa          # carga viva realmente transferida a vigas
+        errQ = abs(Q_transferida - Q_teorica) / Q_teorica if Q_teorica else 0.0
+        okQ = errQ < 1e-6
+        print("=" * 70)
+        print("=== AUDITORIA CARGA VIVA Q ===")
+        print(f"Area total losa           = {A_total:.2f} m2")
+        print(f"q_Q                       = {SOBRECARGA_KNM2:.2f} kN/m2")
+        print(f"Q teorica  = q_Q*A        = {Q_teorica:.2f} kN")
+        print(f"Q transferida a vigas     = {Q_transferida:.2f} kN")
+        print(f"Diferencia                = {Q_transferida - Q_teorica:.4f} kN")
+        print(f"Error relativo            = {errQ:.3e} ({errQ*100:.5f} %)")
+        print(f"Estado                    = {'OK' if okQ else 'REVISAR'}")
+        print("=" * 70)
+
+    # ------------------------------------------------------------------
+    # AUDITORIA ESPECIFICA DE SISMO EX / EY (Parte B)
+    # ------------------------------------------------------------------
+    # 1) Carga lateral total: Σ(Fy/Fx aplicada) = F_EX / F_EY (control).
+    # 2) Corte basal: suma de reacciones horizontales en los apoyos.
+    #    Vb_X = Σ Rx (EX) ; Vb_Y = Σ Ry (EY). Debe cumplir |Vb| ≈ |F|.
+    # 3) Deformada: ux/uy del nodo master en el sentido (+) de la fuerza aplicada.
+    # 4) Torsion de piso: rz del master (debe salir pequena si es simetrico; si es
+    #    relevante, revisar asimetria de rigidez / posicion de CM-CR).
+    if is_lateral:
+        dir_axis = 0 if case_name == "EX" else 1   # 0=X, 1=Y
+        F_aplicada = total_W_apply
+        # Corte basal: suma de reacciones horizontales SOLO en apoyos de
+        # fundacion verdaderamente fijos (1,1,1,1,1,1). Los nodos esclavos
+        # del diafragma y los floating/piso_vertical (0,0,1,1,1,0) tienen
+        # ux/uy libres; sus nodeReaction en DOF horizontales contienen
+        # fuerzas de constraint internas que NO son reacciones de apoyo.
+        corte = 0.0
+        for tag in base_support_tags:
+            r = ops.nodeReaction(tag)
+            corte += r[dir_axis]
+        errV = abs(abs(corte) - F_aplicada) / F_aplicada if F_aplicada else 0.0
+        okV = errV < 1e-6
+        # desplazamiento y rotacion del nodo master de cada piso
+        cm_info = []
+        for fl, s in seismic.items():
+            m = s["master"]
+            if m is None:
+                continue
+            d = ops.nodeDisp(m)
+            cm_info.append((fl, m, d[0], d[1], d[5]))
+        print("=" * 70)
+        print(f"=== AUDITORIA SISMO {case_name} ===")
+        print(f"Fuerza lateral aplicada    = {F_aplicada:.2f} kN")
+        print(f"Corte basal    {'(X)' if dir_axis==0 else '(Y)'}           = {corte:10.2f} kN")
+        print(f"Diferencia                 = {abs(corte) - F_aplicada:.4f} kN")
+        print(f"Error relativo             = {errV:.3e} ({errV*100:.5f} %)")
+        print(f"Estado                     = {'OK' if okV else 'REVISAR'}")
+        for fl, m, ux, uy, rz in sorted(cm_info, key=lambda t: t[0]):
+            print(f"  CM piso {fl:10s} (master={m}): "
+                  f"Ux={ux/1e-3:9.4f} mm  Uy={uy/1e-3:9.4f} mm  Rz={rz:10.2e} rad")
+        # sentido de la deformada en el eje de la fuerza
+        if dir_axis == 0:
+            d_cm = cm_info[0][2] if cm_info else 0.0
+        else:
+            d_cm = cm_info[0][3] if cm_info else 0.0
+        print(f"Desplazamiento CM en eje {case_name[-1]}: {d_cm/1e-3:.4f} mm "
+              f"(sentido {'+' if d_cm >= 0 else '-'})")
+        print("=" * 70)
+
+    # ------------------------------------------------------------------
     # RESULTADOS -> JSON
     # ------------------------------------------------------------------
     disp = {}
@@ -668,6 +899,10 @@ def run_case(case_name="G"):
             "global_i": [round(v, 8) for v in fg],
             "section": meta["section"],
         }
+
+    # Datos de masa sismica / corte basal para reportar en el resultado.
+    # En casos no laterales, seismic no se calcula; se deja como dict vacio.
+    seismic_export = seismic if is_lateral else {}
 
     result = {
         "model": data["model"],
@@ -694,11 +929,28 @@ def run_case(case_name="G"):
         "displacements_m": disp,
         "reactions_kN": reactions,
         "element_forces_global": forces,
+        # (Semana 3) masa sismica por piso, G/Q por piso y corte basal
+        "seismic_mass": {
+            "g": g,
+            "alpha_sismo": ALPHA_SISMO,
+            "frac_live_sismic": FRAC_LIVE_SISMIC,
+            "G_total_kN": round(G_total, 4),
+            "Q_total_kN": round(Q_total, 4),
+            "W_sismico_total_kN": round(W_sismico_total, 4),
+            "G_floor_kN": {fl: round(v, 4) for fl, v in G_floor.items()},
+            "Q_floor_kN": {fl: round(v, 4) for fl, v in Q_floor.items()},
+            "piso_to_master": piso_to_master,
+        },
+        "seismic_case": seismic_export,
     }
 
     os.makedirs(BASE, exist_ok=True)
-    out = OUT_JSON if case_name == "G" else OUT_JSON.replace(
-        "edificio_full_results.json", "edificio_full_results_Q.json")
+    # Cada caso se exporta a su propio archivo para poder compararlos por separado
+    # y alimentar la Parte C (superposicion). G conserva el nombre historico.
+    out = OUT_JSON
+    if case_name != "G":
+        out = OUT_JSON.replace("edificio_full_results.json",
+                               f"edificio_full_results_{case_name}.json")
     with open(out, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
     print(f"\n[OK] Resultados exportados a: {out}")
@@ -706,10 +958,29 @@ def run_case(case_name="G"):
 
 
 def main():
-    # Cada caso se construye desde cero (ops.wipe en run_case) para estado limpio.
-    run_case("G")
-    if RUN_CASE_Q:
-        run_case("Q")
+    # Cada caso se construye desde cero (ops.wipe en run_case) para estado limpio:
+    # se evita que cargas de un caso anterior (G, Q, EX, EY) queden activas.
+    # Uso:  python opensees_edificio_v2.py [--case G|Q|EX|EY]
+    # Si se omite --case, se corren los casos habilitados por RUN_CASE_*.
+    import sys
+    only_case = None
+    if "--case" in sys.argv:
+        i = sys.argv.index("--case")
+        if i + 1 < len(sys.argv):
+            only_case = sys.argv[i + 1].upper()
+
+    results = {}
+    cases = ["G", "Q", "EX", "EY"] if only_case is None else [only_case]
+    for case in cases:
+        run_flag = {
+            "G": RUN_CASE_G, "Q": RUN_CASE_Q,
+            "EX": RUN_CASE_EX, "EY": RUN_CASE_EY,
+        }[case]
+        if run_flag:
+            res = run_case(case)
+            if res is not None:
+                results[case] = res
+    return results
 
 
 if __name__ == "__main__":

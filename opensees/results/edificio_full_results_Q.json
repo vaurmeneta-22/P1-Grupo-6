@@ -14553,5 +14553,34 @@
       ],
       "section": "30x80"
     }
-  }
+  },
+  "seismic_mass": {
+    "g": 9.81,
+    "alpha_sismo": 0.2,
+    "frac_live_sismic": 0.5,
+    "G_total_kN": 52272.5187,
+    "Q_total_kN": 11353.915,
+    "W_sismico_total_kN": 57949.4762,
+    "G_floor_kN": {
+      "Piso 1": 6541.6753,
+      "Piso 2": 10460.1921,
+      "Subterraneo": 1582.8487,
+      "Piso 3": 11100.5395,
+      "Piso 4": 22587.2631
+    },
+    "Q_floor_kN": {
+      "Piso 1": 1253.0692,
+      "Piso 2": 2283.7868,
+      "Subterraneo": 0.0,
+      "Piso 3": 2494.4868,
+      "Piso 4": 5322.5722
+    },
+    "piso_to_master": {
+      "Piso 1": 186,
+      "Piso 2": 29,
+      "Piso 3": 78,
+      "Piso 4": 146
+    }
+  },
+  "seismic_case": {}
 }
