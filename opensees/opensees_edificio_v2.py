@@ -10,30 +10,45 @@ Lee el contrato Edificio.json (cm) y arma el modelo global del edificio real:
   - Carga G = PESO PROPIO de elementos estructurales (nodal) +
               PESO PROPIO DE LOSA transferido a las vigas por
               AREAS TRIBUTARIAS (metodo 45°).
+  - Casos: G (gravedad), Q (sobrecarga), EX/EY (sismo pseudostatico).
+  - Carga Q y casos sismico EX/EY implementados (Semana 3): masa sismica
+    W_sismico = G + 0.50*Q, F_sismo = ALPHA_SISMO * W_sismico aplicada en el
+    centro de masa de cada piso (via el master del diafragma rigido).
 
 Losas (reglas del enunciado):
   * NO se modelan con elementos finitos (prohibido).
   * Su carga se transfiere a las vigas de borde por areas tributarias
-    (ver areas_tributarias.py), como carga lineal uniforme sobre la viga.
+    (ver areas_tributarias.py) POR TRAMOS, como carga lineal uniforme sobre
+    la viga. Los huecos de cobertura (borde con viga parcial) y las losas
+    aisladas (sin viga en ningun borde) se reportan como PENDIENTES, NO se
+    inventa soporte para compensarlos.
 
-IMPORTANTE (v2):
-  * La carga de TERMINACIONES (G) y SOBRECARGA (Q) y los casos
-    EX/EY/superposicion quedan pendientes (proximas versiones).
-  * La orientacion del eje fuerte de los muros es una SUPOSICION que debe
-    validarse con la convencion del curso.
-  * Las losas NO se modelan con elementos finitos (AGENTS.md).
+Notas de verificacion (Semana 3):
+  * Equilibrio: sigma F + sigma R = 0 (tol < 1e-10).
+  * Areas tributarias: A_transferida + A_huecos = A_losas_soportadas.
+  * F sismica esperada = alpha * W_efectivo, calculada de forma INDEPENDIENTE
+    de la lista aplicada (participacion lateral = pisos con diafragma).
+  * Corte basal con signo: F_aplicada + R_base = 0.
+  * El desplazamiento del master se transforma al centro de masa:
+        ux_CM = ux_master - Rz_master*(yCM - yM)
+        uy_CM = uy_master + Rz_master*(xCM - xM)
+    (Rz en rad, desplazamientos en metros; se exportan ambos: master y CM).
+  * Los 4-5 pisos se diagnostican: claves de diafragma duplicadas y pisos sin
+    master detectados en vez de sobrescribirse en silencio.
 
 Unidades internas (SI): metros, kN, kN·m. El contrato viene en centimetros.
 
 Como correr:
-    python opensees_edificio_v1.py
+    python opensees_edificio_v2.py            (todos los casos)
+    python opensees_edificio_v2.py --case G   (caso individual)
 
-Salida: resultados en opensees/results/edificio_full_results.json
+Salida: resultados en opensees/results/
 """
 
 import json
 import os
 import math
+from collections import defaultdict
 
 # Modulo local de areas tributarias (mismo directorio)
 from areas_tributarias import (
@@ -105,7 +120,10 @@ def load_json(path):
 
 
 def floor_of(z_cm):
-    """Asigna piso por altura, igual convencion que html_to_json.py."""
+    """Asigna piso por altura, igual convencion que html_to_json.py.
+    Se distingue EXPRESAMENTE el 'Techo' (z>=1780) del 'Piso 4' (1424-1780):
+    en el contrato existen dos niveles con esa etiqueta y colapsarlos haria que
+    dos niveles distintos compartieran masa sismica / master de diafragma."""
     if 0 <= z_cm < 356:
         return "Subterraneo"
     if 356 <= z_cm < 712:
@@ -116,7 +134,9 @@ def floor_of(z_cm):
         return "Piso 3"
     if 1424 <= z_cm < 1780:
         return "Piso 4"
-    return "Piso 4" if z_cm >= 1780 else "Subterraneo"
+    if 1780 <= z_cm:
+        return "Techo"
+    return "Subterraneo"
 
 
 def sec_wall_from_name(name, b, h):
@@ -418,11 +438,12 @@ def run_case(case_name="G"):
             continue
         if tag in ya_soportado:
             continue               # ya apoyo real o master de (a): no duplicar
-        prev = [p for p in sorted(col_tops.keys()) if p < z_cm - 0.1]
-        has_col = False
-        if prev:
-            p = max(prev)
-            has_col = (round(x_cm, 1), round(y_cm, 1)) in col_tops.get(p, set())
+        # Tiene columna bajo si el nodo coincide con el EXTREMO SUPERIOR de una
+        # columna en SU PROPIO nivel. col_tops guarda (x,y) del extremo superior
+        # por nivel z (cm). Antes se buscaba en un nivel ESTRICTAMENTE inferior,
+        # lo que no detectaba la columna cuyo tope esta en el mismo z del nodo
+        # (y al no encontrarla, el nodo recibia un apoyo vertical espurio).
+        has_col = (round(x_cm, 1), round(y_cm, 1)) in col_tops.get(round(z_cm), set())
         if has_col:
             continue               # tiene columna bajo
         if muro_cubre(x_cm, y_cm, z_cm):
@@ -497,9 +518,13 @@ def run_case(case_name="G"):
     nodal = {}            # node tag -> (fx, fy, fz)
     total_W = 0.0
     # Peso propio de elementos estructurales desglosado por piso (para masa
-    # sismica). Cada elemento reparte W/2 en cada extremo; ese medio se asigna
-    # al piso del nodo extremo (según su altura). Uso de z en cm para floor_of.
+    # sismica). Cada elemento reparte W/2 en cada extremo; cada medio se asigna
+    # al piso del nodo extremo respectivo (se contabilizan AMBOS extremos).
+    # El 'Subterraneo' (z<356) acumula el peso de lo que cae bajo el primer
+    # nivel: es MASA DE DIAFRAGMA no-restringida y NO participa en la carga
+    # lateral de piso (no hay diafragma en z=0), pero cuenta en el peso total.
     self_weight_by_floor = {}
+    self_weight_foundation = 0.0     # peso propio por debajo del primer forjado
 
     def node_xyz(tag):
         return ops.nodeCoord(tag)[:3]
@@ -516,9 +541,11 @@ def run_case(case_name="G"):
         k = (round(xi, 6), round(yi, 6), round(zi, 6))
         nodal.setdefault(i, [0.0, 0.0, 0.0])[2] -= half
         nodal.setdefault(j, [0.0, 0.0, 0.0])[2] -= half
-        # desglose por piso (nodo i)
-        fl_i = floor_of(zi * 100.0)
+        # desglose por piso: contabilizar W/2 en el piso de CADA extremo
+        zi_cm, zj_cm = zi * 100.0, zj * 100.0
+        fl_i, fl_j = floor_of(zi_cm), floor_of(zj_cm)
         self_weight_by_floor[fl_i] = self_weight_by_floor.get(fl_i, 0.0) + half
+        self_weight_by_floor[fl_j] = self_weight_by_floor.get(fl_j, 0.0) + half
 
     self_weight_kN = total_W      # peso propio de elementos estructurales (kN)
 
@@ -530,16 +557,29 @@ def run_case(case_name="G"):
                                        extra_kn_m2=TERMINACIONES_KNM2,
                                        include_self_weight=True)
 
+    # Tributario de Q (sobrecarga, sin peso propio): misma geometria tributaria
+    # que G, solo cambia la intensidad por m2. Se calcula UNA vez (no por viga).
+    cargas_losa_qQ = cargas_para_vigas(JSON_PATH, nodes_map,
+                                       extra_kn_m2=SOBRECARGA_KNM2,
+                                       include_self_weight=False)
+
+    # Area tributaria TRANSFERIDA por losa (id loza -> m2), identica en G y Q:
+    # solo suma lo que realmente llega a una viga (excluye huecos y losas
+    # aisladas). Se usa para G/Q por piso, masa sismica y centro de masa, de
+    # forma CONSISTENTE con la transferencia (punto 3 de la revision).
+    trib_area_by_loza = defaultdict(float)
+    for c in cargas_losa_qG.values():
+        for ap in c.get('aportes', []):
+            trib_area_by_loza[ap['loza']] += ap['area_m2']
+
     # Tributario EXPLICITO por viga (para el Tributary Area Inspector)
     tributary_by_viga = {}
     for tag, meta in elem_meta.items():
         if meta["type"] not in ("beam_x", "beam_y"):
             continue
-        c = cargas_losa_qG.get(tag) or {"p": 0.0, "A": 0.0, "W": 0.0}
-        cQ = cargas_para_vigas(JSON_PATH, nodes_map,
-                               extra_kn_m2=SOBRECARGA_KNM2,
-                               include_self_weight=False).get(tag) or \
-             {"p": 0.0, "A": 0.0, "W": 0.0}
+        c = cargas_losa_qG.get(tag) or {"p": 0.0, "A": 0.0, "W": 0.0,
+                                        "aportes": []}
+        cQ = cargas_losa_qQ.get(tag) or {"p": 0.0, "A": 0.0, "W": 0.0}
         tributary_by_viga[str(tag)] = {
             "type": meta["type"],
             "section": meta["section"],
@@ -548,6 +588,12 @@ def run_case(case_name="G"):
             "p_G_kN_m": round(c["p"], 6),
             "W_losa_Q_kN": round(cQ["W"], 6),
             "p_Q_kN_m": round(cQ["p"], 6),
+            "aportes": [
+                {"losa": ap["loza"], "borde": ap["borde"],
+                 "tramo_m": [ap["tramo"][0] / 100.0, ap["tramo"][1] / 100.0],
+                 "area_m2": ap["area_m2"], "W_G_kN": ap["W_kN"]}
+                for ap in c["aportes"]
+            ],
         }
 
     # ------------------------------------------------------------------
@@ -564,9 +610,7 @@ def run_case(case_name="G"):
         apply_selfweight = True
         is_lateral = False
     elif case_name == "Q":
-        cargas_losa = cargas_para_vigas(JSON_PATH, nodes_map,
-                                        extra_kn_m2=SOBRECARGA_KNM2,
-                                        include_self_weight=False)
+        cargas_losa = cargas_losa_qQ    # mismo calculo que G, intensidad q_Q
         apply_selfweight = False
         is_lateral = False
     else:                       # EX o EY: caso sismico lateral
@@ -619,16 +663,34 @@ def run_case(case_name="G"):
         z_cm = zm / CM_TO_M
         piso_to_master[floor_of(z_cm)] = master
 
+    # Diagnostico de correspondencia piso<->diafragma (punto 4 de la revision):
+    # claves de piso duplicadas (dos diafragmas en el mismo nivel -> la segunda
+    # sobrescribiria la primera). Los pisos con masa SIN master se detectan
+    # despues de construir G_floor (ver abajo).
+    duplicados_piso = defaultdict(int)
+    for master, zm, slaves in diaphragm_sets:
+        duplicados_piso[floor_of(zm / CM_TO_M)] += 1
+    piso_dup = {fl: n for fl, n in duplicados_piso.items() if n > 1}
+    if piso_dup:
+        print(f"  [AVISO] Diafragmas DUPLICADOS en piso: {piso_dup} "
+              f"(se sobrescribe, revisar)")
+
     # Carga de LOSA por piso, desglosada en G (PP+terminaciones) y Q (sobrecarga).
     # (Usa la misma geometria tributaria: solo difiere la intensidad por m2.)
+    # IMPORTANTE (consistencia, punto 3 de la revision): el area por piso es el
+    # area REALMENTE TRANSFERIDA a las vigas (trib_area_by_loza), identica a la
+    # masa sismica y a la transferencia G/Q. Las losas aisladas y los huecos de
+    # cobertura quedan FUERA de la masa del modelo (no hay elemento estructural
+    # que los lleve) y se reportan aparte.
     def losa_por_piso(w_m2_fn):
         acc = {}
         for e in elements:
             if e["type"] != "loza":
                 continue
+            A = trib_area_by_loza.get(e["id"], 0.0)
+            if A <= 0:
+                continue
             fl = floor_of(e["yi"])
-            A = (max(e["xi"], e["xj"]) - min(e["xi"], e["xj"])) / 100.0 * \
-                (max(e["zi"], e["zj"]) - min(e["zi"], e["zj"])) / 100.0
             acc[fl] = acc.get(fl, 0.0) + w_m2_fn(e) * A
         return acc
 
@@ -641,28 +703,130 @@ def run_case(case_name="G"):
     #   Q_floor = losa Q (sobrecarga) del piso
     G_floor = {}
     Q_floor = {}
-    for fl in set(list(self_weight_by_floor) + list(losa_G_by_floor)):
+    for fl in set(list(self_weight_by_floor) + list(losa_G_by_floor) +
+                  list(losa_Q_by_floor)):
         G_floor[fl] = self_weight_by_floor.get(fl, 0.0) + losa_G_by_floor.get(fl, 0.0)
         Q_floor[fl] = losa_Q_by_floor.get(fl, 0.0)
 
+    # Pisos con masa pero SIN master de diafragma (no participarian en sismo).
+    pisos_sin_master = sorted(
+        fl for fl in G_floor if fl != "Subterraneo" and fl not in piso_to_master)
+    if pisos_sin_master:
+        print(f"  [AVISO] Pisos con carga SIN master de diafragma: "
+              f"{pisos_sin_master} (no participan en masa sismica lateral)")
+
     G_total = sum(G_floor.values())
     Q_total = sum(Q_floor.values())
+    # Peso de fundacion/subterraneo (NO participa en carga lateral: no hay
+    # diafragma en z=0; el diafragma se apoya en los forjados superiores).
+    foundation_weight = G_floor.get("Subterraneo", 0.0)
     W_sismico_total = G_total + FRAC_LIVE_SISMIC * Q_total
 
     if is_lateral:
-        # Masa sismica reconstruida por piso; luego colapsada en un solo piso
-        # si el modelo es de un piso (pero el codigo queda preparado para N pisos).
+        # ==============================================================
+        # CENTRO DE MASA POR PISO (ponderado G + 0.50 Q)
+        # ==============================================================
+        # El nodo master del diafragma se elige por CONECTIVIDAD (nodo mas
+        # conectado del piso), no por el centro de masa. Aplicar la fuerza
+        # sismica en el master introduciria una torsion ESPURIA si el master
+        # no coincide con el CM. Por eso se calcula el CM de cada piso y la
+        # fuerza se aplica en el master como carga EQUIVALENTE:
+        #    Fx, Fy en el master + Mz = (xCM - xM)*Fy - (yCM - yM)*Fx
+        # (teorema de traslacion de fuerzas; la carga resultante actua en el
+        # CM real). El CM se calcula ponderando:
+        #   - masa ESTRUCTURAL por nodo (peso propio repartido W/2 por extremo)
+        #   - masa de LOSA del piso (G_losa + FRAC*Q), repartida en el contorno
+        #     de cada losa -> centroide geometrico de las losas del piso.
+        def tag_floor(tag):
+            z = ops.nodeCoord(tag)[2]
+            return floor_of(z * 100.0)
+
+        # masa estructural por nodo: |W/2 acumulada en z|, base para CM
+        struc_mass = {}   # tag -> kN (peso propio)
+        for tag, f in nodal.items():
+            w = abs(f[2])
+            if w > 0:
+                struc_mass[tag] = w
+
+        # CM y W por losa (pondera G_losa + FRAC*Q); centroide geometrico.
+        # Usa el area TRANSFERIDA (trib_area_by_loza), consistente con G_floor/
+        # Q_floor y con la masa sismica (losas aisladas y huecos excluidos).
+        losa_mass = {}    # fl -> (W_losa, cx, cy)
+        for e in elements:
+            if e["type"] != "loza":
+                continue
+            A = trib_area_by_loza.get(e["id"], 0.0)
+            if A <= 0:
+                continue
+            fl = floor_of(e["yi"])
+            w_m2 = (GAMMA_CONC * (e.get("t", 25.0) / 100.0) + TERMINACIONES_KNM2) \
+                + FRAC_LIVE_SISMIC * SOBRECARGA_KNM2
+            W = w_m2 * A
+            cx = ((e["xi"] + e["xj"]) / 2.0) / 100.0
+            cy = ((e["zi"] + e["zj"]) / 2.0) / 100.0
+            acc = losa_mass.get(fl)
+            if acc is None:
+                losa_mass[fl] = [W, W * cx, W * cy]
+            else:
+                acc[0] += W; acc[1] += W * cx; acc[2] += W * cy
+
         seismic = {}
-        for fl in G_floor:
-            W_floor = G_floor[fl] + FRAC_LIVE_SISMIC * Q_floor[fl]
+        for fl in sorted(set(tag_floor(t) for t in struc_mass) |
+                         set(losa_mass) | set(G_floor)):
+            if fl == "Subterraneo":
+                continue
+            # masa estructural de este piso: se suman TODOS los nodos con masa
+            # cuyo nivel (z) pertenece al piso (tag_floor), NO solo los nodos
+            # del diafragma (master+esclavos a z exacta). Un extremo de muro o
+            # elemento cuya z cae dentro de la banda del piso (pero distinta de
+            # la z exacta del diafragma) aporta su W/2 en self_weight_by_floor
+            # y DEBE contar igual en el CM para que W_CM == W_F se cumpla.
+            W_s = 0.0
+            cx_s = 0.0
+            cy_s = 0.0
+            for tag, w in struc_mass.items():
+                if tag_floor(tag) != fl:
+                    continue
+                x, y, _ = ops.nodeCoord(tag)
+                W_s += w
+                cx_s += w * x
+                cy_s += w * y
+            if W_s > 0:
+                cx_s /= W_s
+                cy_s /= W_s
+            # masa de losa de este piso
+            W_l, lx, ly = losa_mass.get(fl, [0.0, 0.0, 0.0])
+            cx_l = lx / W_l if W_l > 0 else 0.0
+            cy_l = ly / W_l if W_l > 0 else 0.0
+            W_floor = G_floor.get(fl, 0.0) + FRAC_LIVE_SISMIC * Q_floor.get(fl, 0.0)
+            cx = ((W_s * cx_s + W_l * cx_l) / (W_s + W_l)) if (W_s + W_l) else 0.0
+            cy = ((W_s * cy_s + W_l * cy_l) / (W_s + W_l)) if (W_s + W_l) else 0.0
+            # Verificacion de consistencia (punto 5): el peso total de la masa
+            # usada en el CM (estructura + losa) debe coincidir con el peso de
+            # la fuerza F = alpha*W_sismico del piso (W_CM == W_F).
+            W_cm = W_s + W_l
+            err_wcm = (abs(W_cm - W_floor) / W_floor) if W_floor else 0.0
             seismic[fl] = {
-                "G_floor": G_floor[fl],
-                "Q_floor": Q_floor[fl],
+                "G_floor": G_floor.get(fl, 0.0),
+                "Q_floor": Q_floor.get(fl, 0.0),
                 "W_sismico_floor": W_floor,
-                "massa_piso": W_floor / g,          # masa [t] (kN/(m/s^2))
-                "F_floor": ALPHA_SISMO * W_floor,    # fuerza lateral en ese piso
+                "massa_piso": W_floor / g,
+                "masa_kg": 1000.0 * W_floor / g,
+                "F_floor": ALPHA_SISMO * W_floor,
                 "master": piso_to_master.get(fl),
+                "CM": (cx, cy),
+                "W_cm_check": W_cm,
+                "err_W_cm": err_wcm,
             }
+
+        # todas_ok de masa sismica: W_CM == W_F en 100% de los pisos con masa
+        ok_mass = all(s["err_W_cm"] < 1e-10 for s in seismic.values()) \
+            and bool(seismic)
+        if not ok_mass:
+            for fl, s in seismic.items():
+                if s["err_W_cm"] >= 1e-10:
+                    print(f"  [AVISO] W_CM != W_F en {fl}: "
+                          f"W_cm={s['W_cm_check']:.3f} vs W_F={s['W_sismico_floor']:.3f}")
 
         print(f"\n  === MASA SISMICA (G + {FRAC_LIVE_SISMIC:.0%} Q) ===  "
               f"alpha_sismo={ALPHA_SISMO:.2f}")
@@ -670,23 +834,54 @@ def run_case(case_name="G"):
             s = seismic[fl]
             print(f"    {fl:12s}: G={s['G_floor']:10.2f}  Q={s['Q_floor']:9.2f}  "
                   f"W={s['W_sismico_floor']:10.2f}  m={s['massa_piso']:9.1f} t  "
-                  f"F={s['F_floor']:9.2f} kN  master={s['master']}")
+                  f"F={s['F_floor']:9.2f} kN  master={s['master']}  "
+                  f"CM=({s['CM'][0]:.2f},{s['CM'][1]:.2f})")
 
-        # Aplicar la fuerza lateral en el centro de masa (master) de cada piso.
-        # EX: Fy=0, Fx=+F ; EY: Fx=0, Fy=+F   (sentido positivo del eje global).
+        # Aplicar la fuerza en el CM via carga equivalente en el master.
+        # EX: Fx=+F ; EY: Fy=+F (sentido positivo del eje global).
         dirx = 1 if case_name == "EX" else 0
         diry = 1 if case_name == "EY" else 0
         F_total_lateral = 0.0
+        W_sismico_efectivo = 0.0     # solo pisos con diafragma (participan)
         for fl, s in seismic.items():
             if s["master"] is None:
                 continue
             F = s["F_floor"]
-            ops.load(s["master"], dirx * F, diry * F, 0.0, 0.0, 0.0, 0.0)
+            W_sismico_efectivo += s["W_sismico_floor"]
+            cx, cy = s["CM"]
+            xm, ym, _ = ops.nodeCoord(s["master"])
+            # Mz de la fuerza trasladada del CM al master
+            Mz = (cx - xm) * (diry * F) - (cy - ym) * (dirx * F)
+            ops.load(s["master"], dirx * F, diry * F, 0.0, 0.0, 0.0, Mz)
             F_total_lateral += F
         total_W_apply = F_total_lateral
         print(f"  SISMO {case_name}: F_total aplicada = {F_total_lateral:.2f} kN "
               f"sobre {len([s for s in seismic.values() if s['master']])} pisos")
+        print(f"  F esperada = alpha*W_efectivo = {ALPHA_SISMO*W_sismico_efectivo:.2f} kN "
+              f"(W_efectivo={W_sismico_efectivo:.2f} kN, fundacion excluida="
+              f"{foundation_weight:.2f} kN)")
         print(f"  CARGA {case_name} TOTAL (corte basal esperado) : {total_W_apply:.2f} kN")
+
+        # Fuerza esperada CON INDEPENDENCIA de la lista aplicada (punto 6 de la
+        # revision): se recalcula desde G_floor/Q_floor directamente, exigiendo
+        # participacion de todos los pisos con masa (excepto Subterraneo) y que
+        # ninguno quedara sin master. No se reutiliza 'seismic' para el check.
+        W_ef_indep = sum(
+            G_floor.get(fl, 0.0) + FRAC_LIVE_SISMIC * Q_floor.get(fl, 0.0)
+            for fl in G_floor
+            if fl != "Subterraneo" and fl in piso_to_master)
+        F_esperada_indep = ALPHA_SISMO * W_ef_indep
+        participacion_ok = (not pisos_sin_master) and \
+            all(fl in piso_to_master for fl in G_floor if fl != "Subterraneo")
+        okFe = (F_esperada_indep > 0.0 and F_total_lateral > 0.0
+                and abs(F_total_lateral - F_esperada_indep) / F_esperada_indep
+                < 1e-10 and participacion_ok)
+        err_Fe = (abs(F_total_lateral - F_esperada_indep) / F_esperada_indep
+                  if F_esperada_indep else float("inf"))
+        print(f"  F esperada (independiente)= {F_esperada_indep:.2f} kN  "
+              f"(W_efectivo_indep={W_ef_indep:.2f} kN, "
+              f"fundacion_excluida={foundation_weight:.2f} kN)  "
+              f"err={err_Fe:.3e}  ({'OK' if okFe else 'NO'})")
 
     # Para la auditoria/conservacion (caso G y Q):
     seismic_summary = {
@@ -745,14 +940,15 @@ def run_case(case_name="G"):
         for tag in base_support_tags:
             r = ops.nodeReaction(tag)
             R_base += r[dir_axis]
-        err = abs((F_applied + R_base) / F_applied) if F_applied else 0.0
-        ok_eq = err < 1e-6
+        # Ecuacion de equilibrio CON SIGNO: F_aplicada + R_base = 0.
+        err = (abs(F_applied + R_base) / F_applied) if F_applied else float("inf")
+        ok_eq = err < 1e-10 and F_applied > 0.0
         print(f"    . Equilibrio {case_name}: F_applied={F_applied:12.3f}  "
               f"R_base({case_name[-1]})={R_base:12.3f}  err={err:.3e}  "
               f"({'OK' if ok_eq else 'NO'})")
     else:
-        err = abs((total_W_apply - Rz) / total_W_apply) if total_W_apply else 0.0
-        ok_eq = err < 1e-6
+        err = abs((total_W_apply - Rz) / total_W_apply) if total_W_apply else float("inf")
+        ok_eq = err < 1e-10 and total_W_apply > 0.0
         print(f"    . Equilibrio {case_name}: SigmaX={Rx:9.3f}  SigmaY={Ry:9.3f}  "
               f"SigmaZ={Rz:12.3f}  W={total_W_apply:12.3f}  err={err:.3e}  "
               f"({'OK' if ok_eq else 'NO'})")
@@ -761,28 +957,33 @@ def run_case(case_name="G"):
     ok_areas, res_areas = verificar_areas_tributarias(
         JSON_PATH, nodes_map, extra_kn_m2=TERMINACIONES_KNM2,
         include_self_weight=True)
+    ok_conserv = (res_areas['conservacion_rel_W'] < 1e-10
+                  and res_areas['conservacion_rel_A'] < 1e-10)
     print(f"    . Carga de losa q_G: W_losas={res_areas['W_losas_kN']:.1f} kN, "
           f"W_vigas(transf)={res_areas['W_vigas_kN']:.1f} kN, "
-          f"conservacion rel={res_areas['conservacion_rel']:.3e} "
-          f"({'OK' if res_areas['conservacion_rel'] < 1e-10 else 'NO'})")
+          f"W_huecos={res_areas['W_huecos_kN']:.3f} kN, "
+          f"conservacion rel={res_areas['conservacion_rel_W']:.3e} "
+          f"({'OK' if ok_conserv else 'NO'})")
     print(f"      Suma areas trib: A_lozas={res_areas['A_lozas_total_m2']:.2f} m2, "
           f"A_trib(vigas)={res_areas['A_trib_total_m2']:.2f} m2, "
-          f"diferencia rel={res_areas['area_rel']:.3e} "
-          f"({'OK' if res_areas['area_rel'] < 1e-10 else 'NO'})")
+          f"A_huecos={res_areas['A_huecos_m2']:.3f} m2, "
+          f"diferencia rel={res_areas['conservacion_rel_A']:.3e} "
+          f"({'OK' if ok_conserv else 'NO'})")
+    if res_areas['huecos_pendientes']:
+        print("      Huecos de cobertura (borde con viga parcial, sin soporte):")
+        for h in res_areas['huecos_pendientes']:
+            print(f"        losa {h['loza']} {h['borde']} "
+                  f"tramo={h['hueco_cm']} A={h['area_m2']:.4f} m2")
+    for lz in res_areas['aisladas']:
+        print(f"      Losa aislada (sin viga en ningun borde): "
+              f"losa {lz['id']} A={lz.get('A_m2', 0.0):.4f} m2 "
+              f"[{lz['motivo']}]")
 
-    # (c) Carga de losa por piso (q_G)
-    por_piso = {}
-    for e in elements:
-        if e["type"] != "loza":
-            continue
-        fl = floor_of(e["yi"])
-        A = (max(e["xi"], e["xj"]) - min(e["xi"], e["xj"])) / 100.0 * \
-            (max(e["zi"], e["zj"]) - min(e["zi"], e["zj"])) / 100.0
-        w_m2 = GAMMA_CONC * (e.get("t", 25.0) / 100.0) + TERMINACIONES_KNM2
-        por_piso[fl] = por_piso.get(fl, 0.0) + w_m2 * A
-    print("    . Carga de losa (q_G) por piso (kN):")
-    for fl, W in sorted(por_piso.items()):
-        print(f"        {fl:12s}: {W:.2f} kN")
+    # (c) Carga de losa por piso (q_G y q_Q), area TRANSFERIDA
+    print("    . Carga de losa por piso (kN), area transferida:")
+    for fl in sorted(set(list(losa_G_by_floor) + list(losa_Q_by_floor))):
+        print(f"        {fl:12s}: G_losa={losa_G_by_floor.get(fl,0.0):.2f}  "
+              f"Q_losa={losa_Q_by_floor.get(fl,0.0):.2f}")
 
     # (d) Compatibilidad del diafragma rigido
     dmax = 0.0
@@ -803,31 +1004,45 @@ def run_case(case_name="G"):
     # ------------------------------------------------------------------
     # AUDITORIA ESPECIFICA DE CARGA VIVA Q (Parte A)
     # ------------------------------------------------------------------
-    # Verifica conservacion:  Σ(Q transferida a vigas) ≈ q_Q * A_total_losa.
+    # Verifica conservacion:  Σ(Q transferida a vigas) ≈ q_Q * A_transferible.
     # La carga viva usa EXACTAMENTE la misma geometria tributaria que G, por lo
     # que el doble conteo se evita usando q_Q (sin incluir peso propio de losa)
     # sobre las mismas areas tributarias. Q queda en un pattern independiente.
     if case_name == "Q":
-        # Area total de losa (m2) desde el contrato:
-        A_total = 0.0
-        for e in elements:
-            if e["type"] != "loza":
-                continue
-            A_total += (max(e["xi"], e["xj"]) - min(e["xi"], e["xj"])) / 100.0 * \
-                       (max(e["zi"], e["zj"]) - min(e["zi"], e["zj"])) / 100.0
-        Q_teorica = SOBRECARGA_KNM2 * A_total
+        # Referencia: area realmente TRANSFERIBLE = losas soportadas MENOS los
+        # huecos de cobertura (borde con viga parcial, ese pedazo no llega a
+        # ninguna viga). El verificador reporta aparte:
+        #   * losas aisladas (antepecho/remate de borde, 20 x 282 cm, una por
+        #     nivel 388.5/744.5/1100.5/1456.5): sin viga en NINGUN borde -> no
+        #     tienen elementos estructurales que las reciban; excluidas del
+        #     modelo y reportadas aparte (2.256 m2 en total);
+        #   * huecos: borde con viga parcial -> la franja sin viga queda como
+        #     pendiente y NO se inventa soporte.
+        _, resQ = verificar_areas_tributarias(
+            JSON_PATH, nodes_map, extra_kn_m2=SOBRECARGA_KNM2,
+            include_self_weight=False)
+        A_soportada = resQ['A_lozas_total_m2']
+        A_huecos = resQ['A_huecos_m2']
+        A_aisladas = resQ['A_lozas_aisladas_m2']
+        A_transferible = A_soportada - A_huecos
+        Q_teorica = SOBRECARGA_KNM2 * A_transferible
         Q_transferida = total_losa          # carga viva realmente transferida a vigas
-        errQ = abs(Q_transferida - Q_teorica) / Q_teorica if Q_teorica else 0.0
-        okQ = errQ < 1e-6
+        errQ = abs(Q_transferida - Q_teorica) / Q_teorica if Q_teorica else float("inf")
+        okQ = errQ < 1e-10 and Q_teorica > 0.0
         print("=" * 70)
         print("=== AUDITORIA CARGA VIVA Q ===")
-        print(f"Area total losa           = {A_total:.2f} m2")
+        print(f"Area losa soportada       = {A_soportada:.2f} m2")
+        print(f"Area huecos (banda suelta)= {A_huecos:.4f} m2 "
+              f"({len(resQ['huecos_pendientes'])} bordes con viga parcial)")
+        print(f"Area losas aisladas excl.  = {A_aisladas:.4f} m2 "
+              f"({len(resQ['aisladas'])} losas sin viga de apoyo)")
+        print(f"Area TRANSFERIBLE          = {A_transferible:.2f} m2")
         print(f"q_Q                       = {SOBRECARGA_KNM2:.2f} kN/m2")
-        print(f"Q teorica  = q_Q*A        = {Q_teorica:.2f} kN")
+        print(f"Q teorica  = q_Q*A_transf  = {Q_teorica:.2f} kN")
         print(f"Q transferida a vigas     = {Q_transferida:.2f} kN")
         print(f"Diferencia                = {Q_transferida - Q_teorica:.4f} kN")
         print(f"Error relativo            = {errQ:.3e} ({errQ*100:.5f} %)")
-        print(f"Estado                    = {'OK' if okQ else 'REVISAR'}")
+        print(f"Estado                      = {'OK' if okQ else 'REVISAR'}")
         print("=" * 70)
 
     # ------------------------------------------------------------------
@@ -841,9 +1056,13 @@ def run_case(case_name="G"):
     #    relevante, revisar asimetria de rigidez / posicion de CM-CR).
     if is_lateral:
         dir_axis = 0 if case_name == "EX" else 1   # 0=X, 1=Y
+        dir_sense = 1                               # fuerza aplicada en eje (+)
         F_aplicada = total_W_apply
-        # Corte basal: suma de reacciones horizontales SOLO en apoyos de
-        # fundacion verdaderamente fijos (1,1,1,1,1,1). Los nodos esclavos
+        # (2b) Fuerza sismica esperada: usa la verif. INDEPENDIENTE calculada
+        # antes del analisis (F_esperada_indep desde G_floor/Q_floor, sin
+        # reutilizar la lista aplicada). No se recalcula aqui.
+        # Corte basal CON SIGNO: suma de reacciones horizontales SOLO en apoyos
+        # de fundacion verdaderamente fijos (1,1,1,1,1,1). Los nodos esclavos
         # del diafragma y los floating/piso_vertical (0,0,1,1,1,0) tienen
         # ux/uy libres; sus nodeReaction en DOF horizontales contienen
         # fuerzas de constraint internas que NO son reacciones de apoyo.
@@ -851,8 +1070,9 @@ def run_case(case_name="G"):
         for tag in base_support_tags:
             r = ops.nodeReaction(tag)
             corte += r[dir_axis]
-        errV = abs(abs(corte) - F_aplicada) / F_aplicada if F_aplicada else 0.0
-        okV = errV < 1e-6
+        # Ecuacion F + R_base = 0 (signo): corte debe SALIR del signo opuesto.
+        errV = (abs(F_aplicada + corte) / F_aplicada) if F_aplicada else float("inf")
+        okV = errV < 1e-10 and F_aplicada > 0.0
         # desplazamiento y rotacion del nodo master de cada piso
         cm_info = []
         for fl, s in seismic.items():
@@ -861,23 +1081,32 @@ def run_case(case_name="G"):
                 continue
             d = ops.nodeDisp(m)
             cm_info.append((fl, m, d[0], d[1], d[5]))
+        # sentido de la deformada en TODOS los pisos (no solo el primero):
+        # en un analisis estatico lineal toda la torre debe deformarse en el
+        # sentido de la fuerza aplicada (deformada del primer modo).
+        signo_ok = True
+        detalles_signo = []
+        for fl, m, ux, uy, rz in sorted(cm_info, key=lambda t: t[0]):
+            d_eje = ux if dir_axis == 0 else uy
+            sentido = 1 if d_eje >= 0 else -1
+            if abs(d_eje) > 1e-12 and sentido != dir_sense:
+                signo_ok = False
+                detalles_signo.append((fl, d_eje))
         print("=" * 70)
         print(f"=== AUDITORIA SISMO {case_name} ===")
         print(f"Fuerza lateral aplicada    = {F_aplicada:.2f} kN")
+        print(f"F esperada (independiente) = {F_esperada_indep:.2f} kN  "
+              f"err={err_Fe:.3e}  {'OK' if okFe else 'REVISAR'}")
         print(f"Corte basal    {'(X)' if dir_axis==0 else '(Y)'}           = {corte:10.2f} kN")
-        print(f"Diferencia                 = {abs(corte) - F_aplicada:.4f} kN")
-        print(f"Error relativo             = {errV:.3e} ({errV*100:.5f} %)")
-        print(f"Estado                     = {'OK' if okV else 'REVISAR'}")
+        print(f"F + R_base (con signo)     = {F_aplicada + corte:.4e}  "
+              f"errV={errV:.3e}  {'OK' if okV else 'REVISAR'}")
         for fl, m, ux, uy, rz in sorted(cm_info, key=lambda t: t[0]):
             print(f"  CM piso {fl:10s} (master={m}): "
                   f"Ux={ux/1e-3:9.4f} mm  Uy={uy/1e-3:9.4f} mm  Rz={rz:10.2e} rad")
-        # sentido de la deformada en el eje de la fuerza
-        if dir_axis == 0:
-            d_cm = cm_info[0][2] if cm_info else 0.0
-        else:
-            d_cm = cm_info[0][3] if cm_info else 0.0
-        print(f"Desplazamiento CM en eje {case_name[-1]}: {d_cm/1e-3:.4f} mm "
-              f"(sentido {'+' if d_cm >= 0 else '-'})")
+        if detalles_signo:
+            print(f"  [AVISO] pisos con sentido opuesto a F (+): {detalles_signo}")
+        print(f"Sentido de deformada (eje {case_name[-1]}): "
+              f"{'OK en todos los pisos' if signo_ok else 'REVISAR'}")
         print("=" * 70)
 
     # ------------------------------------------------------------------
@@ -904,10 +1133,50 @@ def run_case(case_name="G"):
     # En casos no laterales, seismic no se calcula; se deja como dict vacio.
     seismic_export = seismic if is_lateral else {}
 
+    # Resultados por piso para sismo: desplazamiento del master, transformada al
+    # CM (movimiento de cuerpo rigido) y participacion lateral.
+    seismic_floor_results = {}
+    if is_lateral:
+        for fl, s in seismic.items():
+            m = s["master"]
+            if m is None:
+                continue
+            d = ops.nodeDisp(m)
+            ux_m, uy_m, rz_m = d[0], d[1], d[5]     # m, m, rad
+            cx, cy = s["CM"]
+            xm, ym, _ = ops.nodeCoord(m)
+            # (5) Traslacion del movimiento del master al CENTRO DE MASA:
+            #     ux_CM = ux_master - Rz*(yCM - yM)
+            #     uy_CM = uy_master + Rz*(xCM - xM)
+            ux_cm = ux_m - rz_m * (cy - ym)
+            uy_cm = uy_m + rz_m * (cx - xm)
+            seismic_floor_results[fl] = {
+                "master": m,
+                "CM_x_m": round(cx, 4),
+                "CM_y_m": round(cy, 4),
+                "F_x_kN": round(dirx * s["F_floor"], 4),
+                "F_y_kN": round(diry * s["F_floor"], 4),
+                "W_sismico_kN": round(s["W_sismico_floor"], 4),
+                "masa_kg": round(s["masa_kg"], 3),
+                "W_CM_check_kN": round(s["W_cm_check"], 4),
+                "err_W_cm": round(s["err_W_cm"], 12),
+                "Ux_master_m": round(ux_m, 10),
+                "Uy_master_m": round(uy_m, 10),
+                "Ux_CM_m": round(ux_cm, 10),
+                "Uy_CM_m": round(uy_cm, 10),
+                "Rz_rad": round(rz_m, 12),
+            }
+
+    # okQ/okV/okFe solo cobran sentido en sus casos; ok_mass en laterales.
+    ok_q = okQ if case_name == "Q" else True
+    ok_v = okV if is_lateral else True
+    ok_fe = okFe if is_lateral else True
+    ok_m = ok_mass if is_lateral else True
+
     result = {
         "model": data["model"],
         "case": case_name,
-        "units_internal": {"length": "m", "force": "kN"},
+        "units_internal": {"length": "m", "force": "kN", "moment": "kN*m"},
         "summary": {
             "nodes_total": n_nodes_total,
             "elements_structural": n_created,
@@ -916,14 +1185,33 @@ def run_case(case_name="G"):
             f"Carga_{case_name}_total_kN": round(total_W_apply, 4),
         },
         "verifications": {
-            "carga_losa_por_piso_kN": {fl: round(W, 4) for fl, W in por_piso.items()},
+            "carga_losa_G_por_piso_kN": {fl: round(W, 4)
+                                          for fl, W in losa_G_by_floor.items()},
+            "carga_losa_Q_por_piso_kN": {fl: round(W, 4)
+                                          for fl, W in losa_Q_by_floor.items()},
             "suma_areas_tributarias_m2": round(res_areas["A_trib_total_m2"], 4),
             "area_lozas_total_m2": round(res_areas["A_lozas_total_m2"], 4),
-            "area_rel_error": round(res_areas["area_rel"], 12),
-            "conservacion_carga_rel": round(res_areas["conservacion_rel"], 12),
+            "area_huecos_m2": round(res_areas["A_huecos_m2"], 4),
+            "area_lozas_aisladas_m2": round(res_areas["A_lozas_aisladas_m2"], 4),
+            "n_huecos_pendientes": len(res_areas["huecos_pendientes"]),
+            "n_losas_aisladas": len(res_areas["aisladas"]),
+            "area_conservacion_rel": round(res_areas["conservacion_rel_A"], 12),
+            "carga_conservacion_rel": round(res_areas["conservacion_rel_W"], 12),
             "equilibrio_error": round(err, 12),
+            "todas_ok_eq": bool(ok_eq),
             "diafragma_compatibilidad_err_max_m": round(dmax, 12),
-            "todas_ok": bool(ok_eq and ok_areas and ok_dia),
+            "todas_ok_dia": bool(ok_dia),
+            "W_CM_coincide_W_F": bool(ok_m),
+            "conservacion_q_error": round(errQ, 12) if case_name == "Q" else None,
+            "todas_ok_q": bool(ok_q),
+            "F_esperada_indep_kN": round(F_esperada_indep, 4) if is_lateral else None,
+            "F_aplicada_kN": round(F_aplicada, 4) if is_lateral else None,
+            "corte_basal_error": round(errV, 12) if is_lateral else None,
+            "todas_ok_sismo_basal": bool(ok_v),
+            "F_esperada_error": round(err_Fe, 12) if is_lateral else None,
+            "todas_ok_sismo_F": bool(ok_fe),
+            "todas_ok": bool(ok_eq and ok_areas and ok_dia and ok_q
+                           and ok_m and ok_fe and ok_v),
         },
         "tributary_by_viga": tributary_by_viga,
         "displacements_m": disp,
@@ -937,11 +1225,14 @@ def run_case(case_name="G"):
             "G_total_kN": round(G_total, 4),
             "Q_total_kN": round(Q_total, 4),
             "W_sismico_total_kN": round(W_sismico_total, 4),
+            "W_sismico_efectivo_kN": round(W_sismico_efectivo, 4) if is_lateral else None,
+            "fundacion_excluida_kN": round(foundation_weight, 4),
             "G_floor_kN": {fl: round(v, 4) for fl, v in G_floor.items()},
             "Q_floor_kN": {fl: round(v, 4) for fl, v in Q_floor.items()},
             "piso_to_master": piso_to_master,
         },
         "seismic_case": seismic_export,
+        "seismic_floor_results": seismic_floor_results,
     }
 
     os.makedirs(BASE, exist_ok=True)
