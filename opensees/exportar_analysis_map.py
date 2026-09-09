@@ -137,9 +137,26 @@ def main():
         return {"P": pm["P_kN_fiber"], "M": pm["M_kNm_fiber"],
                 "seccion": pm["seccion"]}
 
+    # Todos los muros del contrato con curva P-M: se mapea por el `seccion`
+    # del JSON (que coincide con el nombre de seccion del viewer). La clave
+    # del archivo pm_muro_30x356.json es "muro_30x356" -> se expone como
+    # "30x356" para que el viewer la encuentre.
+    muros_capacidad = {}
+    for fn in sorted(os.listdir(FIGURES)):
+        if not fn.startswith("pm_") or not fn.endswith(".json"):
+            continue
+        if fn == "pm_columna_70x70.json":
+            continue
+        pm = load_pm(fn)
+        clave = pm["seccion"]
+        if clave == "muro_30x356":
+            clave = "30x356"
+        muros_capacidad[clave] = pm
+
     capacidad = {
         "columna": load_pm("pm_columna_70x70.json"),
         "muro": load_pm("pm_muro_30x356.json"),
+        "muros": muros_capacidad,
     }
 
     out = {

@@ -120,6 +120,8 @@ cd opensees
 python exportar_analysis_map.py
 ```
 
+La capacidad P-M se genera con `scripts/parte_d_fiber.py` (columna 70x70 y muro 30x356) y `scripts/parte_d_muros.py` (los **14 muros del contrato restantes**, con la enfierradura proporcional de `sections.muro_tipificado()`). El visor busca cada curva por el nombre de sección del elemento.
+
 Luego abrir `edificio_3d.html` y usar `TAB` para el modo análisis.
 
 ### Unity

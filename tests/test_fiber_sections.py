@@ -32,6 +32,41 @@ def test_columna_areas():
     assert sections.COLUMNA["db"] == 25.0
 
 
+def test_muro_tipificado_escala():
+    """La regla proporcional reproduce las proporciones del 30x356 y
+    cubre las 14 secciones de muro adicionales del contrato."""
+    # el 30x356 es el caso base (borde 11.2% de Lw)
+    base = sections.MURO
+    assert base["Lw"] == 3560.0
+    assert math.isclose(base["borde"] / base["Lw"], 0.112, rel_tol=5e-3)
+
+    # regla: borde proporcional, filas proporcionales, malla fija phi10@20
+    grand = sections.muro_tipificado("30x1000", 30.0, 1000.0)
+    assert grand["Lw"] == 10000.0
+    assert math.isclose(grand["borde"] / grand["Lw"],
+                        round(0.112 * grand["Lw"], 1) / grand["Lw"],
+                        rel_tol=1e-9)
+    # filas de borde escaladas en la misma proporcion
+    assert math.isclose(grand["filas_b"][0] / grand["Lw"],
+                        round(0.0225 * grand["Lw"], 1) / grand["Lw"], rel_tol=1e-9)
+    assert math.isclose(grand["filas_b"][1] / grand["Lw"],
+                        round(0.0674 * grand["Lw"], 1) / grand["Lw"], rel_tol=1e-9)
+    # malla central sin cambios (phi10 @ 200 mm doble)
+    assert grand["db_malla"] == 10.0 and grand["s_malla"] == 200.0
+
+    # todos los muros reales del contrato estan cubiertos
+    esperadas = {"60x291.5", "60x292", "25x795", "25x585", "30x2695",
+                 "25x282", "30x725", "30x1000", "30x890", "30x615",
+                 "25x158", "25x365", "30x225", "30x310"}
+    claves = {s["nombre"] for s in sections.WALLS}
+    assert claves == esperadas
+    # geometria coherente en todos: borde al interior del largo, filas ordenadas
+    for s in sections.WALLS:
+        assert 0 < s["borde"] < s["Lw"] / 2 - 50.0
+        assert s["filas_b"][0] < s["filas_b"][1] < s["borde"]
+        assert sections.area_acero(s) > 0
+
+
 def test_muro_areas():
     bw, Lw, bars, Ast = vh.seccion_muro()
     assert bw == 300.0 and Lw == 3560.0

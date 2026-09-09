@@ -2203,11 +2203,12 @@ const F = ANALYSIS.forces[S.caso] || {};
   // Dibuja la curva P-M de capacidad (columna o muro) + punto de demanda
   function drawPM(meta, Pd, Md, caso) {
     const sec = meta.section;
-    const curvas = {
-      '70x70': ANALYSIS.capacidad.columna,
-      '30x356': ANALYSIS.capacidad.muro
-    };
-    const cur = curvas[sec];
+    // todas las secciones: muros con curva propia (capacidad.muros[sec]),
+    // respaldando las dos claves historicas columna '70x70' / muro '30x356'.
+    const cur =
+      (ANALYSIS.capacidad.muros && ANALYSIS.capacidad.muros[sec]) ||
+      (sec === '70x70' && ANALYSIS.capacidad.columna) ||
+      (sec === '30x356' && ANALYSIS.capacidad.muro) || null;
     if (!cur) {
       inspectorEl.style.display = 'block';
       inspectorBody.innerHTML = (meta.type === 'column' ? 'Columna' : 'Muro') + ' seccion ' + sec +

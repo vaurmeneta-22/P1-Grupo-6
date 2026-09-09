@@ -40,9 +40,63 @@ MURO = {
     "rec": 50.0,                      # recubrimiento al centro de barra
     "nb_borde": 4, "db_borde": 16.0,  # 4 phi16 por borde (2 por extremo/fila)
     "db_malla": 10.0, "s_malla": 200.0,  # phi10 @ 20 cm, doble capa
+    "filas_b": [80.0, 240.0],         # filas de acero de borde (desde el extremo)
     "nFY": 40, "nFZ": 6,              # fibras de concreto (40 a lo largo)
     "fuente": "sections.json wall_30x356 (contracto)",
 }
+
+
+def muro_tipificado(clave, bw_cm, Lw_cm):
+    """Config de seccion de muro generica con la misma regla que el 30x356
+    (recubrimiento 50 mm al centro de barra, bordes con 4 phi16 en 2 filas y
+    malla phi10 @ 20 cm doble capa en la zona central) pero escalada
+    proporcionalmente a la geometria dada. `clave` es el nombre de la seccion
+    en el contrato (p.ej. "30x2695"); bw_cm x Lw_cm son las dimensiones en cm.
+
+    Regla de escala:
+      - borde concentrado = 11.2% del largo (400/3560 del 30x356).
+      - filas de acero de borde a 2.25% y 6.74% del largo (80/3560, 240/3560).
+      - malla central de phi10 @ 200 mm doble capa (igual en todos).
+      - fibras de concreto a lo largo proporcionales (40 para Lw=3560 mm).
+    """
+    bw = bw_cm * 10.0
+    Lw = Lw_cm * 10.0
+    return {
+        "nombre": clave,
+        "tipo": "muro",
+        "bw": bw, "Lw": Lw,            # mm
+        "borde": round(0.112 * Lw, 1),
+        "rec": 50.0,
+        "nb_borde": 4, "db_borde": 16.0,
+        "db_malla": 10.0, "s_malla": 200.0,
+        "filas_b": [round(0.0225 * Lw, 1), round(0.0674 * Lw, 1)],
+        "nFY": max(16, int(round(Lw / 89.0))),
+        "nFZ": 6,
+        "fuente": "regla proporcional muro_tipificado()",
+    }
+
+
+# Muros reales del contrato (no 1D) que circulan en el edificio. El 30x356
+# (reference) se mantiene en MURO; el resto se tipifican con la regla.
+# Formato: (clave contrato, espesor cm, largo en planta cm). En el contrato
+# "30x2695" el largo es 269.5 cm (los b/h de Edificio.json lo confirman).
+MUROS_EXTRA = [
+    ("60x291.5", 60.0, 291.5),
+    ("60x292", 60.0, 292.0),
+    ("25x795", 25.0, 795.0),
+    ("25x585", 25.0, 585.0),
+    ("30x2695", 30.0, 269.5),
+    ("25x282", 25.0, 282.0),
+    ("30x725", 30.0, 725.0),
+    ("30x1000", 30.0, 1000.0),
+    ("30x890", 30.0, 890.0),
+    ("30x615", 30.0, 615.0),
+    ("25x158", 25.0, 158.0),
+    ("25x365", 25.0, 365.0),
+    ("30x225", 30.0, 225.0),
+    ("30x310", 30.0, 310.0),
+]
+WALLS = [muro_tipificado(clave, bw, Lw) for clave, bw, Lw in MUROS_EXTRA]
 
 # area de una barra (mm2)
 def abar(d):
@@ -74,14 +128,14 @@ def build_columna(mat_conc, mat_ac, sec_tag):
     ops.layer("straight", mat_ac, 3, a, y_bot, x1, y_bot, x2)
 
 
-def build_muro(mat_conc, mat_ac, sec_tag):
-    """Crea la seccion fibra del muro 30x356 (2D, flexion en el plano).
+def build_muro(section, mat_conc, mat_ac, sec_tag):
+    """Crea la seccion fibra de un muro generico (2D, flexion en el plano).
     Eje y = largo Lw (flexion fuerte), z = espesor bw.
-    - Elementos de borde (400 mm) en cada extremo: 2 barras de 16 mm por fila,
-      filas separadas 80 mm (2 filas -> 4 por borde).
-    - Malla central doble 10 @ 200 -> capa doble centrada en el espesor."""
+    - Elementos de borde (borde mm) en cada extremo: 2 barras por fila,
+      filas separadas segun filas_b (2 filas -> 4 por borde) del config.
+    - Malla central doble db_malla @ s_malla -> capa doble en el espesor."""
     import openseespy.opensees as ops
-    s = MURO
+    s = section
     Lw, bw, r = s["Lw"], s["bw"], s["rec"]
     borde = s["borde"]
 
@@ -92,8 +146,8 @@ def build_muro(mat_conc, mat_ac, sec_tag):
     # -- elementos de borde -------------------------------------------------
     db = s["db_borde"]
     a = abar(db)
-    # 2 filas x (2 barras por fila) dentro de cada borde, separacion 80 mm
-    filas_b = [80.0, 240.0]           # a 80 y 240 mm del borde
+    # 2 filas x (2 barras por fila) dentro de cada borde
+    filas_b = s.get("filas_b", [80.0, 240.0])
     for fila in filas_b:
         # borde inferior (extremo y = -Lw/2)
         ops.layer("straight", mat_ac, 2, a, -Lw / 2 + fila, -bw / 2 + 45, -Lw / 2 + fila, bw / 2 - 45)
@@ -103,12 +157,12 @@ def build_muro(mat_conc, mat_ac, sec_tag):
     # -- malla central doble ------------------------------------------------
     dbm = s["db_malla"]
     am = abar(dbm)
-    # 2 capas x (una barra 10mm cada 200mm) => en la seccion 2D la capa es una
+    # 2 capas x (una barra 10mm cada s_malla) => en la seccion 2D la capa es una
     # barra equivalente por posicion con area 2*am (una en cada cara).
     a_equiv = 2.0 * am
     y0 = -Lw / 2 + borde
     y1 = Lw / 2 - borde
-    n = int(round((y1 - y0) / s["s_malla"])) + 1
+    n = max(1, int(round((y1 - y0) / s["s_malla"])) + 1)
     ops.layer("straight", mat_ac, n, a_equiv, y0, 0.0, y1, 0.0)
 
 
@@ -117,7 +171,7 @@ def build(section, mat_conc, mat_ac, sec_tag):
     if section["tipo"] == "columna":
         build_columna(mat_conc, mat_ac, sec_tag)
     elif section["tipo"] == "muro":
-        build_muro(mat_conc, mat_ac, sec_tag)
+        build_muro(section, mat_conc, mat_ac, sec_tag)
     else:
         raise ValueError(section["tipo"])
 
