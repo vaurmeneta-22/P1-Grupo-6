@@ -53,6 +53,16 @@
   }
   #analysisPanel .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   #analysisPanel label { color: #9ff; }
+  #legendScale {
+    display: none; position: absolute; right: 14px; bottom: 14px;
+    background: rgba(0,0,0,0.82); border: 1px solid #0aa; border-radius: 6px;
+    padding: 8px 10px; font-family: monospace; font-size: 11px; color: #cfc;
+    z-index: 20; line-height: 1.5;
+  }
+  #legendScale .ls-title { color: #0ff; font-weight: bold; margin-bottom: 4px; }
+  #legendScale .ls-row { display: flex; align-items: center; gap: 8px; }
+  #legendScale .ls-swat { width: 18px; height: 10px; border: 1px solid #555; border-radius: 2px; flex-shrink: 0; }
+  #legendScale .ls-range { color: #ddd; }
   .slot { display: inline-block; width: 14px; height: 14px; border: 1px solid #888; vertical-align: middle; margin: 0 4px 0 0; border-radius: 2px; }
 </style>
 </head>
@@ -86,6 +96,7 @@
   <span class="kbd">[TAB]</span>
 </div>
 <div id="analysisPanel"></div>
+<div id="legendScale"></div>
 <div id="inspector"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="opensees/results/tributary_map.js"></script>
@@ -1772,6 +1783,8 @@ spherical.theta -= dx * 0.01;
   const analysisGroup = new THREE.Group();
   scene.add(analysisGroup);
 
+  let scaleVmax = 1, scaleDmax = 1;   // para la leyenda de colores
+
   // Geometria original del viewer -> igual orden que ANALYSIS.elements
   const elemIdx = new Map();            // element object -> indice
   elements.forEach((e, ix) => elemIdx.set(e, ix));
@@ -1806,7 +1819,10 @@ spherical.theta -= dx * 0.01;
       if (c.geometry) c.geometry.dispose();
       if (c.material) c.material.dispose();
     }
-    if (S.mode !== 'analysis') return;
+    if (S.mode !== 'analysis') {
+      hideScale();
+      return;
+    }
 
 const F = ANALYSIS.forces[S.caso] || {};
     const D = ANALYSIS.disp[S.caso] || {};
@@ -1840,6 +1856,8 @@ const F = ANALYSIS.forces[S.caso] || {};
       if (v > vmax) vmax = v;
     }
     if (vmax < 1e-12) vmax = 1;
+    scaleVmax = vmax;
+    scaleDmax = dmax;
 
     for (let ix = 0; ix < elements.length; ix++) {
       const meta = ANALYSIS.elements[ix];
@@ -1881,6 +1899,7 @@ const F = ANALYSIS.forces[S.caso] || {};
       mesh.userData = { elem: e, tipo: meta.type, sec: meta.section };
       analysisGroup.add(mesh);
     }
+    updateScale();
     updateHUD();
   }
 
@@ -1920,6 +1939,39 @@ const F = ANALYSIS.forces[S.caso] || {};
       btnMode.textContent = (S.mode === 'view') ? 'VISUALIZACION' : 'ANALISIS';
       btnMode.classList.toggle('on', S.mode === 'analysis');
     }
+  }
+
+  function updateScale() {
+    const ls = document.getElementById('legendScale');
+    if (!ls || S.mode !== 'analysis') return;
+    const isDef = (S.vista === 'deformada');
+    const unid = isDef ? ' mm' : (S.vista === 'M' ? ' kN·m' : ' kN');
+    const mx = isDef ? scaleDmax : scaleVmax;
+    if (mx <= 0) { ls.style.display = 'none'; return; }
+    let title;
+    if (S.vista === 'M') title = 'Momento M (caso ' + S.caso + ')';
+    else if (S.vista === 'N') title = 'Axial N (caso ' + S.caso + ')';
+    else if (S.vista === 'V') title = 'Corte V (caso ' + S.caso + ')';
+    else title = 'Desplazamiento max ' + (scaleDmax * 1000).toFixed(1) + ' mm (x' + S.factor + ')';
+    const N = 6;
+    const lim = isDef ? mx * 1000 : mx;   // mm en deformada, kN / kNm en resto
+    let rows = '';
+    for (let i = N - 1; i >= 0; i--) {
+      const t0 = i / N, t1 = (i + 1) / N;
+      const v0 = lim * t0, v1 = lim * t1;
+      const col = heat(t0);
+      const fmt = (v) => (v >= 100000 ? (v / 1000).toFixed(0) : (v >= 100 ? v.toFixed(0) : v.toFixed(1)));
+      rows += '<div class="ls-row"><span class="ls-swat" style="background:#' +
+        col.getHexString() + '"></span><span class="ls-range">' +
+        fmt(v0) + ' – ' + fmt(v1) + unid + '</span></div>';
+    }
+    ls.innerHTML = '<div class="ls-title">' + title + '</div>' + rows;
+    ls.style.display = 'block';
+  }
+
+  function hideScale() {
+    const ls = document.getElementById('legendScale');
+    if (ls) ls.style.display = 'none';
   }
 
   function updateHUD() {
