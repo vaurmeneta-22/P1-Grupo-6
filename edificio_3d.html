@@ -115,8 +115,9 @@
     <label>Escala: <input type="range" id="rngFac" min="10" max="600" step="5" value="120">
       <span id="facVal">120x</span></label>
   </div>
-  <div class="row" style="margin-top:4px;color:#999" id="rowNote">
-Nota: respuesta lineal del modelo global. Doble clic en columna/muro -> P-M.
+<div class="row" style="margin-top:4px;color:#999" id="rowNote">
+Nota: respuesta lineal del modelo global. Doble clic en columna/muro -> P-M. Doble clic en viga -> M/V/N/DEF.
+
   </div>
 </div>
 <div id="legendScale"></div>
@@ -1877,13 +1878,14 @@ const F = ANALYSIS.forces[S.caso] || {};
       const L = Math.hypot(e.xj - e.xi, e.yj - e.yi, e.zj - e.zi);
       if (L < 1e-6) continue;
       const ux = (e.xj - e.xi) / L, uy = (e.yj - e.yi) / L, uz = (e.zj - e.zi) / L;
-      const fvx = f[0], fvy = f[2], fvz = f[1];   // fuerzas en viewer
+      const fA = extremoMayor(f);   // extremo de mayor demanda
+      const fvx = fA[0], fvy = fA[2], fvz = fA[1];   // fuerzas en viewer
       let v;
       if (S.vista === 'N') v = Math.abs(fvx * ux + fvy * uy + fvz * uz);
       else if (S.vista === 'V') {
         const ax = fvx * ux + fvy * uy + fvz * uz;
         v = Math.hypot(fvx - ax * ux, fvy - ax * uy, fvz - ax * uz);
-      } else if (S.vista === 'M') v = Math.hypot(f[3], f[4], f[5]);
+      } else if (S.vista === 'M') v = Math.hypot(fA[3], fA[4], fA[5]);
       else v = 0;
       values[ix] = v;
       if (v > vmax) vmax = v;
@@ -2039,7 +2041,7 @@ const F = ANALYSIS.forces[S.caso] || {};
     if (rowNote) {
       rowNote.style.display = '';
       rowNote.textContent = (S.vista === 'deformada' ? 'Desplazamientos ampliados. ' : '') +
-        'Nota: respuesta lineal del modelo global. Clic en columna/muro -> P-M.';
+        'Nota: respuesta lineal del modelo global. Doble clic en columna/muro -> P-M. Doble clic en viga -> M/V/N/DEF.';
     }
     updateScale();
   }
@@ -2069,8 +2071,80 @@ const F = ANALYSIS.forces[S.caso] || {};
 
   // Leyenda del colormap (simple indicacion de casos)
   // ------------------------------------------------------------------
-  // P-M overlay: doble clic en columna/muro en modo analisis
+  // Doble clic en modo analisis: viga -> tabla M/V/N/DEF; columna o
+  // muro -> curva P-M de capacidad + punto de demanda.
   // ------------------------------------------------------------------
+  function beamNN(m) { return m >= 1000 ? m.toFixed(0) : (m >= 100 ? m.toFixed(1) : m.toFixed(2)); }
+  function beamXX(n) { return n >= 1000 ? n.toFixed(0) : (n >= 100 ? n.toFixed(1) : n.toFixed(2)); }
+
+  // Fuerzas de resultado: soporta {i,j} (nuevo) y vector plano (legacy).
+  function extremoMayor(f) {
+    if (Array.isArray(f)) return f;
+    const gi = f.i || [0, 0, 0, 0, 0, 0];
+    const gj = f.j || gi;
+    const mi = Math.hypot(gi[3], gi[4], gi[5]), mj = Math.hypot(gj[3], gj[4], gj[5]);
+    return mi >= mj ? gi : gj;
+  }
+
+  // Fuerzas globales -> N (axial), V (corte), M (momento resultante) y
+  // desplazamiento nodal |D| en mm, para un extremo del elemento.
+  function beamForces(elemObj, f) {
+    const L = Math.hypot(elemObj.xj - elemObj.xi, elemObj.yj - elemObj.yi, elemObj.zj - elemObj.zi) || 1;
+    const ux = (elemObj.xj - elemObj.xi) / L, uy = (elemObj.yj - elemObj.yi) / L, uz = (elemObj.zj - elemObj.zi) / L;
+    if (!f) return { N: NaN, V: NaN, M: NaN };
+    const vx = f[0], vy = f[2], vz = f[1];
+    const axial = vx * ux + vy * uy + vz * uz;
+    return {
+      N: Math.abs(axial),
+      V: Math.hypot(vx - axial * ux, vy - axial * uy, vz - axial * uz),
+      M: Math.hypot(f[3], f[4], f[5])
+    };
+  }
+
+  function showBeamReport(meta, elemObj, caso) {
+    const caseF = (ANALYSIS.forces[caso] || {})[meta.id] || {};
+    const fi = caseF.i, fj = caseF.j;
+    const D = (ANALYSIS.disp[caso] || {});
+    const di = meta.ni ? D[meta.ni] : null;
+    const dj = meta.nj ? D[meta.nj] : null;
+    const a = beamForces(elemObj, fi);
+    const b = beamForces(elemObj, fj);
+    const defi = di ? Math.hypot(di[0], di[2], di[1]) * 1000 : NaN;   // mm
+    const defj = dj ? Math.hypot(dj[0], dj[2], dj[1]) * 1000 : NaN;
+    const maxN = Math.max(a.N, b.N), maxV = Math.max(a.V, b.V), maxM = Math.max(a.M, b.M);
+    const rows = [['Extremo', 'N [kN]', 'V [kN]', 'M [kN·m]', 'DEF [mm]']];
+    rows.push(['i', beamXX(a.N), beamXX(a.V), beamNN(a.M), defi.toFixed(1)]);
+    rows.push(['j', beamXX(b.N), beamXX(b.V), beamNN(b.M), defj.toFixed(1)]);
+    let html = (meta.type === 'beam_x' ? 'Viga X' : 'Viga Y') + ' sec. ' + meta.section +
+      ' - caso ' + caso +
+      '<table style="border-collapse:collapse;margin-top:6px;font-family:monospace;font-size:12px">';
+    for (let r = 0; r < rows.length; r++) {
+      html += '<tr>';
+      const bold = (r === 0);
+      for (let c = 0; c < rows[r].length; c++) {
+        html += '<td style="border:1px solid #0aa;padding:2px 8px;' +
+          ((!bold && c === 0) ? 'color:#9ff;' : '') +
+          ((!bold && c >= 1 && c <= 3) ? 'color:' + highColor([a, b][r - 1][({1: 'N', 2: 'V', 3: 'M'})[c]]) + ';' : '') +
+          '">' + rows[r][c] + '</td>';
+      }
+      html += '</tr>';
+    }
+    html += '</table><br>Valores ' + (meta.type === 'beam_x' ? 'X' : 'Y') +
+      ': N=axial, V=corte, M=momento resultante en cada extremo, DEF=modulo del desplazamiento nodal.';
+    // marca el extremo con la mayor demanda de momento
+    const worst = maxM > 0 ? ((a.M >= b.M) ? 'i' : 'j') : '-';
+    inspectorEl.style.display = 'block';
+    inspectorBody.innerHTML = html +
+      '<br>Max M = <b>' + maxM.toFixed(1) + '</b> kN·m en extremo ' + worst;
+  }
+
+  function highColor(row) {
+    const ref = Math.max(Math.abs(row.N), Math.abs(row.V), Math.abs(row.M));
+    if (!(ref > 0)) return '#aaa';
+    const r = Math.max(row.N, row.V, row.M) / ref;
+    return r > 0.9 ? '#f66' : (r > 0.6 ? '#fc6' : '#cfc');
+  }
+
   renderer.domElement.addEventListener('dblclick', (ev) => {
     if (S.mode !== 'analysis') return;
     const r = renderer.domElement.getBoundingClientRect();
@@ -2078,6 +2152,23 @@ const F = ANALYSIS.forces[S.caso] || {};
     const my = -((ev.clientY - r.top) / r.height) * 2 + 1;
     const rc = new THREE.Raycaster();
     rc.setFromCamera(new THREE.Vector2(mx, my), camera);
+
+    // Prioridad de picking: vigas primero; luego columnas/muros (mismo
+    // orden que el inspector de visualizacion).
+    const beamTargets = [];
+    [groupBeamX, groupBeamY].forEach(g => {
+      g.traverse(o => { if (o.userData && o.userData.type) beamTargets.push(o); });
+    });
+    const bhits = rc.intersectObjects(beamTargets, false);
+    if (bhits.length) {
+      const elemObj = bhits[0].object.userData.elem;
+      const ix = elemIdx.get(elemObj);
+      if (ix === undefined) return;
+      const meta = ANALYSIS.elements[ix];
+      if (!meta) return;
+      showBeamReport(meta, elemObj, S.caso);
+      return;
+    }
 
     const targets = [];
     const srcTypes = { column: groupColumn, wall: groupWall };
@@ -2094,7 +2185,8 @@ const F = ANALYSIS.forces[S.caso] || {};
       const meta = ANALYSIS.elements[ix];
       if (!meta) return;
       // punto de demanda (caso activo) sobre ese elemento
-      const f = (ANALYSIS.forces[S.caso] || {})[meta.id];
+      const frec = (ANALYSIS.forces[S.caso] || {})[meta.id] || {};
+      const f = frec.i || frec.j;
       // conversion P (axial) y M (momento resultante)
       let P = 0, M = 0;
       if (f) {

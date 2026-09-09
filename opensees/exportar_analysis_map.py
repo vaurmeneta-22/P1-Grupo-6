@@ -123,7 +123,7 @@ def main():
             "descripcion": r["summary"],
             "superposicion": r.get("superposition", None),
         }
-        forces[c] = {int(tag): el["global_i"]
+        forces[c] = {int(tag): {"i": el.get("global_i"), "j": el.get("global_j")}
                      for tag, el in r["element_forces_global"].items()}
         disp[c] = {int(tag): d
                    for tag, d in r.get("displacements_m", {}).items()}
@@ -150,7 +150,7 @@ def main():
         "forces": forces,
         "disp": disp,
         "capacidad": capacidad,
-        "nota": "Fuerzas globales en extremo i (kN, kN*m); disp en m. "
+        "nota": "Fuerzas globales en extremos i y j (kN, kN*m); disp en m. "
                 "Orden de `elements` == edificio_3d.html.",
     }
 

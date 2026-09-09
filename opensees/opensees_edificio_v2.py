@@ -1204,10 +1204,11 @@ def run_case(case_name="G"):
         reactions[str(tag)] = [round(v, 10) for v in r]
     forces = {}
     for tag, meta in elem_meta.items():
-        fg = list(ops.eleForce(tag))[:6]
+        fg = list(ops.eleForce(tag))[:12]
         forces[str(tag)] = {
             "type": meta["type"],
-            "global_i": [round(v, 8) for v in fg],
+            "global_i": [round(v, 8) for v in fg[:6]],
+            "global_j": [round(v, 8) for v in fg[6:12]],
             "section": meta["section"],
         }
 
