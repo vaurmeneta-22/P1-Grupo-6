@@ -1856,7 +1856,15 @@ const F = ANALYSIS.forces[S.caso] || {};
       if (v > vmax) vmax = v;
     }
     if (vmax < 1e-12) vmax = 1;
-    scaleVmax = vmax;
+    // Escala por percentil 90 (solo valores > 0): evita que 1-2 muros
+    // dominen la barra y dejen todo el resto en azul oscuro.
+    const nz = [];
+    for (const k in values) if (values[k] > 0) nz.push(values[k]);
+    nz.sort((a, b) => a - b);
+    let sat = 0;
+    if (nz.length) sat = nz[Math.min(nz.length - 1, Math.floor(nz.length * 0.90))];
+    if (sat <= 0) sat = vmax;
+    scaleVmax = sat;
     scaleDmax = dmax;
 
     for (let ix = 0; ix < elements.length; ix++) {
@@ -1883,7 +1891,8 @@ const F = ANALYSIS.forces[S.caso] || {};
         // escala visual: 100% del maximo ~ rojo; los demas van de azul a rojo
         color = heat(Math.min(1, des / (denom * 0.85)));
       } else {
-        color = heat(values[ix] / vmax);
+        // valores > percentil 90 -> rojo maximo
+        color = heat(Math.min(1, values[ix] / scaleVmax));
       }
 
       const mat = new THREE.MeshBasicMaterial({ color: color });
@@ -1949,9 +1958,9 @@ const F = ANALYSIS.forces[S.caso] || {};
     const mx = isDef ? scaleDmax : scaleVmax;
     if (mx <= 0) { ls.style.display = 'none'; return; }
     let title;
-    if (S.vista === 'M') title = 'Momento M (caso ' + S.caso + ')';
-    else if (S.vista === 'N') title = 'Axial N (caso ' + S.caso + ')';
-    else if (S.vista === 'V') title = 'Corte V (caso ' + S.caso + ')';
+    if (S.vista === 'M') title = 'Momento M (caso ' + S.caso + ', p90)';
+    else if (S.vista === 'N') title = 'Axial N (caso ' + S.caso + ', p90)';
+    else if (S.vista === 'V') title = 'Corte V (caso ' + S.caso + ', p90)';
     else title = 'Desplazamiento max ' + (scaleDmax * 1000).toFixed(1) + ' mm (x' + S.factor + ')';
     const N = 6;
     const lim = isDef ? mx * 1000 : mx;   // mm en deformada, kN / kNm en resto
@@ -1965,7 +1974,9 @@ const F = ANALYSIS.forces[S.caso] || {};
         col.getHexString() + '"></span><span class="ls-range">' +
         fmt(v0) + ' – ' + fmt(v1) + unid + '</span></div>';
     }
-    ls.innerHTML = '<div class="ls-title">' + title + '</div>' + rows;
+    ls.innerHTML = '<div class="ls-title">' + title + '</div>' + rows +
+      (isDef ? '' : '<div class="ls-range" style="color:#999;margin-top:2px">≥ ' +
+        fmt(lim) + unid + ' → rojo máximo</div>');
     ls.style.display = 'block';
   }
 
