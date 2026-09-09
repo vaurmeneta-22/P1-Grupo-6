@@ -2008,18 +2008,26 @@ const F = ANALYSIS.forces[S.caso] || {};
       '<div class="row" style="margin-top:4px;color:#999">' +
       (S.vista === 'deformada' ? 'Desplazamientos ampliados. ' : '') +
       'Nota: respuesta lineal del modelo global. Clic en columna/muro -> P-M.</div>';
-
-    const sc = document.getElementById('selCaso'), sv = document.getElementById('selVista'),
-          rf = document.getElementById('rngFac');
-    if (sc) sc.onchange = () => { S.caso = sc.value; buildAnalysis(); };
-    if (sv) sv.onchange = () => { S.vista = sv.value; buildAnalysis(); };
-    if (rf) rf.onchange = () => {
-      S.factor = +rf.value;
-      const fv = document.getElementById('facVal');
-      if (fv) fv.textContent = S.factor + 'x';
-      buildAnalysis();
-    };
   }
+
+  // Delegacion de eventos sobre el panel: sobrevive a los re-renders del
+  // innerHTML, asegurando que al cambiar caso/vista/escala se reconstruya
+  // el solido y se refresque SIEMPRE la leyenda de colores.
+  analysisPanel.addEventListener('change', (ev) => {
+    const t = ev.target;
+    if (!t || !t.id) return;
+    if (t.id === 'selCaso' && t.value !== S.caso) { S.caso = t.value; buildAnalysis(); }
+    else if (t.id === 'selVista' && t.value !== S.vista) { S.vista = t.value; buildAnalysis(); }
+    else if (t.id === 'rngFac') { S.factor = +t.value; buildAnalysis(); }
+  });
+  analysisPanel.addEventListener('input', (ev) => {
+    const t = ev.target;
+    if (!t || t.id !== 'rngFac') return;
+    S.factor = +t.value;
+    const fv = document.getElementById('facVal');
+    if (fv) fv.textContent = t.value + 'x';
+    buildAnalysis();
+  });
 
   // Leyenda del colormap (simple indicacion de casos)
   // ------------------------------------------------------------------
