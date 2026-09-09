@@ -1981,12 +1981,12 @@ const F = ANALYSIS.forces[S.caso] || {};
     else title = 'Desplazamiento max ' + (scaleDmax * 1000).toFixed(1) + ' mm (x' + S.factor + ')';
     const N = 6;
     const lim = isDef ? mx * 1000 : mx;   // mm en deformada, kN / kNm en resto
+    const fmt = (v) => (v >= 100000 ? (v / 1000).toFixed(0) : (v >= 100 ? v.toFixed(0) : v.toFixed(1)));
     let rows = '';
     for (let i = N - 1; i >= 0; i--) {
       const t0 = i / N, t1 = (i + 1) / N;
       const v0 = lim * t0, v1 = lim * t1;
       const col = heat(t0);
-      const fmt = (v) => (v >= 100000 ? (v / 1000).toFixed(0) : (v >= 100 ? v.toFixed(0) : v.toFixed(1)));
       rows += '<div class="ls-row"><span class="ls-swat" style="background:#' +
         col.getHexString() + '"></span><span class="ls-range">' +
         fmt(v0) + ' – ' + fmt(v1) + unid + '</span></div>';
