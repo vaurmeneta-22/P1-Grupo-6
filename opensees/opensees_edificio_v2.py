@@ -107,11 +107,20 @@ ALPHA_SISMO = 0.20        # PARAMETRO A CONFIRMAR CON EL PROFESOR (NCh433 ~20% g
 FRAC_LIVE_SISMIC = 0.50   # fraccion de sobrecarga de uso considerada como masa sismica
 
 # Casos a correr (G = gravedad completa, Q = sobrecarga sola,
-# EX/EY = sismo pseudostatico en X / Y)
+# EX/EY = sismo pseudostatico en X / Y, COMBO = superposicion con lambdas)
 RUN_CASE_G = True
 RUN_CASE_Q = True
 RUN_CASE_EX = True
 RUN_CASE_EY = True
+RUN_CASE_COMBO = False
+
+# Parte C - Superposicion  R = lambda_G*G + lambda_Q*Q + lambda_EX*EX + lambda_EY*EY
+# Se usa solo cuando case_name == "COMBO" (por defecto 1.0 = combinacion de servicio
+# con todos los casos a plena carga). Pueden pasarse por CLI (--lambda-g X ...).
+LAMBDA_G = 1.0
+LAMBDA_Q = 1.0
+LAMBDA_EX = 1.0
+LAMBDA_EY = 1.0
 
 
 def load_json(path):
@@ -613,6 +622,18 @@ def run_case(case_name="G"):
         cargas_losa = cargas_losa_qQ    # mismo calculo que G, intensidad q_Q
         apply_selfweight = False
         is_lateral = False
+    elif case_name == "COMBO":
+        # Parte C: superposicion con lambdas. La carga de losa que recibe cada
+        # viga es la combinacion lambda_G q_G + lambda_Q q_Q, y el peso propio
+        # estructural se escala por lambda_G (misma intensidad que en G).
+        cargas_losa = {}
+        for tag, c in cargas_losa_qG.items():
+            cq = cargas_losa_qQ.get(tag)
+            p = LAMBDA_G * c["p"] + ((LAMBDA_Q * cq["p"]) if cq else 0.0)
+            W = LAMBDA_G * c["W"] + ((LAMBDA_Q * cq["W"]) if cq else 0.0)
+            cargas_losa[tag] = {"p": p, "A": c["A"], "W": W}
+        apply_selfweight = LAMBDA_G != 0.0
+        is_lateral = True        # puede incluir componentes sismicas EX/EY
     else:                       # EX o EY: caso sismico lateral
         cargas_losa = {}
         apply_selfweight = False
@@ -621,8 +642,9 @@ def run_case(case_name="G"):
     ops.timeSeries("Linear", 1)
     ops.pattern("Plain", 1, 1)
     if apply_selfweight:
+        w_scale = LAMBDA_G if case_name == "COMBO" else 1.0
         for tag, (fx, fy, fz) in nodal.items():
-            ops.load(tag, fx, fy, fz, 0.0, 0.0, 0.0)
+            ops.load(tag, fx * w_scale, fy * w_scale, fz * w_scale, 0.0, 0.0, 0.0)
 
     print(f"  Peso propio (elementos estructurales): {total_W:.2f} kN")
 
@@ -642,7 +664,7 @@ def run_case(case_name="G"):
         total_losa += p * L
         n_viga_cargada += 1
 
-    total_W_apply = self_weight_kN if apply_selfweight else 0.0
+    total_W_apply = (LAMBDA_G * self_weight_kN) if (apply_selfweight and case_name == "COMBO") else (self_weight_kN if apply_selfweight else 0.0)
     total_W_apply += total_losa
     print(f"  Carga de losa (areas tributarias)  : {total_losa:.2f} kN  "
           f"({n_viga_cargada} vigas)")
@@ -839,9 +861,16 @@ def run_case(case_name="G"):
 
         # Aplicar la fuerza en el CM via carga equivalente en el master.
         # EX: Fx=+F ; EY: Fy=+F (sentido positivo del eje global).
-        dirx = 1 if case_name == "EX" else 0
-        diry = 1 if case_name == "EY" else 0
+        # COMBO: componentes X (lambda_EX) e Y (lambda_EY) simultaneas.
+        if case_name == "COMBO":
+            dirx = LAMBDA_EX
+            diry = LAMBDA_EY
+        else:
+            dirx = 1 if case_name == "EX" else 0
+            diry = 1 if case_name == "EY" else 0
         F_total_lateral = 0.0
+        fx_total = 0.0
+        fy_total = 0.0
         W_sismico_efectivo = 0.0     # solo pisos con diafragma (participan)
         for fl, s in seismic.items():
             if s["master"] is None:
@@ -854,7 +883,13 @@ def run_case(case_name="G"):
             Mz = (cx - xm) * (diry * F) - (cy - ym) * (dirx * F)
             ops.load(s["master"], dirx * F, diry * F, 0.0, 0.0, 0.0, Mz)
             F_total_lateral += F
-        total_W_apply = F_total_lateral
+            fx_total += dirx * F
+            fy_total += diry * F
+        if case_name == "COMBO":
+            # conserva la carga combinada (gravity + lateral) para el reporte
+            total_W_apply = total_W_apply + fx_total + fy_total
+        else:
+            total_W_apply = F_total_lateral
         print(f"  SISMO {case_name}: F_total aplicada = {F_total_lateral:.2f} kN "
               f"sobre {len([s for s in seismic.values() if s['master']])} pisos")
         print(f"  F esperada = alpha*W_efectivo = {ALPHA_SISMO*W_sismico_efectivo:.2f} kN "
@@ -932,7 +967,7 @@ def run_case(case_name="G"):
     for tag in all_support_tags:
         r = ops.nodeReaction(tag)
         Rx += r[0]; Ry += r[1]; Rz += r[2]
-    if is_lateral:
+    if is_lateral and case_name in ("EX", "EY"):
         F_applied = total_W_apply
         dir_axis = 0 if case_name == "EX" else 1
         # Para equilibrio lateral, usar SOLO apoyos de fundacion fijos.
@@ -946,6 +981,10 @@ def run_case(case_name="G"):
         print(f"    . Equilibrio {case_name}: F_applied={F_applied:12.3f}  "
               f"R_base({case_name[-1]})={R_base:12.3f}  err={err:.3e}  "
               f"({'OK' if ok_eq else 'NO'})")
+    elif case_name == "COMBO":
+        # El equilibrio del caso combinado se audita en su propia seccion
+        # (AUDITORIA SUPERPOSICION COMBO), donde se verifica F+R=0 en X, Y, Z.
+        print(f"    . Equilibrio COMBO: auditado en la seccion dedicada (X, Y, Z)")
     else:
         err = abs((total_W_apply - Rz) / total_W_apply) if total_W_apply else float("inf")
         ok_eq = err < 1e-10 and total_W_apply > 0.0
@@ -1054,7 +1093,7 @@ def run_case(case_name="G"):
     # 3) Deformada: ux/uy del nodo master en el sentido (+) de la fuerza aplicada.
     # 4) Torsion de piso: rz del master (debe salir pequena si es simetrico; si es
     #    relevante, revisar asimetria de rigidez / posicion de CM-CR).
-    if is_lateral:
+    if is_lateral and case_name in ("EX", "EY"):
         dir_axis = 0 if case_name == "EX" else 1   # 0=X, 1=Y
         dir_sense = 1                               # fuerza aplicada en eje (+)
         F_aplicada = total_W_apply
@@ -1107,6 +1146,49 @@ def run_case(case_name="G"):
             print(f"  [AVISO] pisos con sentido opuesto a F (+): {detalles_signo}")
         print(f"Sentido de deformada (eje {case_name[-1]}): "
               f"{'OK en todos los pisos' if signo_ok else 'REVISAR'}")
+        print("=" * 70)
+
+    # ------------------------------------------------------------------
+    # AUDITORIA DE SUPERPOSICION COMBO (Parte C)
+    # ------------------------------------------------------------------
+    # Verifica que la corrida combinada equilibra: las reacciones de la base
+    # deben cancelar exactamente la carga aplicada del caso combinado (F + R = 0)
+    # en las tres direcciones, igual que en los casos individuales.
+    if case_name == "COMBO":
+        rx = ry = rz = 0.0
+        for tag in base_support_tags:
+            r = ops.nodeReaction(tag)
+            rx += r[0]; ry += r[1]
+        for tag in all_support_tags:
+            r = ops.nodeReaction(tag)
+            rz += r[2]
+        print("=" * 70)
+        print(f"=== AUDITORIA SUPERPOSICION COMBO ===")
+        print(f"  React. base (Rx, Ry) = {rx:.4e}, {ry:.4e} kN | Rz total={rz:.4e} kN")
+        # Equilibrio vertical: carga gravitacional combinada hacia abajo (-fz)
+        # cancelada por las reacciones verticales de TODOS los apoyos (+rz).
+        fz_comb = (LAMBDA_G * self_weight_kN)
+        fz_comb += sum(c["W"] for c in cargas_losa.values())   # losa G*lG + Q*lQ
+        if abs(fz_comb) > 1e-6:
+            err_z = abs((fz_comb - rz) / fz_comb)
+            ok_z = err_z < 1e-6
+        else:
+            # sin carga vertical (lambdas de gravedad nulas): no hay equilibrio
+            # vertical que verificar; Rz debe salir ~0
+            err_z = abs(rz)
+            ok_z = err_z < 1e-6
+        # Equilibrio lateral: F + R = 0 en cada eje (R con signo de reaccion).
+        err_x = abs((fx_total + rx) / fx_total) if fx_total else float("inf")
+        ok_x = err_x < 1e-6
+        err_y = abs((fy_total + ry) / fy_total) if fy_total else float("inf")
+        ok_y = err_y < 1e-6
+        for label, err, ok in (("X", err_x, ok_x), ("Y", err_y, ok_y),
+                               ("Z", err_z, ok_z)):
+            print(f"    . Equilibrio {label}: err={err:.3e}  "
+                  f"{'OK' if ok else 'REVISAR'}")
+        # reutiliza la variable err (global) como el peor error de equilibrio
+        err = max(e for e in (err_x, err_y, err_z) if e != float("inf"))
+        ok_eq = ok_x and ok_y and ok_z
         print("=" * 70)
 
     # ------------------------------------------------------------------
@@ -1169,8 +1251,8 @@ def run_case(case_name="G"):
 
     # okQ/okV/okFe solo cobran sentido en sus casos; ok_mass en laterales.
     ok_q = okQ if case_name == "Q" else True
-    ok_v = okV if is_lateral else True
-    ok_fe = okFe if is_lateral else True
+    ok_v = okV if (is_lateral and case_name in ("EX", "EY")) else True
+    ok_fe = okFe if (is_lateral and case_name in ("EX", "EY")) else True
     ok_m = ok_mass if is_lateral else True
 
     result = {
@@ -1204,15 +1286,23 @@ def run_case(case_name="G"):
             "W_CM_coincide_W_F": bool(ok_m),
             "conservacion_q_error": round(errQ, 12) if case_name == "Q" else None,
             "todas_ok_q": bool(ok_q),
-            "F_esperada_indep_kN": round(F_esperada_indep, 4) if is_lateral else None,
-            "F_aplicada_kN": round(F_aplicada, 4) if is_lateral else None,
-            "corte_basal_error": round(errV, 12) if is_lateral else None,
+            "F_esperada_indep_kN": round(F_esperada_indep, 4) if (is_lateral and case_name in ("EX", "EY")) else None,
+            "F_aplicada_kN": round(F_aplicada, 4) if (is_lateral and case_name in ("EX", "EY")) else None,
+            "corte_basal_error": round(errV, 12) if (is_lateral and case_name in ("EX", "EY")) else None,
             "todas_ok_sismo_basal": bool(ok_v),
-            "F_esperada_error": round(err_Fe, 12) if is_lateral else None,
+            "F_esperada_error": round(err_Fe, 12) if (is_lateral and case_name in ("EX", "EY")) else None,
             "todas_ok_sismo_F": bool(ok_fe),
             "todas_ok": bool(ok_eq and ok_areas and ok_dia and ok_q
                            and ok_m and ok_fe and ok_v),
         },
+        # Parte C: componentes y lambdas de la superposicion (solo COMBO)
+        "superposition": {
+            "lambdas": {"G": LAMBDA_G, "Q": LAMBDA_Q,
+                        "EX": LAMBDA_EX, "EY": LAMBDA_EY},
+            "Fx_lateral_kN": round(fx_total, 6),
+            "Fy_lateral_kN": round(fy_total, 6),
+            "ecuacion": "R = lambda_G*G + lambda_Q*Q + lambda_EX*EX + lambda_EY*EY",
+        } if case_name == "COMBO" else None,
         "tributary_by_viga": tributary_by_viga,
         "displacements_m": disp,
         "reactions_kN": reactions,
@@ -1251,7 +1341,8 @@ def run_case(case_name="G"):
 def main():
     # Cada caso se construye desde cero (ops.wipe en run_case) para estado limpio:
     # se evita que cargas de un caso anterior (G, Q, EX, EY) queden activas.
-    # Uso:  python opensees_edificio_v2.py [--case G|Q|EX|EY]
+    # Uso:  python opensees_edificio_v2.py [--case G|Q|EX|EY|COMBO]
+    #       python opensees_edificio_v2.py --case COMBO --lambda-g 1.2 --lambda-q 0.5 ...
     # Si se omite --case, se corren los casos habilitados por RUN_CASE_*.
     import sys
     only_case = None
@@ -1260,12 +1351,33 @@ def main():
         if i + 1 < len(sys.argv):
             only_case = sys.argv[i + 1].upper()
 
+    def _flag(name):
+        global LAMBDA_G, LAMBDA_Q, LAMBDA_EX, LAMBDA_EY
+        if name in sys.argv:
+            i = sys.argv.index(name)
+            if i + 1 < len(sys.argv):
+                val = float(sys.argv[i + 1])
+                {
+                    "--lambda-g": lambda: globals().update(LAMBDA_G=val),
+                    "--lambda-q": lambda: globals().update(LAMBDA_Q=val),
+                    "--lambda-ex": lambda: globals().update(LAMBDA_EX=val),
+                    "--lambda-ey": lambda: globals().update(LAMBDA_EY=val),
+                }[name]()
+                return val
+        return None
+
+    for name in ("--lambda-g", "--lambda-q", "--lambda-ex", "--lambda-ey"):
+        v = _flag(name)
+        if v is not None:
+            print(f"  lambda {name[-1].upper()} = {v}")
+
     results = {}
     cases = ["G", "Q", "EX", "EY"] if only_case is None else [only_case]
     for case in cases:
         run_flag = {
             "G": RUN_CASE_G, "Q": RUN_CASE_Q,
             "EX": RUN_CASE_EX, "EY": RUN_CASE_EY,
+            "COMBO": RUN_CASE_COMBO or True,
         }[case]
         if run_flag:
             res = run_case(case)
