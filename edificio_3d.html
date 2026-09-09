@@ -95,7 +95,24 @@
   Modo: <button id="btnMode" onclick="toggleMode()">VISUALIZACION</button>
   <span class="kbd">[TAB]</span>
 </div>
-<div id="analysisPanel"></div>
+<div id="analysisPanel">
+  <div class="row">
+    <label>Caso: <select id="selCaso"></select></label>
+    <label>Mostrar: <select id="selVista">
+      <option value="deformada">Deformada</option>
+      <option value="M">Momento M</option>
+      <option value="N">Axial N</option>
+      <option value="V">Corte V</option>
+    </select></label>
+  </div>
+  <div class="row" id="rowFac" style="display:none">
+    <label>Escala: <input type="range" id="rngFac" min="10" max="600" step="5" value="120">
+      <span id="facVal">120x</span></label>
+  </div>
+  <div class="row" style="margin-top:4px;color:#999" id="rowNote">
+    Nota: respuesta lineal del modelo global. Clic en columna/muro -> P-M.
+  </div>
+</div>
 <div id="legendScale"></div>
 <div id="inspector"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -1909,7 +1926,6 @@ const F = ANALYSIS.forces[S.caso] || {};
       analysisGroup.add(mesh);
     }
     updateScale();
-    updateHUD();
   }
 
   // ------------------------------------------------------------------
@@ -1937,10 +1953,11 @@ const F = ANALYSIS.forces[S.caso] || {};
     S.mode = (S.mode === 'view') ? 'analysis' : 'view';
     if (S.mode === 'analysis') {
       analysisPanel.style.display = 'block';
-      updateHUD();
+      updateHUD();       // sincroniza selects + leyenda
       buildAnalysis();
     } else {
       analysisPanel.style.display = 'none';
+      hideScale();
       buildAnalysis();   // limpia analysisGroup
     }
     // boton
@@ -1987,27 +2004,28 @@ const F = ANALYSIS.forces[S.caso] || {};
 
   function updateHUD() {
     if (!analysisPanel) return;
-    const casos = ANALYSIS.casos.map(c =>
-      `<option value="${c}" ${c === S.caso ? 'selected' : ''}>${c}</option>`).join('');
-
-    analysisPanel.style.display = 'block';
-    analysisPanel.innerHTML =
-      '<div class="row">' +
-      '<label>Caso: <select id="selCaso">' + casos + '</select></label>' +
-      '<label>Mostrar: <select id="selVista">' +
-      '<option value="deformada" ' + (S.vista === 'deformada' ? 'selected' : '') + '>Deformada</option>' +
-      '<option value="M" ' + (S.vista === 'M' ? 'selected' : '') + '>Momento M</option>' +
-      '<option value="N" ' + (S.vista === 'N' ? 'selected' : '') + '>Axial N</option>' +
-      '<option value="V" ' + (S.vista === 'V' ? 'selected' : '') + '>Corte V</option>' +
-      '</select></label>' +
-      '</div>' +
-      '<div class="row">' +
-      (S.vista === 'deformada' ?
-        '<label>Escala: <input type="range" id="rngFac" min="10" max="600" step="5" value="' + S.factor + '"> <span id="facVal">' + S.factor + 'x</span></label>' : '') +
-      '</div>' +
-      '<div class="row" style="margin-top:4px;color:#999">' +
-      (S.vista === 'deformada' ? 'Desplazamientos ampliados. ' : '') +
-      'Nota: respuesta lineal del modelo global. Clic en columna/muro -> P-M.</div>';
+    // Panel estatico: solo se sincronizan valores, no se re-renderiza el
+    // innerHTML (evita destruir los selects en medio de la interaccion).
+    const casosEl = document.getElementById('selCaso');
+    if (casosEl) {
+      const prev = S.caso;
+      casosEl.innerHTML = ANALYSIS.casos.map(c =>
+        `<option value="${c}">${c}</option>`).join('');
+      casosEl.value = prev;
+    }
+    const vistaEl = document.getElementById('selVista');
+    if (vistaEl) vistaEl.value = S.vista;
+    const rowFac = document.getElementById('rowFac');
+    if (rowFac) rowFac.style.display = (S.vista === 'deformada') ? '' : 'none';
+    const facVal = document.getElementById('facVal');
+    if (facVal) facVal.textContent = S.factor + 'x';
+    const rowNote = document.getElementById('rowNote');
+    if (rowNote) {
+      rowNote.style.display = '';
+      rowNote.textContent = (S.vista === 'deformada' ? 'Desplazamientos ampliados. ' : '') +
+        'Nota: respuesta lineal del modelo global. Clic en columna/muro -> P-M.';
+    }
+    updateScale();
   }
 
   // Delegacion de eventos sobre el panel: sobrevive a los re-renders del
@@ -2016,9 +2034,13 @@ const F = ANALYSIS.forces[S.caso] || {};
   analysisPanel.addEventListener('change', (ev) => {
     const t = ev.target;
     if (!t || !t.id) return;
-    if (t.id === 'selCaso' && t.value !== S.caso) { S.caso = t.value; buildAnalysis(); }
-    else if (t.id === 'selVista' && t.value !== S.vista) { S.vista = t.value; buildAnalysis(); }
-    else if (t.id === 'rngFac') { S.factor = +t.value; buildAnalysis(); }
+    if (t.id === 'selCaso' && t.value !== S.caso) { S.caso = t.value; updateHUD(); buildAnalysis(); }
+    else if (t.id === 'selVista' && t.value !== S.vista) {
+      S.vista = t.value;
+      updateHUD();        // sincroniza selects, fila escala y leyenda
+      buildAnalysis();
+    }
+    if (t.id === 'rngFac') { S.factor = +t.value; updateHUD(); buildAnalysis(); }
   });
   analysisPanel.addEventListener('input', (ev) => {
     const t = ev.target;
