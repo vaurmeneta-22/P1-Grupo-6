@@ -2137,17 +2137,36 @@ const F = ANALYSIS.forces[S.caso] || {};
     for (let i = 1; i < Mc.length; i++) ctx.lineTo(sx(Mc[i]), sy(P[i]));
     ctx.strokeStyle = '#0ff'; ctx.lineWidth = 2; ctx.stroke();
 
+    // capacidad M interpolada al mismo nivel de carga axial Pd
+    function mcapAt(p) {
+      if (p <= P[0]) return Mc[0];
+      if (p >= P[P.length - 1]) return Mc[Mc.length - 1];
+      for (let i = 1; i < P.length; i++) {
+        if (p <= P[i]) {
+          const t = (p - P[i - 1]) / (P[i] - P[i - 1]);
+          return Mc[i - 1] + t * (Mc[i] - Mc[i - 1]);
+        }
+      }
+      return Mc[Mc.length - 1];
+    }
+    const Mcap = mcapAt(Pd);
+
     // punto de demanda
     if (Md > 0 || Pd > 0) {
+      const dentro = Md <= Mcap;
       ctx.beginPath(); ctx.arc(sx(Md), sy(Pd), 6, 0, 2 * Math.PI);
-      ctx.fillStyle = '#ff5'; ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
-      ctx.fillStyle = '#ff5'; ctx.fillText(S.caso, sx(Md) + 10, sy(Pd) - 8);
+      ctx.fillStyle = dentro ? '#ff5' : '#f55';
+      ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = dentro ? '#ff5' : '#f55';
+      ctx.fillText(S.caso + (dentro ? '' : ' (fuera)'), sx(Md) + 10, sy(Pd) - 8);
     }
 
     inspectorEl.style.display = 'block';
     inspectorEl.innerHTML = (meta.type === 'column' ? 'Columna' : 'Muro') + ' sec. ' + sec +
       '<br>Caso ' + caso + ' -> P = ' + Pd.toFixed(1) + ' kN,  M = ' + Md.toFixed(1) + ' kNm' +
-      '<br><b>' + (Md / (Mmax || 1) * 100).toFixed(1) + '%</b> del M maximo de capacidad (aprox.)';
+      '<br>Capacidad a esa P (M cap. = ' + Mcap.toFixed(1) + ' kNm): <b>' +
+      (Md / (Mcap || 1) * 100).toFixed(1) + '%</b> ' +
+      (Md <= Mcap ? '(dentro de la curva)' : '(FUERA de la curva / no cumple)');
     inspectorEl.appendChild(cv);
   }
 

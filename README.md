@@ -35,7 +35,7 @@ Accesible desde `edificio_3d.html` con `TAB` o el botón `ANALISIS` de la barra 
 - **Vistas**: deformada (con amplificación ajustable), Momento M, Axial N y Corte V.
 - **Casos de carga**: G (permanente), Q (sobrecarga), EX, EY y COMBO (combinación). El case COMBO agrupa los resultados combinados exportados.
 - **Color por valor**: cada elemento se pinta con un colormap azul→verde→rojo normalizado por el **percentil 90** de los valores (evita que uno o dos muros en la base dominen la escala y dejen el resto en azul). La leyenda inferior derecha muestra los rangos reales en las unidades de cada vista (mm en deformada, kN·m en momento, kN en axial/corte).
-- **P-M por clic**: con el modo análisis activo, hacer clic sobre una columna o muro dibuja en el inspector la **curva de capacidad** P-M (de las secciones de fibra RC) y marca el punto de demanda del caso activo, reportando el % del momento máximo de capacidad.
+- **P-M por clic**: con el modo análisis activo, hacer clic sobre una columna o muro dibuja en el inspector la **curva de capacidad** P-M (de las secciones de fibra RC) y marca el punto de demanda del caso activo (P axial y M resultante del extremo i del elemento), reportando el % de la **capacidad interpolada a esa misma carga axial** y si la demanda cae dentro de la curva (una demanda fuera de la curva se marca en rojo).
 - Deformada: `38.5 mm` máx. a escala x120 por defecto (deslizador `x`). M/N/V en respuesta lineal del modelo global.
 
 Los datos se cargan desde `opensees/results/analysis_map.js`, generado por `exportar_analysis_map.py` a partir de los resultados `edificio_full_results*.json`.
