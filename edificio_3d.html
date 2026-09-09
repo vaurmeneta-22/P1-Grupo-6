@@ -24,9 +24,15 @@
     position: absolute; top: 10px; right: 10px;
     color: #0ff; background: rgba(0,0,0,0.78);
     padding: 10px 14px; border-radius: 6px; font-size: 13px;
-    z-index: 10; min-width: 240px; line-height: 1.5;
+    z-index: 10; min-width: 240px; max-width: 420px; line-height: 1.5;
     display: none; border: 1px solid #0aa;
   }
+  #inspector .inspector-close {
+    position: absolute; top: 6px; right: 8px;
+    background: none; border: none; color: #f66;
+    font: bold 15px/1 monospace; cursor: pointer; padding: 2px 5px;
+  }
+  #inspector .inspector-close:hover { color: #faa; }
   #modebar {
     position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
     background: rgba(0,0,0,0.78); border-radius: 6px; padding: 6px 12px;
@@ -110,11 +116,14 @@
       <span id="facVal">120x</span></label>
   </div>
   <div class="row" style="margin-top:4px;color:#999" id="rowNote">
-    Nota: respuesta lineal del modelo global. Clic en columna/muro -> P-M.
+Nota: respuesta lineal del modelo global. Doble clic en columna/muro -> P-M.
   </div>
 </div>
 <div id="legendScale"></div>
-<div id="inspector"></div>
+<div id="inspector">
+  <button type="button" class="inspector-close" id="inspectorClose" title="Cerrar">X</button>
+  <div id="inspectorBody"></div>
+</div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="opensees/results/tributary_map.js"></script>
 <script src="opensees/results/analysis_map.js"></script>
@@ -1484,6 +1493,13 @@ spherical.theta -= dx * 0.01;
   // Tributary Area Inspector: clic en una viga -> area + cargas
   // ------------------------------------------------------------------
   const inspectorEl = document.getElementById('inspector');
+  const inspectorBody = document.getElementById('inspectorBody');
+  const inspectorClose = document.getElementById('inspectorClose');
+  if (inspectorClose) {
+    inspectorClose.addEventListener('click', () => {
+      inspectorEl.style.display = 'none';
+    });
+  }
   const raycaster = new THREE.Raycaster();
   const mouseNdc = new THREE.Vector2();
   let highlightMesh = null;
@@ -1724,7 +1740,7 @@ spherical.theta -= dx * 0.01;
       const t = resolveTributary(ud);
       inspectorEl.style.display = 'block';
       if (t) {
-        inspectorEl.innerHTML = buildBeamRows(ud, t).join('<br>');
+        inspectorBody.innerHTML = buildBeamRows(ud, t).join('<br>');
         // resaltar la viga (caja transparente)
         const o = hits[0].object;
         const b = new THREE.Box3().setFromObject(o);
@@ -1737,7 +1753,7 @@ spherical.theta -= dx * 0.01;
         // visualizacion grafica del area tributaria + flechas de carga
         showTribGraphics(ud, t);
       } else {
-        inspectorEl.innerHTML =
+        inspectorBody.innerHTML =
           'Viga ' + ud.type + '  (id no indexado, sin area tributaria de losa).' +
           '<br>[Rampa/escalera/parapeto sin losa tributaria -> sin dato]';
       }
@@ -1754,7 +1770,7 @@ spherical.theta -= dx * 0.01;
       const L = new THREE.Vector3(ud.xj, ud.yj, ud.zj)
         .distanceTo(new THREE.Vector3(ud.xi, ud.yi, ud.zi));
       inspectorEl.style.display = 'block';
-      inspectorEl.innerHTML = (ud.type === 'column' ? 'Columna' : 'Muro') + '  (id ' + (ud.type) + ')' +
+      inspectorBody.innerHTML = (ud.type === 'column' ? 'Columna' : 'Muro') + '  (id ' + (ud.type) + ')' +
         '<br>Nodos: (' + ud.xi.toFixed(2) + ',' + ud.zi.toFixed(2) + ') -> (' + ud.xj.toFixed(2) + ',' + ud.zj.toFixed(2) + ')' +
         '<br>Altura: ' + L.toFixed(2) + ' m' +
         '<br>' + (ud.type === 'column'
@@ -1772,12 +1788,12 @@ spherical.theta -= dx * 0.01;
       const d = phits[0].object.userData;
       inspectorEl.style.display = 'block';
       if (d.diafragma) {
-        inspectorEl.innerHTML = d.name +
+        inspectorBody.innerHTML = d.name +
           '<br><span style="color:#8ff">Rigido: UX, UY, RZ restringidos por piso (rigidDiaphragm).</span>' +
           '<br><span style="color:#aaa">No anula areas tributarias: la carga gravitacional se reparte por vigas.</span>';
       } else {
         const lz = d.elem || {};
-        inspectorEl.innerHTML = 'Losa (panel): ' +
+        inspectorBody.innerHTML = 'Losa (panel): ' +
           (lz.type ? 'aspecto ' + (Math.abs(lz.xj-lz.xi)).toFixed(2) + 'x' + (Math.abs(lz.zj-lz.zi)).toFixed(2) + ' m, e=' + (lz.t||0) + ' m' : '') +
           '<br>Altura placa: ' + ((lz.yi||0)).toFixed(2) + ' m';
       }
@@ -2053,9 +2069,9 @@ const F = ANALYSIS.forces[S.caso] || {};
 
   // Leyenda del colormap (simple indicacion de casos)
   // ------------------------------------------------------------------
-  // P-M overlay: clic en columna/muro en modo analisis
+  // P-M overlay: doble clic en columna/muro en modo analisis
   // ------------------------------------------------------------------
-  renderer.domElement.addEventListener('click', (ev) => {
+  renderer.domElement.addEventListener('dblclick', (ev) => {
     if (S.mode !== 'analysis') return;
     const r = renderer.domElement.getBoundingClientRect();
     const mx = ((ev.clientX - r.left) / r.width) * 2 - 1;
@@ -2102,7 +2118,7 @@ const F = ANALYSIS.forces[S.caso] || {};
     const cur = curvas[sec];
     if (!cur) {
       inspectorEl.style.display = 'block';
-      inspectorEl.innerHTML = (meta.type === 'column' ? 'Columna' : 'Muro') + ' seccion ' + sec +
+      inspectorBody.innerHTML = (meta.type === 'column' ? 'Columna' : 'Muro') + ' seccion ' + sec +
         '<br>Curva P-M de capacidad no disponible para esta seccion.';
       return;
     }
@@ -2162,12 +2178,12 @@ const F = ANALYSIS.forces[S.caso] || {};
     }
 
     inspectorEl.style.display = 'block';
-    inspectorEl.innerHTML = (meta.type === 'column' ? 'Columna' : 'Muro') + ' sec. ' + sec +
+    inspectorBody.innerHTML = (meta.type === 'column' ? 'Columna' : 'Muro') + ' sec. ' + sec +
       '<br>Caso ' + caso + ' -> P = ' + Pd.toFixed(1) + ' kN,  M = ' + Md.toFixed(1) + ' kNm' +
       '<br>Capacidad a esa P (M cap. = ' + Mcap.toFixed(1) + ' kNm): <b>' +
       (Md / (Mcap || 1) * 100).toFixed(1) + '%</b> ' +
       (Md <= Mcap ? '(dentro de la curva)' : '(FUERA de la curva / no cumple)');
-    inspectorEl.appendChild(cv);
+    inspectorBody.appendChild(cv);
   }
 
   // Activar por defecto en modo visualizacion
