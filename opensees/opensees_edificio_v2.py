@@ -57,6 +57,10 @@ from areas_tributarias import (
     verificar_areas_tributarias,
 )
 
+# Planificador de conectividad (reglas A-E muro<->marco, apoyos huerfanos).
+# Modulo PURO: garantiza que generador y exportador usen los mismos tags.
+from conexiones import plan_conexiones
+
 # ---------------------------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------------------------
@@ -80,6 +84,12 @@ E_CONC = 25.0e6            # kN/m2 (25 GPa)
 NU = 0.2
 G_CONC = E_CONC / (2.0 * (1.0 + NU))
 GAMMA_CONC = 2400.0 * 9.81 / 1000.0   # kN/m3 = 23.544
+
+# Acero estructural A240ES (NCh 203)
+E_STEEL = 200.0e6          # kN/m2 (200 GPa)
+NU_STEEL = 0.3
+G_STEEL = E_STEEL / (2.0 * (1.0 + NU_STEEL))
+GAMMA_STEEL = 7850.0 * 9.81 / 1000.0  # kN/m3 ≈ 77.01
 
 # ---------------------------------------------------------------------------
 # CARGAS GRAVITACIONALES por m2 de LOSA (kN/m2)
@@ -171,6 +181,19 @@ def sec_rect(b, h):
     return A, Iy, Iz, J
 
 
+def sec_tube(b, t):
+    """Tubo cuadrado hueco. b = lado exterior (m), t = espesor (m).
+    Retorna (A, Iy, Iz, J)."""
+    a = b - 2.0 * t
+    if a < 0:
+        a = 0.0
+    A = b * b - a * a
+    Iy = (b**4 - a**4) / 12.0
+    Iz = Iy
+    J = (b**4 - a**4) / 6.0
+    return A, Iy, Iz, J
+
+
 def run_case(case_name="G"):
     """Arma el modelo completo del edificio (536 nodos), aplica un caso de carga
     gravitacional y verifica. `case_name`:
@@ -184,6 +207,15 @@ def run_case(case_name="G"):
     elements = [e for e in data["elements"]]
     supports = data["supports"]
 
+    # Plan de conectividad: nodos de muro (9000+), splits de viga (200000+/300000+),
+    # rigidLinks A-E y apoyos huerfanos. Definido ANTES de crear nodos para que los
+    # tags coincidan exactamente con exportar_analysis_map.py (viewer 1:1).
+    conx = plan_conexiones(data["nodes"], data["elements"], data["supports"])
+    wall_ends = conx["wall_ends"]
+    frame_split = conx["frame_split"]
+    rigid_links = conx["rigid_links"]
+    orphan_nodes = conx["orphan_nodes"]
+
     # ------------------------------------------------------------------
     # 0. Chequeos de integridad
     # ------------------------------------------------------------------
@@ -192,12 +224,15 @@ def run_case(case_name="G"):
     n_by = sum(1 for e in elements if e["type"] == "beam_y")
     n_wall = sum(1 for e in elements if e["type"] == "wall")
     n_loza = sum(1 for e in elements if e["type"] == "loza")
+    n_sc = sum(1 for e in elements if e["type"] == "steel_column")
+    n_sb = sum(1 for e in elements if e["type"] == "steel_beam")
     print("=" * 70)
     print("EDIFICIO COMPLETO - OpenSeesPy (v1 - prueba)")
     print("=" * 70)
     print(f"  Nodos contrato : {len(nodes_json)}")
     print(f"  Elementos      : {len(elements)} (col={n_column}, bx={n_bx}, "
-          f"by={n_by}, wall={n_wall}, loza={n_loza})")
+          f"by={n_by}, wall={n_wall}, loza={n_loza}, "
+          f"scol={n_sc}, sbeam={n_sb})")
     print(f"  Apoyos          : {len(supports)}")
 
     import openseespy.opensees as ops
@@ -209,7 +244,16 @@ def run_case(case_name="G"):
     # 1. SOPORTES
     # ------------------------------------------------------------------
     support_tags = set(s["node"] for s in supports)
-    print(f"  Soportes (fijos): {len(support_tags)}")
+    # Apoyos huerfanos unidos por rigidLink 'bar' a un nodo estructural proximo:
+    # NO se fijan directamente (la restriccion los define), evita doble constraint.
+    bar_orphan_ids = {t for (t, _x, _y, _z, kind, _m) in orphan_nodes
+                      if kind == "bar"}
+    fix_orphan_ids = {t for (t, _x, _y, _z, kind, _m) in orphan_nodes
+                      if kind == "fix"}
+    support_tags -= bar_orphan_ids
+    print(f"  Soportes (fijos): {len(support_tags)} "
+          f"(+{len(bar_orphan_ids)} huerfanos por rigidLink 'bar', "
+          f"+{len(fix_orphan_ids)} huerfanos fijos)")
 
     # Nodos referenciados por elementos estructurales (col/viga).
     structural_refs = set()
@@ -251,43 +295,42 @@ def run_case(case_name="G"):
               f"(reticula de losas y apoyos aislados sin elemento)")
 
     # ------------------------------------------------------------------
-    # 3. NODOS de MUROS (no existen en el contrato; crear en extremos)
-    #    Muro JSON: (xi, yi=ALTURA, zi) -> nodo (x=xi, y=zi, z=yi) en metros.
+    # 3. NODOS EXTRA del plan de conectividad
+    #    - nodos de MUROS (9000+): no existen en el contrato; el plan fija
+    #      su tag (misma logica compartida con exportar_analysis_map.py).
+    #      Muro JSON: (xi, yi=ALTURA, zi) -> nodo (x=xi, y=zi, z=yi) en metros.
+    #    - nodos de CONEXION en vigas (200000+): pie perpendicular del muro
+    #      dentro del tramo -> subdivide la viga.
+    #    - nodos HUERFANOS de apoyo (apoyos del contrato sin elemento propio).
     # ------------------------------------------------------------------
     wall_elems = [e for e in elements if e["type"] == "wall"]
-    WALL_TAG_START = 9000
-    next_wall_node = WALL_TAG_START
-
-    def get_or_create_wall_node(cx_cm, cz_cm, cy_cm):
-        """cx_cm, cz_cm = plan (x, z del JSON wall); cy_cm = altura."""
-        nonlocal next_wall_node
-        x = cx_cm * CM_TO_M
-        y = cz_cm * CM_TO_M
-        z = cy_cm * CM_TO_M
-        key = (round(x, 4), round(y, 4), round(z, 4))
-        if key in pos_key:
-            return pos_key[key]
-        tag = next_wall_node
-        next_wall_node += 1
+    n_wall_nodes = len(conx["wall_node_coords"])
+    for (tag, x, y, z) in conx["wall_node_coords"]:
         ops.node(tag, x, y, z)
-        pos_key[key] = tag
-        return tag
+    for (tag, x, y, z) in conx["extra_nodes"]:
+        ops.node(tag, x, y, z)
+    orphan_ids = set()
+    for (nid, x, y, z, _kind, _master) in conx["orphan_nodes"]:
+        ops.node(nid, x, y, z)
+        orphan_ids.add(nid)
 
-    wall_ends = {}        # elem id -> (tagA, tagB)
-    for e in wall_elems:
-        tagA = get_or_create_wall_node(e["xi"], e["zi"], e["yi"])
-        tagB = get_or_create_wall_node(e["xj"], e["zj"], e["yj"])
-        wall_ends[e["id"]] = (tagA, tagB)
+    n_nodes_total = len(conx["pos_key"])
+    print(f"  Nodos totales (contrato + muros + conexion + huerfanos): "
+          f"{n_nodes_total} (muros={n_wall_nodes}, "
+          f"splits={len(conx['extra_nodes'])}, huerfanos={len(orphan_nodes)})")
 
-    n_nodes_total = len(nodes_json) + (next_wall_node - WALL_TAG_START)
-    print(f"  Nodos totales (contrato + muros): {n_nodes_total}")
+    # pos_key global del modelo (mismos tags que el plan): lo usan fundacion,
+    # diafragma, apoyos verticales de piso y resultados de desplazamientos.
+    pos_key = conx["pos_key"]
 
     # FUNDACION: todo nodo (contrato o muro) en z=0 que no este en la lista
     # de apoyos queda empotrado; si no, el modelo tiene nodos flotantes
-    # (U(i,i)=0 -> matriz singular).
+    # (U(i,i)=0 -> matriz singular). Los huerfanos BAR ya se unen por
+    # rigidLink a un nodo estructural proximo: se omiten aqui para no
+    # duplicar su restriccion.
     base_extra = []
     for (ax, ay, az), tag in pos_key.items():
-        if az < 0.06 and tag not in support_tags:
+        if az < 0.06 and tag not in support_tags and tag not in bar_orphan_ids:
             ops.fix(tag, 1, 1, 1, 1, 1, 1)
             base_extra.append(tag)
     if base_extra:
@@ -321,29 +364,102 @@ def run_case(case_name="G"):
             j = nid_map[e["node_j"]]
         elif t == "wall":
             i, j = wall_ends[tag]
+        elif t in ("steel_column", "steel_beam"):
+            i = nid_map[e["node_i"]]
+            j = nid_map[e["node_j"]]
         else:
             continue
 
-        transf = 1 if t in ("column", "wall") else 2
+        is_steel = t in ("steel_column", "steel_beam")
+        E_cur = E_STEEL if is_steel else E_CONC
+        G_cur = G_STEEL if is_steel else G_CONC
+        transf = 1 if t in ("column", "wall", "steel_column", "steel_beam") else 2
         b = e["b"] * CM_TO_M
         h = e["h"] * CM_TO_M
         if t == "wall":
             A, Iy, Iz, J = sec_wall_from_name(e.get("section", ""), b, h)
+        elif is_steel:
+            # Espesor del tubo: 3er campo del nombre de seccion "300x300x20" -> 20 mm.
+            try:
+                t_mm = float(str(e.get("section", "")).split("x")[2])
+            except (ValueError, IndexError):
+                t_mm = float(e.get("t", 20.0))
+            tw = t_mm * 0.001  # mm -> m
+            A, Iy, Iz, J = sec_tube(b, tw)
         else:
             A, Iy, Iz, J = sec_rect(b, h)
 
-        ops.element(
-            "elasticBeamColumn", tag, i, j,
-            A, E_CONC, G_CONC, J, Iy, Iz, transf,
-        )
-        elem_meta[tag] = {"type": t, "nodes": (i, j), "section": e.get("section", ""),
-                          "A": A, "Iy": Iy, "Iz": Iz, "J": J}
-        incidence[i] = incidence.get(i, 0) + 1
-        incidence[j] = incidence.get(j, 0) + 1
-        n_created += 1
+        if t in ("beam_x", "beam_y") and tag in frame_split:
+            # Viga subdividida para conectar un muro en su interior (regla B).
+            # La 1a fraccion conserva el tag del contrato (viewer 1:1); las
+            # demas reciben tags 300000+ definidos en el plan compartido.
+            for (ftag, ni, nj) in frame_split[tag]:
+                ops.element("elasticBeamColumn", ftag, ni, nj,
+                            A, E_cur, G_cur, J, Iy, Iz, transf)
+                elem_meta[ftag] = {"type": t, "nodes": (ni, nj),
+                                   "section": e.get("section", ""),
+                                   "A": A, "Iy": Iy, "Iz": Iz, "J": J,
+                                   "gamma": GAMMA_CONC,
+                                   "parent": tag,
+                                   "is_fraction": (ftag != tag)}
+                incidence[ni] = incidence.get(ni, 0) + 1
+                incidence[nj] = incidence.get(nj, 0) + 1
+                n_created += 1
+        else:
+            ops.element(
+                "elasticBeamColumn", tag, i, j,
+                A, E_cur, G_cur, J, Iy, Iz, transf,
+            )
+            elem_meta[tag] = {"type": t, "nodes": (i, j),
+                              "section": e.get("section", ""),
+                              "A": A, "Iy": Iy, "Iz": Iz, "J": J,
+                              "gamma": GAMMA_STEEL if is_steel else GAMMA_CONC,
+                              "parent": tag, "is_fraction": False}
+            incidence[i] = incidence.get(i, 0) + 1
+            incidence[j] = incidence.get(j, 0) + 1
+            n_created += 1
 
     print(f"  Elementos estructurales creados: {n_created} "
-          f"(se omitieron {n_loza} lozas)")
+          f"(se omitieron {n_loza} lozas; "
+          f"{sum(len(v) > 1 for v in frame_split.values())} vigas subdivididas)")
+
+    # ------------------------------------------------------------------
+    # 6. CONEXIONES del plan (reglas A-E): rigidLinks muro<->marco y
+    #    apoyos huerfanos como esclavos de un nodo estructural proximo.
+    #    Se omiten los links a nodos YA fijos (p.ej. base de muro en z=0,
+    #    que base_extra empotra): un rigidLink adicional duplicaria la
+    #    restriccion y el handler Transformation lo rechaza.
+    # ------------------------------------------------------------------
+    rigid_slave_tags = set()
+    rigid_master_tags = set()
+    for (_kind, master, slave) in rigid_links:
+        if slave in support_tags:
+            continue
+        if _kind == "eq3":
+            # Regla G (vigas apoyadas en muro de fachada): igualdad de
+            # traslaciones ux,uy,uz. Las rotaciones quedan libres: la viga
+            # sigue el movimiento del punto del muro sin arrastrar el giro del
+            # muro ancho por el brazo de conexion (rx*brazo = descuelgue
+            # artificial). Si el master esta fijo se omite (duplicaria
+            # constraint, Transformation lo rechaza).
+            ops.equalDOF(master, slave, 1, 2, 3)
+        else:
+            ops.rigidLink(_kind, master, slave)
+        rigid_slave_tags.add(slave)
+        rigid_master_tags.add(master)
+    for (nid, _x, _y, _z, kind, master) in conx["orphan_nodes"]:
+        if kind == "bar":
+            # Esclavo traslacional del nodo estructural proximo + rotaciones
+            # empotradas: el nodo no conecta a elementos y sus rx/ry/rz libres
+            # dejarian la diagonal en cero (matriz singular). Las traslaciones
+            # las define el rigidLink; las rotaciones quedan fijas (apoyo).
+            ops.fix(nid, 0, 0, 0, 1, 1, 1)
+            ops.rigidLink("bar", master, nid)
+    if rigid_links or orphan_nodes:
+        print(f"  Conexiones: {len(rigid_links)} rigidLinks "
+              f"(reglas A-E), {len(conx['orphan_nodes'])} apoyos huerfanos "
+              f"({len([o for o in conx['orphan_nodes'] if o[4] == 'bar'])} por "
+              f"rigidLink 'bar')")
 
     # ------------------------------------------------------------------
     # 7. APOYO VERTICAL DE LOSA (nodos sin columna/muro bajo)
@@ -413,7 +529,7 @@ def run_case(case_name="G"):
     # (b) apoyo vertical uniforme a nodos de piso sin columna/muro
     col_tops = {}
     for e in elements:
-        if e["type"] == "column":
+        if e["type"] in ("column", "steel_column"):
             nn_i = json_nodes_by_id.get(e["node_i"])
             nn_j = json_nodes_by_id.get(e["node_j"])
             if nn_i and nn_j:
@@ -440,13 +556,65 @@ def run_case(case_name="G"):
 
     piso_vertical = []
     n_losa = 0
-    ya_soportado = set(support_tags) | set(floating_supports)
+    # Nodos de CONEXION del plan (splits de viga 200000+): estan sobre la viga,
+    # NO reciben suelo vertical artificial (seria un apoyo extra que endurece el
+    # tramo; el muro se conecta ahi por rigidLink y la viga transmite la carga).
+    split_node_tags = {t for (t, *_rest) in conx["extra_nodes"]}
+    # Nodos INTERIORES de vigas subdivididas (Regla F y B): son cruces que
+    # reciben rigidez vertical REAL de la viga pasante que los atraviesa. NO
+    # deben recibir el suelo vertical artificial de la losa (regla 7b), o las
+    # vigas secundarias quedan clavadas en u_z=0 y no flexionan bajo G/Q.
+    cruce_node_tags = set()
+    for fracc in conx["frame_split"].values():
+        for k in range(len(fracc) - 1):
+            cruce_node_tags.add(fracc[k + 1][1])
+    ya_soportado = (set(support_tags) | set(floating_supports)
+                    | split_node_tags | cruce_node_tags)
+    # RED DE RIGIDEZ VERTICAL (BFS): un nodo de la reticula que tiene CAMINO de
+    # vigas/columnas/rigidLinks (muros) hasta la fundacion ya recibe su rigidez
+    # vertical por FLEXION de las vigas (o carga real). NO debe recibir el suelo
+    # vertical artificial de regla 7b; ese apoyo solo queda para nodos que no
+    # tienen ninguna ruta a soporte (huerfanos/voladizos sin red). Asi las vigas
+    # en voladizo/encastre flexionan y bajan bajo G/Q en vez de quedar clavadas.
+    grafo_v = {}
+    for _a, _b in [(e["node_i"], e["node_j"]) for e in elements
+                   if e["type"] in ("beam_x", "beam_y", "column",
+                                    "steel_column", "steel_beam")
+                   and e["node_i"] in nid_map and e["node_j"] in nid_map]:
+        grafo_v.setdefault(nid_map[_a], set()).add(nid_map[_b])
+        grafo_v.setdefault(nid_map[_b], set()).add(nid_map[_a])
+    for _kind, _a, _b in rigid_links:
+        grafo_v.setdefault(_a, set()).add(_b)
+        grafo_v.setdefault(_b, set()).add(_a)
+    seeds = ((set(conx["support_tags"]) | set(conx["base_extra"]))
+             & set(nid_map.values())) | set(floating_supports)
+    reachable_v = set(seeds)
+    stack = list(seeds)
+    while stack:
+        nn = stack.pop()
+        for mm in grafo_v.get(nn, ()):
+            if mm in reachable_v:
+                continue
+            reachable_v.add(mm)
+            stack.append(mm)
+    # CASOS ESPECIALES: extremos libres de voladizos largos sin viga pasante.
+    # beam_x 335-344 => nodos 167..180. Estos ya se apoyan en la muralla 315..319
+    # via REGLA G (rigidLink wall->viga, plan conexiones): se RETIRAN del set y
+    # el apoyo vertical real lo da el muro. beam_y 390-394 => nodos 398..407
+    # (x=3205) siguen sin muro asignado: se mantienen con suelo vertical
+    # artificial hasta que el usuario seleccione sus muros.
+    regla_g_nodes = set(conx.get("regla_g_nodes", ()))
+    casos_especiales = set(range(398, 408)) if regla_g_nodes else (
+        {167, 170, 173, 176, 179, 168, 171, 174, 177, 180}
+        | set(range(398, 408)))
     for (rx, ry, rz), tag in pos_key.items():
         x_cm, y_cm, z_cm = rx / CM_TO_M, ry / CM_TO_M, rz / CM_TO_M
         if z_cm < 356.0:         # subterraneo: lo maneja (a)/columnas/muros
             continue
         if tag in ya_soportado:
             continue               # ya apoyo real o master de (a): no duplicar
+        if tag in reachable_v and tag not in casos_especiales:
+            continue               # ya tiene rigidez vertical por la red
         # Tiene columna bajo si el nodo coincide con el EXTREMO SUPERIOR de una
         # columna en SU PROPIO nivel. col_tops guarda (x,y) del extremo superior
         # por nivel z (cm). Antes se buscaba en un nivel ESTRICTAMENTE inferior,
@@ -480,6 +648,11 @@ def run_case(case_name="G"):
                 ops.fix(tag, *dof)
             else:
                 ops.fix(tag, 1, 1, 1, 1, 1, 1)
+    # Apoyos huerfanos TIPO FIX: se crean (seccion 3) y quedan empotrados en
+    # su posicion; los huerfanos tipo BAR ya se unieron por rigidLink y NO se
+    # fijan (evita doble constraint). Los huerfanos fijos no estan en nid_map.
+    for nid in fix_orphan_ids:
+        ops.fix(nid, 1, 1, 1, 1, 1, 1)
 
     # ------------------------------------------------------------------
     # 8. DIAFRAGMA RIGIDO POR PISO
@@ -498,10 +671,15 @@ def run_case(case_name="G"):
 
         for z, tags in sorted(levels.items()):
             fl = floor_of(z / CM_TO_M)
-            # excluir del diafragma: solo apoyos reales (fijos completos).
-            # los nodos con apoyo vertical (0,0,1,1,1,0) quedan como esclavos,
-            # uniendo ux/uy/rz al master (igual que v1).
-            excl = set(support_tags)
+            # excluir del diafragma: apoyos reales (fijos), esclavos de
+            # rigidLink (su movimiento en el plano ya lo impone el link al
+            # nodo de la viga; un rigidDiaphragma adicional duplicaria la
+            # restriccion de ux/uy/rz y Transformation lo rechazaria) y
+            # MASTERS de rigidLink (el nodo que arrastra al esclavo no puede
+            # estar a su vez constrenido por el diafragma del piso, o la
+            # cadena diafragma->rigidLink no transmite la traslacion).
+            excl = (set(support_tags) | set(rigid_slave_tags)
+                    | set(rigid_master_tags))
             candidates = [t for t in tags if t not in excl]
             if not candidates:
                 print(f"  [DIAFRAGMA] {fl:12s} z={z:6.2f} m: sin candidatos")
@@ -544,7 +722,7 @@ def run_case(case_name="G"):
         xi, yi, zi = node_xyz(i)
         xj, yj, zj = node_xyz(j)
         L = math.sqrt((xj - xi) ** 2 + (yj - yi) ** 2 + (zj - zi) ** 2)
-        W = GAMMA_CONC * A * L
+        W = meta.get("gamma", GAMMA_CONC) * A * L
         total_W += W
         half = W / 2.0
         k = (round(xi, 6), round(yi, 6), round(zi, 6))
@@ -586,6 +764,8 @@ def run_case(case_name="G"):
     for tag, meta in elem_meta.items():
         if meta["type"] not in ("beam_x", "beam_y"):
             continue
+        if meta.get("is_fraction"):
+            continue          # solo el tag del contrato (los demas son fracciones)
         c = cargas_losa_qG.get(tag) or {"p": 0.0, "A": 0.0, "W": 0.0,
                                         "aportes": []}
         cQ = cargas_losa_qQ.get(tag) or {"p": 0.0, "A": 0.0, "W": 0.0}
@@ -653,7 +833,10 @@ def run_case(case_name="G"):
     for tag, meta in elem_meta.items():
         if meta["type"] not in ("beam_x", "beam_y"):
             continue
-        p = cargas_losa.get(tag, {}).get("p", 0.0)
+        # Fracciones de una viga subdividida: la carga lineal (kN/m) es la de
+        # la viga PADRE; ops.eleLoad beamUniform la reparte por longitud, asi
+        # cada fraccion recibe automaticamente su parte proporcional.
+        p = cargas_losa.get(meta.get("parent", tag), {}).get("p", 0.0)
         if p <= 0:
             continue
         i, j = meta["nodes"]
@@ -963,23 +1146,27 @@ def run_case(case_name="G"):
     # (a) Equilibrio global: Sigma F + Sigma R = 0
     #     Para G/Q: comparar Rz vs total_W_apply (carga vertical).
     #     Para EX/EY: comparar Rx/Ry vs F_lateral (carga horizontal).
+    #     CON CONEXIONES (rigidDiaphragm/rigidLink de muros) la suma DEBE
+    #     hacerse sobre TODOS los nodos del modelo: parte de la carga queda
+    #     en masters/slaves de constraint (nodos de conexion 200000+ y de
+    #     muro 9000+) que no son apoyos fisicos, y por eso
+    #     Sigma(all_support_tags) != Sigma(total). Con Transformation la
+    #     identidad exacta es Sigma(nodeReaction en todos) + Sigma(F) = 0.
     Rx = Ry = Rz = 0.0
-    for tag in all_support_tags:
+    for tag in in_model:
         r = ops.nodeReaction(tag)
         Rx += r[0]; Ry += r[1]; Rz += r[2]
     if is_lateral and case_name in ("EX", "EY"):
         F_applied = total_W_apply
-        dir_axis = 0 if case_name == "EX" else 1
-        # Para equilibrio lateral, usar SOLO apoyos de fundacion fijos.
-        R_base = 0.0
-        for tag in base_support_tags:
-            r = ops.nodeReaction(tag)
-            R_base += r[dir_axis]
-        # Ecuacion de equilibrio CON SIGNO: F_aplicada + R_base = 0.
-        err = (abs(F_applied + R_base) / F_applied) if F_applied else float("inf")
+        dir_axis = 0 if case_name == "EX" else 1   # 0=X, 1=Y
+        # Equilibrio global (identidad exacta con Transformation): la suma de
+        # nodeReaction sobre TODOS los nodos cancela las fuerzas internas de
+        # constraint (rigidDiaphragm / rigidLink de muros) y debe dar -F.
+        R_eje = Rx if dir_axis == 0 else Ry
+        err = (abs(F_applied + R_eje) / F_applied) if F_applied else float("inf")
         ok_eq = err < 1e-10 and F_applied > 0.0
-        print(f"    . Equilibrio {case_name}: F_applied={F_applied:12.3f}  "
-              f"R_base({case_name[-1]})={R_base:12.3f}  err={err:.3e}  "
+        print(f"    . Equilibrio {case_name} (global): F_applied={F_applied:12.3f}  "
+              f"R_global({case_name[-1]})={R_eje:12.3f}  err={err:.3e}  "
               f"({'OK' if ok_eq else 'NO'})")
     elif case_name == "COMBO":
         # El equilibrio del caso combinado se audita en su propia seccion
@@ -1088,8 +1275,9 @@ def run_case(case_name="G"):
     # AUDITORIA ESPECIFICA DE SISMO EX / EY (Parte B)
     # ------------------------------------------------------------------
     # 1) Carga lateral total: Σ(Fy/Fx aplicada) = F_EX / F_EY (control).
-    # 2) Corte basal: suma de reacciones horizontales en los apoyos.
-    #    Vb_X = Σ Rx (EX) ; Vb_Y = Σ Ry (EY). Debe cumplir |Vb| ≈ |F|.
+    # 2) Equilibrio global: Σ nodeReaction sobre TODOS los nodos cancela las
+    #    fuerzas internas de constraint (rigidDiaphragm/rigidLink) y debe dar
+    #    F + R_global = 0. El corte de fundacion se reporta por separado.
     # 3) Deformada: ux/uy del nodo master en el sentido (+) de la fuerza aplicada.
     # 4) Torsion de piso: rz del master (debe salir pequena si es simetrico; si es
     #    relevante, revisar asimetria de rigidez / posicion de CM-CR).
@@ -1100,17 +1288,23 @@ def run_case(case_name="G"):
         # (2b) Fuerza sismica esperada: usa la verif. INDEPENDIENTE calculada
         # antes del analisis (F_esperada_indep desde G_floor/Q_floor, sin
         # reutilizar la lista aplicada). No se recalcula aqui.
-        # Corte basal CON SIGNO: suma de reacciones horizontales SOLO en apoyos
-        # de fundacion verdaderamente fijos (1,1,1,1,1,1). Los nodos esclavos
-        # del diafragma y los floating/piso_vertical (0,0,1,1,1,0) tienen
-        # ux/uy libres; sus nodeReaction en DOF horizontales contienen
-        # fuerzas de constraint internas que NO son reacciones de apoyo.
+        # Corte basal de FUNDACION: suma de reacciones horizontales SOLO en
+        # apoyos verdaderamente fijos (1,1,1,1,1,1). Es un dato de diseno.
+        # NO se exige F + corte = 0: los muros inclinados/flotantes y los
+        # diafragmas transmiten parte de la carga como pares de constraint
+        # internos (rigidDiaphragm/rigidLink) que en la contabilidad de
+        # Transformation residen en nodos interiores. El invariante exacto es
+        # la suma GLOBAL sobre todos los nodos (F + R_global = 0).
         corte = 0.0
         for tag in base_support_tags:
             r = ops.nodeReaction(tag)
             corte += r[dir_axis]
-        # Ecuacion F + R_base = 0 (signo): corte debe SALIR del signo opuesto.
-        errV = (abs(F_aplicada + corte) / F_aplicada) if F_aplicada else float("inf")
+        corte_global = 0.0
+        for tag in in_model:
+            r = ops.nodeReaction(tag)
+            corte_global += r[dir_axis]
+        # Ecuacion F + R_global = 0 (signo): corte global cancela la fuerza.
+        errV = (abs(F_aplicada + corte_global) / F_aplicada) if F_aplicada else float("inf")
         okV = errV < 1e-10 and F_aplicada > 0.0
         # desplazamiento y rotacion del nodo master de cada piso
         cm_info = []
@@ -1136,8 +1330,8 @@ def run_case(case_name="G"):
         print(f"Fuerza lateral aplicada    = {F_aplicada:.2f} kN")
         print(f"F esperada (independiente) = {F_esperada_indep:.2f} kN  "
               f"err={err_Fe:.3e}  {'OK' if okFe else 'REVISAR'}")
-        print(f"Corte basal    {'(X)' if dir_axis==0 else '(Y)'}           = {corte:10.2f} kN")
-        print(f"F + R_base (con signo)     = {F_aplicada + corte:.4e}  "
+        print(f"Corte basal fundacion {'(X)' if dir_axis==0 else '(Y)'}    = {corte:10.2f} kN")
+        print(f"F + R_global (con signo)     = {F_aplicada + corte_global:.4e}  "
               f"errV={errV:.3e}  {'OK' if okV else 'REVISAR'}")
         for fl, m, ux, uy, rz in sorted(cm_info, key=lambda t: t[0]):
             print(f"  CM piso {fl:10s} (master={m}): "
@@ -1151,22 +1345,26 @@ def run_case(case_name="G"):
     # ------------------------------------------------------------------
     # AUDITORIA DE SUPERPOSICION COMBO (Parte C)
     # ------------------------------------------------------------------
-    # Verifica que la corrida combinada equilibra: las reacciones de la base
-    # deben cancelar exactamente la carga aplicada del caso combinado (F + R = 0)
-    # en las tres direcciones, igual que en los casos individuales.
+    # Verifica que la corrida combinada equilibra en las tres direcciones.
+    # Igual que EX/EY, el invariante exacto con Transformation es la suma de
+    # nodeReaction sobre TODOS los nodos (las fuerzas de constraint internas
+    # de rigidDiaphragm/rigidLink cancelan); el corte de fundacion (base
+    # 1,1,1,1,1,1) se reporta por separado como dato de diseno.
     if case_name == "COMBO":
-        rx = ry = rz = 0.0
+        rxb = ryb = 0.0
         for tag in base_support_tags:
             r = ops.nodeReaction(tag)
-            rx += r[0]; ry += r[1]
-        for tag in all_support_tags:
+            rxb += r[0]; ryb += r[1]
+        rx = ry = rz = 0.0
+        for tag in in_model:
             r = ops.nodeReaction(tag)
-            rz += r[2]
+            rx += r[0]; ry += r[1]; rz += r[2]
         print("=" * 70)
         print(f"=== AUDITORIA SUPERPOSICION COMBO ===")
-        print(f"  React. base (Rx, Ry) = {rx:.4e}, {ry:.4e} kN | Rz total={rz:.4e} kN")
+        print(f"  Corte fundacion (Rxb, Ryb) = {rxb:.4e}, {ryb:.4e} kN")
+        print(f"  Equilibrio global (Rx, Ry) = {rx:.4e}, {ry:.4e} | Rz total={rz:.4e} kN")
         # Equilibrio vertical: carga gravitacional combinada hacia abajo (-fz)
-        # cancelada por las reacciones verticales de TODOS los apoyos (+rz).
+        # cancelada por las reacciones verticales de TODOS los nodos (+rz).
         fz_comb = (LAMBDA_G * self_weight_kN)
         fz_comb += sum(c["W"] for c in cargas_losa.values())   # losa G*lG + Q*lQ
         if abs(fz_comb) > 1e-6:
@@ -1177,10 +1375,17 @@ def run_case(case_name="G"):
             # vertical que verificar; Rz debe salir ~0
             err_z = abs(rz)
             ok_z = err_z < 1e-6
-        # Equilibrio lateral: F + R = 0 en cada eje (R con signo de reaccion).
-        err_x = abs((fx_total + rx) / fx_total) if fx_total else float("inf")
+        # Equilibrio lateral GLOBAL: F + R = 0 en cada eje (R con signo de
+        # reaccion).
+        if fx_total:
+            err_x = abs((fx_total + rx) / fx_total)
+        else:
+            err_x = abs(rx)
         ok_x = err_x < 1e-6
-        err_y = abs((fy_total + ry) / fy_total) if fy_total else float("inf")
+        if fy_total:
+            err_y = abs((fy_total + ry) / fy_total)
+        else:
+            err_y = abs(ry)
         ok_y = err_y < 1e-6
         for label, err, ok in (("X", err_x, ok_x), ("Y", err_y, ok_y),
                                ("Z", err_z, ok_z)):

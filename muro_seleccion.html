@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Seleccionar muros de apoyo</title>
+<style>
+  body { margin: 0; overflow: hidden; background: #1a1a2e; font-family: monospace; }
+  #info {
+    position: absolute; top: 10px; left: 10px;
+    color: #0f0; background: rgba(0,0,0,0.7);
+    padding: 10px 15px; border-radius: 5px; font-size: 13px;
+    z-index: 10; max-width: 500px; line-height: 1.5;
+  }
+  #panel {
+    position: absolute; top: 10px; right: 10px;
+    width: 320px; max-height: calc(100vh - 40px); overflow-y: auto;
+    color: #fff; background: rgba(0,0,0,0.85);
+    padding: 10px 14px; border-radius: 6px; font-size: 12px;
+    z-index: 10; border: 1px solid #0aa;
+  }
+  #panel h3 { margin: 0 0 6px; color: #0ff; font-size: 13px; }
+  #panel .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0; }
+  #panel label { color: #9ff; }
+  #panel button {
+    background: #2d6f2d; color: #fff; border: none; border-radius: 4px;
+    padding: 4px 8px; cursor: pointer; font-family: monospace; font-size: 11px;
+  }
+  #panel .danger { background: #8b2f2f; }
+  #panel .muros { background: #2d5f8f; }
+  #selList { max-height: 260px; overflow-y: auto; margin-top: 6px;
+             border: 1px solid #333; padding: 4px; font-size : 11px; }
+  #selList div { padding: 1px 2px; color: #ddd; }
+  #selList .rm { color: #f66; cursor: pointer; margin-right: 6px; }
+  #hoverInfo {
+    position: absolute; bottom: 10px; left: 10px;
+    color: #0ff; background: rgba(0,0,0,0.75);
+    padding: 8px 12px; border-radius: 5px; font-size: 12px; z-index: 10;
+  }
+  #count { color: #ffd700; font-weight: bold; }
+</style>
+</head>
+<body>
+<div id="info">
+  <b>Seleccion de muros de apoyo</b> (muros como placas solidas; wireframe = contexto)<br>
+  Izq: rotar | Der: mover | Scroll: zoom | <b>Clic en un muro</b>: marcar / desmarcar<br>
+  <b>Esferas rojas</b> = los 20 nodos especiales que necesitan apoyo (x=60 y x=3205)
+</div>
+
+<div id="panel">
+  <h3>Control</h3>
+  <div class="row">
+    <label><input type="checkbox" checked id="tg-wall"> Muros</label>
+    <label><input type="checkbox" checked id="tg-marks"> Nodos especiales</label>
+  </div>
+  <div class="row">
+    <button onclick="copySel()">Copiar JSON</button>
+    <button onclick="downloadSel()">Descargar</button>
+    <button class="muros" onclick="selectNearSpecials()">Muros junto a los 20 nodos</button>
+    <button class="danger" onclick="clearSel()">Limpiar</button>
+  </div>
+  <div class="row">Seleccionadas: <span id="count">0</span></div>
+  <div id="selList"></div>
+</div>
+
+<div id="hoverInfo">Hover sobre un muro para ver su id</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="opensees/results/analysis_map.js"></script>
+<script src="opensees/results/deformada_elements.js"></script>
+<script>
+const ANALYSIS = (typeof ANALYSIS_MAP !== 'undefined') ? ANALYSIS_MAP : null;
+
+// puntos destacados dentro del escenario grafico
+const SPECIAL_NODES = [167,170,173,176,179,168,171,174,177,180,398,399,400,401,402,403,404,405,406,407];
+
+// ---------- escena ----------
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a2e);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.01, 1000);
+const ORBIT_TARGET = new THREE.Vector3(3.6, 3.56, 20);
+camera.position.set(-15, 30, 60);
+camera.lookAt(ORBIT_TARGET);
+
+const renderer = new THREE.WebGLRenderer({antialias: true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+const ambLight = new THREE.AmbientLight(0x404060, 0.6);
+scene.add(ambLight);
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(10, 20, 10);
+scene.add(dirLight);
+const hemiLight = new THREE.HemisphereLight(0x8888aa, 0x444422, 0.4);
+scene.add(hemiLight);
+const gridHelper = new THREE.GridHelper(70, 70, 0x444466, 0x333355);
+gridHelper.position.y = 0;
+scene.add(gridHelper);
+const axesHelper = new THREE.AxesHelper(3);
+axesHelper.position.set(0, 0, 0);
+scene.add(axesHelper);
+
+// ---------- contexto (wireframe tenue de columnas y vigas) ----------
+const ctxGroup = new THREE.Group();
+const ctxMat = new THREE.LineBasicMaterial({color: 0x777788, transparent: true, opacity: 0.25});
+elements.forEach(e => {
+  if (e.type === 'wall' || e.type === 'loza') return;
+  const pts = [
+    new THREE.Vector3(e.xi, e.yi, e.zi),
+    new THREE.Vector3(e.xj, e.yj, e.zj)
+  ];
+  const g = new THREE.BufferGeometry().setFromPoints(pts);
+  ctxGroup.add(new THREE.Line(g, ctxMat));
+});
+scene.add(ctxGroup);
+
+// ---------- marcadores de nodos especiales ----------
+const markGroup = new THREE.Group();
+scene.add(markGroup);
+let specials = [];
+function buildMarks() {
+  while (markGroup.children.length) {
+    const c = markGroup.children.pop();
+    c.geometry && c.geometry.dispose();
+  }
+  if (!document.getElementById('tg-marks').checked) return;
+  const NC = ANALYSIS ? (ANALYSIS.node_coords || {}) : {};
+  const mat = new THREE.MeshPhongMaterial({color: 0xff2222, emissive: 0x660000});
+  specials = [];
+  SPECIAL_NODES.forEach(id => {
+    const nc = NC[id];
+    if (!nc) return;
+    specials.push([nc[0], nc[2], nc[1]]); // (x, Z_altura, Y_plano)
+    // posicion grafica: (x, Z_altura, Y_plano)
+    const p = new THREE.Vector3(nc[0], nc[2], nc[1]);
+    const spe = new THREE.SphereGeometry(0.5, 12, 12);
+    const mesh = new THREE.Mesh(spe, mat);
+    mesh.position.copy(p);
+    mesh.userData = { spNode: id };
+    markGroup.add(mesh);
+  });
+}
+
+// ---------- grupo de muros (placas solidas) ----------
+const defGroup = new THREE.Group();
+scene.add(defGroup);
+const SEL_COLOR = new THREE.Color(0xffff00);
+const WALL_COLOR = new THREE.Color(0x4488cc);
+const metaIdx = [];   // ix -> {e, meta}
+const defMeshes = []; // {mesh, ix}
+
+function buildDeformada() {
+  while (defGroup.children.length) {
+    const c = defGroup.children.pop();
+    c.geometry && c.geometry.dispose();
+  }
+  defMeshes.length = 0;
+  if (!ANALYSIS) { alert('Sin analysis_map.js'); return; }
+  const wallsOn = document.getElementById('tg-wall').checked;
+  for (let ix = 0; ix < elements.length; ix++) {
+    const e = elements[ix];
+    if (e.type !== 'wall') continue;
+    if (!wallsOn) continue;
+    const meta = ANALYSIS.elements[ix];
+    if (!meta || !meta.ni) continue;
+
+    const start = new THREE.Vector3(e.xi, e.yi, e.zi);
+    const end = new THREE.Vector3(e.xj, e.yj, e.zj);
+    const dir = new THREE.Vector3().subVectors(end, start);
+    const length = dir.length();
+    const center = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+
+    let geo;
+    if (Math.abs(dir.x) > 0.001 && Math.abs(dir.z) < 0.001) {
+      geo = new THREE.BoxGeometry(Math.abs(dir.x), e.h, e.b);
+    } else {
+      geo = new THREE.BoxGeometry(e.b, length, e.h);
+    }
+    const color = selected.has(ix) ? SEL_COLOR : WALL_COLOR;
+    const mat = new THREE.MeshPhongMaterial({
+      color: color,
+      transparent: !selected.has(ix),
+      opacity: selected.has(ix) ? 1.0 : 0.9,
+      emissive: selected.has(ix) ? 0x443300 : 0x000000
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(center);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.userData = { ix: ix, id: meta.id, type: e.type, section: e.section };
+    defGroup.add(mesh);
+    defMeshes.push({mesh, ix});
+    metaIdx[ix] = {e, meta};
+  }
+}
+
+// ---------- seleccion ----------
+const selected = new Set();
+const selListEl = document.getElementById('selList');
+const countEl = document.getElementById('count');
+function renderList() {
+  selListEl.innerHTML = '';
+  const ids = [...selected].sort((a,b)=>a-b);
+  ids.forEach(ix => {
+    const m = metaIdx[ix];
+    if (!m) return;
+    const div = document.createElement('div');
+    const rm = document.createElement('span');
+    rm.className = 'rm'; rm.textContent = 'x'; rm.title = 'Quitar';
+    rm.onclick = () => { selected.delete(ix); buildDeformada(); renderList(); };
+    div.appendChild(rm);
+    div.appendChild(document.createTextNode(
+      '#' + m.meta.id + '  ' + m.e.type + '  ' + (m.e.section||'') + '  ni=' + m.meta.ni + ' nj=' + m.meta.nj
+    ));
+    selListEl.appendChild(div);
+  });
+  countEl.textContent = ids.length;
+}
+function copySel() {
+  const out = [...selected].map(ix => {
+    const m = metaIdx[ix];
+    return { id: m.meta.id, type: m.e.type, section: m.e.section, ni: m.meta.ni, nj: m.meta.nj,
+             xij: [m.e.xi, m.e.yi, m.e.zi, m.e.xj, m.e.yj, m.e.zj] };
+  });
+  navigator.clipboard.writeText(JSON.stringify(out, null, 2)).then(
+    () => alert('Copiado al portapapeles: ' + out.length + ' muros'),
+    () => alert('No se pudo copiar; usa Descargar')
+  );
+}
+function downloadSel() {
+  const out = [...selected].map(ix => {
+    const m = metaIdx[ix];
+    return { id: m.meta.id, type: m.e.type, section: m.e.section, ni: m.meta.ni, nj: m.meta.nj };
+  });
+  const blob = new Blob([JSON.stringify(out, null, 2)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'seleccion_muros.json';
+  a.click();
+}
+function clearSel() { selected.clear(); buildDeformada(); renderList(); }
+
+// seleccion rapida: muros cuyo centroide esta a < 5 m de alguno de los 20 nodos
+function selectNearSpecials() {
+  specials.forEach(spm => {
+    for (let ix = 0; ix < elements.length; ix++) {
+      const e = elements[ix];
+      if (e.type !== 'wall') continue;
+      const C = [(e.xi+e.xj)/2, (e.yi+e.yj)/2, (e.zi+e.zj)/2];
+      if (Math.hypot(C[0]-spm[0], C[1]-spm[1], C[2]-spm[2]) < 5.0) {
+        if (metaIdx[ix]) selected.add(ix);
+      }
+    }
+  });
+  buildDeformada();
+  renderList();
+}
+
+// ---------- raycast ----------
+const raycaster = new THREE.Raycaster();
+const mouseNdc = new THREE.Vector2();
+renderer.domElement.addEventListener('click', ev => {
+  mouseNdc.x = (ev.clientX / window.innerWidth) * 2 - 1;
+  mouseNdc.y = -(ev.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouseNdc, camera);
+  const hits = raycaster.intersectObjects(defMeshes.map(m => m.mesh), false);
+  if (hits.length) {
+    const ix = hits[0].object.userData.ix;
+    if (selected.has(ix)) selected.delete(ix); else selected.add(ix);
+    buildDeformada();
+    renderList();
+  }
+});
+
+// hover info
+renderer.domElement.addEventListener('mousemove', ev => {
+  mouseNdc.x = (ev.clientX / window.innerWidth) * 2 - 1;
+  mouseNdc.y = -(ev.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouseNdc, camera);
+  const hits = raycaster.intersectObjects(defMeshes.map(m => m.mesh), false);
+  const el = document.getElementById('hoverInfo');
+  if (hits.length) {
+    const u = hits[0].object.userData;
+    const m = metaIdx[u.ix];
+    el.textContent = '#' + u.id + '  ' + u.type + '  ' + (u.section||'') +
+      '  ni=' + m.meta.ni + '  nj=' + m.meta.nj +
+      '  de (' + m.e.xi.toFixed(2) + ',' + m.e.yi.toFixed(2) + ',' + m.e.zi.toFixed(2) + ')' +
+      '  a (' + m.e.xj.toFixed(2) + ',' + m.e.yj.toFixed(2) + ',' + m.e.zj.toFixed(2) + ')';
+  } else {
+    el.textContent = 'Hover sobre un muro para ver su id';
+  }
+});
+
+// ---------- controles orbit ----------
+let isRotating = false, isPanning = false;
+let prevMouse = {x:0,y:0};
+const spherical = new THREE.Spherical().setFromVector3(
+  new THREE.Vector3().subVectors(camera.position, ORBIT_TARGET));
+renderer.domElement.addEventListener('mousedown', e => {
+  if (e.button === 0) isRotating = true;
+  if (e.button === 2) isPanning = true;
+  prevMouse = {x: e.clientX, y: e.clientY};
+});
+renderer.domElement.addEventListener('mouseup', () => { isRotating = false; isPanning = false; });
+renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+renderer.domElement.addEventListener('mousemove', ev => {
+  if (!isRotating && !isPanning) return;
+  const dx = ev.clientX - prevMouse.x, dy = ev.clientY - prevMouse.y;
+  prevMouse = {x: ev.clientX, y: ev.clientY};
+  if (isRotating) {
+    spherical.theta -= dx * 0.01;
+    spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi - dy * 0.01));
+    camera.position.copy(ORBIT_TARGET).add(new THREE.Vector3().setFromSpherical(spherical));
+    camera.lookAt(ORBIT_TARGET);
+  }
+  if (isPanning) {
+    const wdir = new THREE.Vector3(); camera.getWorldDirection(wdir);
+    const right = new THREE.Vector3().crossVectors(camera.up, wdir).normalize();
+    camera.position.addScaledVector(right, -dx * 0.02);
+    camera.position.addScaledVector(camera.up, dy * 0.02);
+  }
+});
+renderer.domElement.addEventListener('wheel', e => {
+  spherical.radius = Math.max(2, Math.min(200, spherical.radius + e.deltaY * 0.02));
+  camera.position.copy(ORBIT_TARGET).add(new THREE.Vector3().setFromSpherical(spherical));
+  camera.lookAt(ORBIT_TARGET);
+});
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ---------- eventos panel ----------
+document.getElementById('tg-wall').addEventListener('change', buildDeformada);
+document.getElementById('tg-marks').addEventListener('change', buildMarks);
+
+function animate() {
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+buildMarks();
+buildDeformada();
+renderList();
+animate();
+</script>
+</body>
+</html>

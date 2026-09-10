@@ -103,7 +103,10 @@ def test_comparacion_explicita_directa_tolerancias():
     for label, a, b in maps:
         me, n, _, _ = sp.compare_maps(a, b, None, 6)
         assert me < TOL, f"{label}: err={me:.3e} >= TOL"
-        assert n > 100, f"{label}: solo {n} claves comparadas"
+        # se comparan TODAS las claves del resultado explicito (los sets de
+        # tags deben coincidir 1:1; el umbral fijo >100 quedo obsoleto cuando
+        # los suelos artificiales se liberaron y reactions_kN bajo a ~99).
+        assert n == len(b), f"{label}: solo {n}/{len(b)} claves comparadas"
 
 
 # ---------------------------------------------------------------------------
@@ -132,7 +135,7 @@ def test_combinacion_solo_EX_reproduce_caso_EX():
                         ("react", combo["reactions_kN"], ex["reactions_kN"])]:
         me, n, _, _ = sp.compare_maps(a, b, None, 6)
         assert me < 1e-8, f"EX solo: {label} err={me:.3e}"
-        assert n > 100
+        assert n == len(b), f"EX solo: {label}: solo {n}/{len(b)} claves comparadas"
 
 
 if __name__ == "__main__":

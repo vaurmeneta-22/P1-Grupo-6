@@ -49,46 +49,23 @@ def main():
     json_nodes_by_id = {n["id"]: n for n in nodes_json}
 
     # ------------------------------------------------------------------
-    # Replicar exactamente los tags OpenSees de los extremos de cada
-    # elemento (misma logica que opensees_edificio_v2.py, sin ejecutar FI).
+    # Tags de los extremos de cada elemento en el MISMO orden que el array
+    # `elements` del viewer (Edificio.json y viewer 1:1). Para muros usa el
+    # plan de conectividad compartido (conexiones.py): garantiza que los tags
+    # de extremo (9000+) coincidan EXACTAMENTE con los del FE.
     # ------------------------------------------------------------------
-    structural_refs = set()
-    for e in elements_json:
-        if e["type"] == "loza":
-            continue
-        if "node_i" in e:
-            structural_refs.add(e["node_i"])
-            structural_refs.add(e["node_j"])
+    from conexiones import plan_conexiones
+    conx = plan_conexiones(nodes_json, elements_json, data["supports"])
+    wall_ends = conx["wall_ends"]
+    frame_split = conx["frame_split"]
 
-    pos_key = {}          # (x,y,z redon.) -> tag
-    for n in nodes_json:
-        if n["id"] in structural_refs:
-            x = n["x"] * CM_TO_M
-            y = n["y"] * CM_TO_M
-            z = n["z"] * CM_TO_M
-            pos_key[(round(x, 4), round(y, 4), round(z, 4))] = n["id"]
-
-    wall_elems = [e for e in elements_json if e["type"] == "wall"]
-    next_wall_node = 9000
-
-    def get_or_create_wall_node(cx_cm, cz_cm, cy_cm):
-        nonlocal next_wall_node
-        x = cx_cm * CM_TO_M
-        y = cz_cm * CM_TO_M
-        z = cy_cm * CM_TO_M
-        key = (round(x, 4), round(y, 4), round(z, 4))
-        if key in pos_key:
-            return pos_key[key]
-        tag = next_wall_node
-        next_wall_node += 1
-        pos_key[key] = tag
-        return tag
-
-    wall_ends = {}
-    for e in wall_elems:
-        tagA = get_or_create_wall_node(e["xi"], e["zi"], e["yi"])
-        tagB = get_or_create_wall_node(e["xj"], e["zj"], e["yj"])
-        wall_ends[e["id"]] = (tagA, tagB)
+    # Fracciones reales de cada viga del contrato (reglas B y F): el viewer
+    # debe dibujar la deformada como polilinea usando los nodos reales del FE,
+    # no la viga recta entre sus 2 extremos (si no, el doblez del empalme
+    # viga-viga no se ve y la secundaria parece "flotar").
+    beam_fractions = {vid: [{"ni": ni, "nj": nj} for (_ft, ni, nj) in fr]
+                      for vid, fr in frame_split.items()}
+    node_coords = {str(tag): [x, y, z] for tag, (x, y, z) in conx["tag_coord"].items()}
 
     # ------------------------------------------------------------------
     # Por cada elemento: id, tipo, seccion y tags i/j en el MISMO ORDEN
@@ -159,13 +136,46 @@ def main():
         "muros": muros_capacidad,
     }
 
+    # Capacidad P-M de acero A240ES para tubos huecos cuadrados.
+    FY_STEEL_KPA = 240_000.0   # kPa
+    steel_sections = {
+        "300x300x20": {"b": 0.30, "t": 0.02},
+        "300x300x50": {"b": 0.30, "t": 0.05},
+    }
+    steel_cap = {}
+    for sec_name, dims in steel_sections.items():
+        b, t = dims["b"], dims["t"]
+        a = b - 2.0 * t
+        A = b * b - a * a
+        Zp = (b ** 3 - a ** 3) / 6.0
+        Py = FY_STEEL_KPA * A
+        Mp = FY_STEEL_KPA * Zp
+        npts = 21
+        P_list, M_list = [], []
+        for i in range(npts):
+            frac = i / (npts - 1)
+            P = -Py + 2.0 * Py * frac
+            ratio = abs(P) / Py if Py > 0 else 0
+            M = Mp * max(0.0, 1.0 - ratio ** 1.4)
+            P_list.append(round(P, 2))
+            M_list.append(round(M, 2))
+        steel_cap[sec_name] = {
+            "P": P_list, "M": M_list,
+            "seccion": sec_name,
+            "fy_MPa": 240, "A_m2": round(A, 6), "Zp_m3": round(Zp, 6),
+        }
+    capacidad["steel"] = steel_cap
+
     out = {
         "generado": "opensees/exportar_analysis_map.py",
         "casos": CASES,
+        "units": {"length": "m", "force": "kN", "moment": "kN*m"},
         "meta": meta_by_case,
         "elements": elements_out,
         "forces": forces,
         "disp": disp,
+        "beam_fractions": beam_fractions,
+        "node_coords": node_coords,
         "capacidad": capacidad,
         "nota": "Fuerzas globales en extremos i y j (kN, kN*m); disp en m. "
                 "Orden de `elements` == edificio_3d.html.",
@@ -179,9 +189,10 @@ def main():
         f.write(body)
 
     n_forces = len(forces["COMBO"])
-    print(f"OK: analysis_map.js ({len(body)/1024:.0f} KB)")
+    print(f"OK: analysis_map.js ({len(body)/1020:.0f} KB)")
     print(f"  elements: {len(elements_out)} | fuerzas COMBO: {n_forces} "
-          f"| disp EX nodos: {len(disp['EX'])}")
+          f"| disp EX nodos: {len(disp['EX'])} "
+          f"| vigas con fracciones: {len(beam_fractions)}")
     # sanity: desalineaciones con el viewer
     if len(elements_out) != len(data["elements"]):
         print("  [WARN] tamano no coincide con Edificio.json")

@@ -161,6 +161,20 @@ for e in elements_html:
         }
         if t == 'loza':
             out['t'] = round(e['t'] * 100, 2)
+        if t in ('steel_column', 'steel_beam'):
+            # Acero: igual que columnas, nodo mas cercano a cada extremo.
+            co_i = (e['xi']*100, e['zi']*100, e['yi']*100)
+            co_j = (e['xj']*100, e['zj']*100, e['yj']*100)
+            def pick(cands, co):
+                return min(cands, key=lambda n: dist3((n['x'], n['y'], n['z']), co))
+            ni = pick(nodes_json, co_i)['id']
+            nj = pick(nodes_json, co_j)['id']
+            max_d = max(dist3((nn['x'], nn['y'], nn['z']), co)
+                        for nn, co in ((next(n for n in nodes_json if n['id']==ni), co_i),
+                                       (next(n for n in nodes_json if n['id']==nj), co_j)))
+            out['node_i'] = ni
+            out['node_j'] = nj
+            out['t'] = round(float(str(e['section']).split('x')[2]), 4)  # mm del tubo
         elements_json.append(out)
     eid += 1
 
