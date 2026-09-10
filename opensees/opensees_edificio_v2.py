@@ -99,7 +99,7 @@ GAMMA_STEEL = 7850.0 * 9.81 / 1000.0  # kN/m3 ≈ 77.01
 # ajustar aqui segun el modelo real.
 # ---------------------------------------------------------------------------
 TERMINACIONES_KNM2 = 2.0      # terminaciones uniformes sobre losa (kN/m2)
-SOBRECARGA_KNM2 = 2.0         # sobrecarga de uso sobre losa (kN/m2)
+SOBRECARGA_KNM2 = 4.0         # sobrecarga de uso sobre losa (kN/m2)
 
 # Aceleracion de gravedad (unidades SI, coherente con kN y m).
 g = 9.81         # m/s^2
