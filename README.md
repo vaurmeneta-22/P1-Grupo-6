@@ -102,6 +102,7 @@ En `edificio_3d.html` las capas se alternan con los checkboxes del panel izquier
 ├── tests/                # Verificaciones (equilibrio, superposición, tributarias, empalmes, camino de carga)
 ├── scripts/              # Utilidades (html_to_json.py, parte_d_fiber.py, parte_d_muros.py,
 │                         #   sensibilidad_secciones.py, comparacion_rc.py, demanda_capacidad.py)
+├── reports/              # Entregables obligatorios (reports/semana03.md)
 ├── regla_g_walls.json    # Selección de muros para la regla G de conexiones
 └── Enunciado_Proyecto1/  # Enunciado, cronograma y recursos
 ```
@@ -209,3 +210,4 @@ Issue → Plan → Build → Test → Review → Merge
 
 - [Enunciado del proyecto](Enunciado_Proyecto1/)
 - [Agentes IA](AGENTS.md)
+- [Avance Semana 3 (entregable)](reports/semana03.md) — casos base, curvas M-φ/P-M, verificación RC y demanda-capacidad (copia oficial en `resultados/12_reportes/semana03.md`)
