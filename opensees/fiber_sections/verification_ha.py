@@ -42,19 +42,22 @@ def _constantes(fc=F_C):
     return a1, b1
 
 
-def seccion_columna(b=700.0, h=700.0, rec=62.5, db=25.0, n_por_fila=3):
-    """Columna 70x70 con 18phi25 (9 arriba + 9 abajo): devuelve
+def seccion_columna(b=700.0, h=700.0, rec=64.0, db=28.0):
+    """Columna 70x70 con 16 phi28 perimetrales (5 cara sup + 5 cara inf +
+    3 por costado, sin repetir esquinas): devuelve
     (b, h, barras, Ast_total).
     barras = [(di, Asi), ...] con di = distancia desde fibra extrema
-    comprimida (la cara superior en la flexion). 3 filas por cara, cada una
-    con n_por_fila barras, simetricas."""
+    comprimida (la cara superior en la flexion)."""
     As = math.pi * (db / 2.0) ** 2
     r = rec
-    step = (h / 2.0 - r) / 3.0
-    d_sup = [r + k * step for k in range(3)]       # 62.5, 158.3, 254.2
-    barras = [(d, n_por_fila * As) for d in d_sup] + \
-             [(h - d, n_por_fila * As) for d in reversed(d_sup)]
-    Ast = 6 * n_por_fila * As
+    hy = h / 2.0 - r                      # posicion de las caras (286 mm)
+    # cara superior e inferior: 5 barras a lo ancho (incluyen las esquinas)
+    barras = [(r, 5.0 * As), (h - r, 5.0 * As)]
+    # costados: 3 barras intermedias por lado (2 por nivel: izq + der),
+    # equidistantes entre esquinas -> y = -hy/2, 0, +hy/2
+    for y in (-hy / 2.0, 0.0, hy / 2.0):
+        barras.append((h / 2.0 - y, 2.0 * As))
+    Ast = 16.0 * As
     return b, h, barras, Ast
 
 
@@ -131,7 +134,7 @@ def punto_momento_balanceado(cfg_col=True):
     Devuelve (P[kN], M[kN*m])."""
     if cfg_col:
         b, h, barras, Ast = seccion_columna()
-        rec = 62.5
+        rec = 64.0
     else:
         b, h, barras, Ast = seccion_muro()
         rec = 50.0

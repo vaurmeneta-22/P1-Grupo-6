@@ -187,9 +187,9 @@ Se analiza la sección de la **columna 70×70 cm** (`COLUMNA` en `opensees/fiber
 | Parámetro | Valor |
 |---|---|
 | Dimensión | b = 700 mm, h = 700 mm |
-| Acero longitudinal | 8 φ25 (A_s = 3 927 mm²) |
-| Recubrimiento | 62.5 mm (al centro de la barra) |
-| Disposición | 3 arriba / 2 laterales / 3 abajo |
+| Acero longitudinal | 16 φ28 (A_s = 9 852 mm²) |
+| Recubrimiento | 64.0 mm (al centro de la barra) |
+| Disposición | Perimetral: 5 arriba + 5 abajo + 3 por costado (sin repetir esquinas) |
 | Concreto | f'c = 35 MPa, ε_cu = 0.0035 |
 | Acero | fy = 420 MPa, E_s = 200 000 MPa |
 | Modelo de material | Concrete02 (concreto) + Steel01 (acero) |
@@ -206,9 +206,9 @@ La curva se obtiene con un modelo de viga cantilever de un solo elemento (`dispB
 | Parámetro | Valor |
 |---|---|
 | Curvatura inicial | φ ≈ 6.0 × 10⁻⁶ 1/m |
-| Curvatura máxima (falla) | φ_falla = 0.0255 1/m |
-| Momento último | **M_ult = 1059.38 kN·m** |
-| Pasos convergidos | 4 253 |
+| Curvatura en el pico (falla) | φ_pico = 0.0245 1/m |
+| Momento último (pico) | **M_ult = 1232.70 kN·m** |
+| Pasos convergidos | 4 795 |
 | Criterio de término | ε_fibra_extrema ≤ −ε_cu = −0.0035 |
 
 La curva muestra el comportamiento elástico lineal inicial, seguido de la plastificación del acero y finalmente la falla por compresión del concreto.
@@ -221,7 +221,7 @@ La rigidez inicial se obtiene como la pendiente de la rama elástica:
 EI = M / φ ≈ (M_elast) / (φ_elast)
 ```
 
-Para la columna 70×70 con P=0 la sensibilidad numérica reporta `EI = 701 342 kN·m²` (rama elástica convergida, incluye el refuerzo).
+Para la columna 70×70 con P=0 la sensibilidad numérica reporta `EI = 671 533 kN·m²` (rama elástica convergida, incluye el refuerzo).
 
 ### 5.5 Criterio de término
 
@@ -232,8 +232,8 @@ El análisis se detiene cuando la deformación de la fibra extrema comprimida al
 La convergencia de la discretización de fibras se audita con `scripts/sensibilidad_secciones.py` (`resultados/07_capacidad/sensibilidad/sensibilidad_secciones.json`), barriendo la malla de fibras para ambas secciones con P = 0:
 
 | Sección | Escenarios (n_fib) | M_ult (kN·m) | ΔM máx rel. |
-|---|---|---|---|
-| Columna 70×70 | 48 → 3072 | 1059.38 (invariante) | 0.0% |
+|---|---|---|--:|
+| Columna 70×70 | 48 → 3072 | 1232.70 (invariante) | 0.0% |
 | Muro 30×356 | 80 → 960 | 3400.85 → 3401.14 | 0.02% |
 
 La columna converge desde 48 fibras (M_ult idéntico en los 4 escenarios); el muro varía ≤ 0.02% en momento último y ≤ 3% en curvatura de falla entre 80 y 960 fibras. La malla de trabajo (columna 24×8 = 192 fibras, muro 40×6 = 240) está por tanto dentro del rango convergido.
@@ -244,21 +244,21 @@ La columna converge desde 48 fibras (M_ult idéntico en los 4 escenarios); el mu
 
 ### 6.1 Generación de la envolvente
 
-La envolvente P-M se genera barriendo una grilla de cargas axiales `P = [0, 500, 1500, 2500, 3500, 4500, 5000, 5500, 6000, 6331, 7000, 8000, 9000, 10000, 11000, 12000, 13000, 14000, 15000, 16110] kN`. Para cada valor de P se resuelve la curva M-φ completa y se toma el **momento máximo** (pico de la curva) como la capacidad a flexión para ese nivel de carga axial.
+La envolvente P-M se genera barriendo una grilla de cargas axiales `P = [0, 500, 1500, 2500, 3500, 4500, 5000, 5500, 6000, 7000, 8000, 9000, 10000, 11000, 12000, 13000, 14000, 15000, 16000, 17000, 18000, 19000] kN`. Para cada valor de P se resuelve la curva M-φ completa y se toma el **momento máximo** (pico de la curva) como la capacidad a flexión para ese nivel de carga axial.
 
 ### 6.2 Explicación de puntos característicos
 
 | P (kN) | M_cap (kN·m) | Descripción |
 |---|---|---|
-| 0 | 1 059.4 | Flexión pura (P=0) |
-| 3 500 | 1 665.3 | Zona de compresión moderada |
-| 6 000 | **1 817.6** | Momento máximo absoluto de la envolvente |
-| 7 000 | 1 805.1 | Compresión alta (meseta de balance) |
-| 10 000 | 1 717.4 | Compresión alta (acero cede en tracción) |
-| 15 000 | 1 060.3 | Compresión muy alta |
-| 18 000 | 512.4 | Compresión pura (P_0 analítico ≈ 18 026 kN) |
+| 0 | 1 232.7 | Flexión pura (P=0) |
+| 3 500 | 1 874.5 | Zona de compresión moderada |
+| 6 000 | **2 071.5** | Momento máximo absoluto de la envolvente |
+| 7 000 | 2 032.4 | Compresión alta (meseta de balance) |
+| 10 000 | 1 886.6 | Compresión alta (acero cede en tracción) |
+| 15 000 | 1 208.0 | Compresión muy alta |
+| 19 000 | 432.8 | Compresión pura (P_0 analítico ≈ 18 422 kN) |
 
-La envolvente tiene forma de "ojo": el momento máximo ocurre en la zona de balance (P ≈ 6 000 kN), donde el acero de tracción alcanza fy justo cuando el concreto llega a ε_cu. Para P > P_balance, el momento disminuye porque la sección está dominada por compresión.
+La envolvente tiene forma de "ojo": el momento máximo ocurre en la zona de balance (P ≈ 6 000 kN), donde el acero de tracción alcanza fy justo cuando el concreto llega a ε_cu. Para P > P_balance, el momento disminuye porque la sección está dominada por compresión. El refuerzo perimetral (16 φ28, configuración original del plano) aporta A_s = 98.5 cm² y desplaza la envolvente respecto a la simplificación anterior (18 φ25): el momento máximo sube de 1 817.6 a 2 071.5 kN·m.
 
 ---
 
@@ -305,8 +305,8 @@ La comparación automatizada (`scripts/comparacion_rc.py`, salida en `resultados
 
 | Sección | Punto | M_analítico (kN·m) | M_fiber (kN·m) | Diferencia |
 |---|---|---|---|---|
-| Columna 70×70 | Flexión pura | 1 047.9 | 1 059.4 | 1.1% |
-| Columna 70×70 | Balanceado (P = 6 746 kN) | 1 783.7 | 1 808.2 | 1.4% |
+| Columna 70×70 | Flexión pura | 1 214.4 | 1 232.7 | 1.5% |
+| Columna 70×70 | Balanceado (P = 6 542 kN) | 2 018.8 | 2 050.3 | 1.6% |
 | Muro 30×356 | Flexión pura | 3 323.6 | 3 400.8 | 2.3% |
 | Muro 30×356 | Balanceado (P = 14 930 kN) | 14 884.5 | 16 376.2 | 10.0% |
 
@@ -327,12 +327,12 @@ El script `scripts/demanda_capacidad.py` barre las **128 columnas** del modelo c
 | Elemento | Columna id=70, sección 70×70 |
 | P_demanda | 1 145.8 kN |
 | M_demanda | 2 383.2 kN·m |
-| **Radio de utilización (M_d / M_cap)** | **1.854** |
+| **Radio de utilización (M_d / M_cap)** | **1.612** |
 | **Resultado** | **FUERA de la curva** |
 
 ### 9.3 Top 10 por radio
 
-Las 10 columnas más exigidas son todas de sección 70×70 (radios 1.854 → 1.377); la columna id=70 es la única por encima de 1.8. La interpretación coincide con la Sección 8: varias columnas 70×70 del modelo superan la capacidad nominal a flexión bajo la combinación de diseño, lo que sugiere revisar la distribución de rigidez del sótano y/o considerar redistribución plástica.
+Las 10 columnas más exigidas son todas de sección 70×70 (radios 1.612 → 1.196); la columna id=70 es la única por encima de 1.6. Con el refuerzo perimetral original (16 φ28, A_s = 98.5 cm²) el radio crítico baja de 1.854 a 1.612 respecto a la simplificación anterior (18 φ25), y las columnas 70×70 que quedan fuera de la curva pasan de 17 a **12** (se recuperan las columnas id=285, 275, 30, 280 y 260, todas del Piso 2). La interpretación coincide con la Sección 8: varias columnas 70×70 del modelo superan la capacidad nominal a flexión bajo la combinación de diseño, lo que sugiere revisar la distribución de rigidez del sótano y/o considerar redistribución plástica.
 
 ---
 
@@ -386,12 +386,12 @@ El agente inicialmente propuso usar el **momento último** de la curva M-φ como
 - La masa sísmica `W = G + 0.5Q` excluye la fundación (Subterráneo) porque no hay diafragma rígido en z=0.
 - La fuerza sísmica se aplica en el CM real (no en el master), con momento correctivo `Mz` para equivalentar la traslación.
 - La superposición lineal es exacta en modelos elásticos lineales: la verificación directa vs explícita da error ≤ 7e-09 (tol 1e-6).
-- El barrido automático de demanda-capacidad encuentra que las columnas 70×70 más solicitadas superan la capacidad nominal (máx. radio 1.854 en la columna id=70), consistente con la malla del sótano.
+- El barrido automático de demanda-capacidad encuentra que las columnas 70×70 más solicitadas superan la capacidad nominal (máx. radio 1.612 en la columna id=70 con la enfierradura perimetral 16 φ28, frente a 1.854 con la simplificación 18 φ25), consistente con la malla del sótano.
 - La verificación independiente (bloque rectangular ACI/NCh) muestra concordancia ≤ 2.3% en flexión pura y hasta 10% en el balanceado del muro con el modelo de fibras.
 
 ## Próximos pasos (Semana 4)
 
-- Revisar la distribución de rigidez en el sótano (columna id=70 con radio 1.854).
+- Revisar la distribución de rigidez en el sótano (columna id=70 con radio 1.612).
 - Considerar redistribución plástica o ajuste de idealización para elementos con utilización > 100%.
 - Completar verificación con factores phi de diseño (ACI 318 / NCh430).
 - Documentar sensibilidad de la discretización de fibras (ya auditada en `sensibilidad_secciones.json`).

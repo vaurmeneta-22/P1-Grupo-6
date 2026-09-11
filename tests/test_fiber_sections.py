@@ -2,7 +2,8 @@
 Test de la Parte D - secciones de fibra / capacidades de HA (Grupo 6)
 
 Verifica (sin OpenSees, solo el contraste analitico del curso):
-1. Geometria del acero de la columna 70x70: 18 phi25 (9+9), Ast esperada.
+1. Geometria del acero de la columna 70x70: 16 phi28 perimetrales
+   (5+5+3+3), Ast esperada.
 2. Geometria del muro 30x356: bordes 4phi16 + malla phi10@20 doble.
 3. Capacidad axial pura P0 (bloque ACI/NCh) dentro de rango fisico.
 4. Momento balanceado > momento en flexio'n pura (columna).
@@ -14,27 +15,26 @@ import math
 
 from opensees.fiber_sections import sections, verification_ha as vh
 
-ABAR25 = math.pi * (25.0 / 2.0) ** 2
+ABAR28 = math.pi * (28.0 / 2.0) ** 2
 
 
 def test_columna_areas():
     b, h, barras, Ast = vh.seccion_columna()
     assert b == 700.0 and h == 700.0
-    n = sum(int(round(a / ABAR25)) for _, a in barras)
-    assert n == 18                      # 9+9 barras phi25 (3 x 3 por cara)
-    esperada = 18 * ABAR25
+    n = sum(int(round(a / ABAR28)) for _, a in barras)
+    assert n == 16                      # 5+5+3+3 barras phi28 perimetrales
+    esperada = 16 * ABAR28
     assert math.isclose(Ast, esperada, rel_tol=1e-9)
     # recubrimiento de las guas: todas dentro de la seccion
     for di, _ in barras:
         assert 0 < di < h
     # misma geometria la reporta sections.py
-    assert sections.COLUMNA["barras"] == 18
-    assert sections.COLUMNA["db"] == 25.0
-    # filas simetricas: las 3 superiores y las 3 inferiores espejadas
-    sup = [di for di, _ in barras[:3]]
-    inf = [h - di for di, _ in barras[3:]]
-    for a, b in zip(sorted(sup), sorted(inf)):
-        assert math.isclose(a, b, rel_tol=1e-9, abs_tol=1e-6)
+    assert sections.COLUMNA["barras"] == 16
+    assert sections.COLUMNA["db"] == 28.0
+    # filas simetricas: cara superior (5) y cara inferior (5) espejadas
+    dic = {di: a for di, a in barras}
+    for di, a in dic.items():
+        assert math.isclose(dic[h - di], a, rel_tol=1e-9, abs_tol=1e-6)
 
 
 def test_muro_tipificado_escala():

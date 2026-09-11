@@ -2,22 +2,22 @@
  "columna_70x70": {
   "seccion": "columna_70x70",
   "P0": {
-   "analitico_kN": 18025.64337424086
+   "analitico_kN": 18422.25648768687
   },
   "balanceado": {
-   "P_analitico_kN": 6746.073834117497,
-   "M_analitico_kNm": 1783.6598639390115,
-   "M_fiber_en_Pb_kNm": 1808.245455137302,
-   "dif_rel_pct": 1.3783788992143409
+   "P_analitico_kN": 6541.837876580296,
+   "M_analitico_kNm": 2018.8012496384154,
+   "M_fiber_en_Pb_kNm": 2050.3339646919408,
+   "dif_rel_pct": 1.561952423953234
   },
   "flexion_pura": {
-   "M_analitico_kNm": 1047.9478534149764,
-   "M_fiber_kNm": 1059.3777426490187,
-   "dif_rel_pct": 1.0906925565805041
+   "M_analitico_kNm": 1214.4170238185823,
+   "M_fiber_kNm": 1232.6942169514798,
+   "dif_rel_pct": 1.505017862433054
   },
   "pico_fiber": {
-   "P_kN": 6746.073834117497,
-   "M_kNm": 1059.3777426490187
+   "P_kN": 6541.837876580296,
+   "M_kNm": 1232.6942169514798
   }
  },
  "muro_30x356": {
