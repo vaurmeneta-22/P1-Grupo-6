@@ -120,6 +120,7 @@
   <div><span style="background:#9b59b6;"></span>Apoyo empotrado</div>
   <hr style="border:none;border-top:1px solid #555;margin:6px 0;">
   <div style="font-weight:bold;margin-bottom:4px;">Mostrar:</div>
+  <div><label><input type="checkbox" id="tg-all" onchange="syncAllToggles()"> <b>Todo</b></label></div>
   <div><label><input type="checkbox" checked id="tg-column"> Columnas</label></div>
   <div><label><input type="checkbox" checked id="tg-beamx"> Vigas X</label></div>
   <div><label><input type="checkbox" checked id="tg-beamy"> Vigas Y</label></div>
@@ -177,7 +178,7 @@ Nota: respuesta lineal del modelo global. Doble clic en columna/muro -> P-M. Dob
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="resultados/11_mapa_visor/tributary_map.js"></script>
-<script src="resultados/11_mapa_visor/analysis_map.js"></script>
+<script src="resultados/11_mapa_visor/analysis_map.js?v=08e006daac"></script>
 <script>
   const elements = [{"type":"column","section":"70x70","xi":0.0,"yi":0.0,"zi":0.0,"xj":0.0,"yj":3.56,"zj":0.0,"b":0.7,"h":0.7},
   {"type":"column","section":"70x70","xi":-10.0,"yi":0.0,"zi":0.0,"xj":-10.0,"yj":3.56,"zj":0.0,"b":0.7,"h":0.7},
@@ -1884,13 +1885,35 @@ spherical.theta -= dx * 0.01;
     'tg-axes': axesGroup,
     'tg-diaph': diaphGroup
   };
+  // Checkbox "Todo": marca/desmarca todas las categorias y sincroniza su estado
+  function syncAllToggles() {
+    const allEl = document.getElementById('tg-all');
+    const on = !!allEl && allEl.checked;
+    Object.keys(tgMap).forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.checked = on;
+      tgMap[id].visible = on;
+    });
+  }
+  function updateAllState() {
+    const allEl = document.getElementById('tg-all');
+    if (!allEl) return;
+    const ev = Object.keys(tgMap).every(id => {
+      const el = document.getElementById(id);
+      return el && el.checked;
+    });
+    allEl.checked = ev;
+  }
   Object.keys(tgMap).forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('change', () => {
       tgMap[id].visible = el.checked;
+      updateAllState();
     });
   });
+  updateAllState();
 
   // ------------------------------------------------------------------
   // Tributary Area Inspector: clic en una viga -> area + cargas
@@ -2734,9 +2757,11 @@ const F = ANALYSIS.forces[S.caso] || {};
   // Dibuja la curva P-M de capacidad (columna o muro) + punto de demanda
   function drawPM(meta, Pd, Md, caso) {
     const sec = meta.section;
-    // todas las secciones: muros con curva propia (capacidad.muros[sec]),
-    // respaldando las dos claves historicas columna '70x70' / muro '30x356'.
+    // Columna del portico extremo (borde re-forzado 4x36+4x28): usa su propia
+    // curva P-M en vez de la columna base.
     const cur =
+      ((meta.id === 70 || meta.id70) && ANALYSIS.capacidad && ANALYSIS.capacidad.columna_id70) ||
+      (meta.borde && ANALYSIS.capacidad && ANALYSIS.capacidad.columna_borde) ||
       (ANALYSIS.capacidad.muros && ANALYSIS.capacidad.muros[sec]) ||
       (sec === '70x70' && ANALYSIS.capacidad.columna) ||
       (sec === '30x356' && ANALYSIS.capacidad.muro) ||

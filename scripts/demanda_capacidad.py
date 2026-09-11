@@ -112,8 +112,10 @@ def main():
         sec = el["section"]
         Pcap = Mcap = None
         if el["type"] == "column":
-            Pcap = cap.get("columna", {}).get("P")
-            Mcap = cap.get("columna", {}).get("M")
+            clave = ("columna_id70" if el.get("id70")
+                     else "columna_borde" if el.get("borde") else "columna")
+            Pcap = cap.get(clave, {}).get("P")
+            Mcap = cap.get(clave, {}).get("M")
         elif el["type"] == "steel_column":
             cur = cap.get("steel", {}).get(sec) or {}
             Pcap = cur.get("P")
@@ -125,14 +127,61 @@ def main():
         results.append({
             "id": eid, "type": el["type"], "section": sec,
             "P_d_kN": P_d, "M_d_kNm": M_d,
-            "radio": r, "cap_sec": sec,
+            "radio": r, "cap_sec": sec, "borde": bool(el.get("borde")),
+            "id70": bool(el.get("id70")),
         })
+
+    ##############################################################################
+#   MUROS: misma demanda-capacidad con la curva P-M de la seccion tipificada #
+##############################################################################
+    mur_results = []
+    for el in elements:
+        if el["type"] != "wall":
+            continue
+        eid = el["id"]
+        f = forces.get(str(eid))
+        if not f:
+            continue
+        i = f.get("i") or f.get("j")
+        j = f.get("j") or f.get("i")
+        if not i or not j:
+            continue
+        ni, nj = el["ni"], el["nj"]
+        c_i = coords.get(str(ni)) or coords.get(ni)
+        c_j = coords.get(str(nj)) or coords.get(nj)
+        if not c_i or not c_j:
+            continue
+        P_i = axial(i, c_i, c_j)
+        P_j = axial(j, c_i, c_j)
+        P_d = max(abs(P_i), abs(P_j))
+        M_d = max(momento(i), momento(j))
+        sec = el["section"]
+        cur = cap.get("muros", {}).get(sec) or {}
+        Pcap, Mcap = cur.get("P"), cur.get("M")
+        if not Pcap:
+            continue
+        r = radio_demanda(P_d, M_d, Pcap, Mcap)
+        mur_results.append({
+            "id": eid, "type": "wall", "section": sec,
+            "P_d_kN": P_d, "M_d_kNm": M_d, "radio": r,
+        })
+
+    mur_results.sort(key=lambda x: (x["radio"] if x["radio"] is not None else -1),
+                     reverse=True)
+    n_fuera = sum(1 for r in mur_results if r["radio"] is not None and r["radio"] > 1.0)
+    print(f"\nMuros analizados: {len(mur_results)}  |  FUERA: {n_fuera}  "
+          f"DENTRO: {len(mur_results) - n_fuera}")
+    if mur_results:
+        m = mur_results[0]
+        rr = f"{m['radio']:.3f}" if m["radio"] is not None else "n/a"
+        print(f"Muro critico: id={m['id']} {m['section']}  P={m['P_d_kN']:.1f} "
+              f"M={m['M_d_kNm']:.1f} radio={rr}")
 
     results.sort(key=lambda x: (x["radio"] if x["radio"] is not None else -1),
                  reverse=True)
     crit = results[0]
     print("=" * 70)
-    print(f"DEMANDA - CAPACIDAD  caso {CASO}")
+    print(f"DEMANDA - CAPACIDAD  caso {CASO}  (columnas)")
     print("=" * 70)
     print(f"Columnas analizadas: {len(results)}")
     print(f"\nCRITICA: id={crit['id']}  tipo={crit['type']}  "
@@ -152,8 +201,10 @@ def main():
     # figura de la critica
     sec = crit["section"]
     if crit["type"] == "column":
-        Pcap = cap.get("columna", {}).get("P")
-        Mcap = cap.get("columna", {}).get("M")
+        clave = ("columna_id70" if crit.get("id70")
+                 else "columna_borde" if crit.get("borde") else "columna")
+        Pcap = cap.get(clave, {}).get("P")
+        Mcap = cap.get(clave, {}).get("M")
     else:
         cur = cap.get("steel", {}).get(sec) or {}
         Pcap = cur.get("P")

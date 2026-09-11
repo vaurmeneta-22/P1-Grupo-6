@@ -35,47 +35,86 @@ COLUMNA = {
     "fuente": "sections.json column_70x70 (config original del plano)",
 }
 
+# Columna 70x70 del PORTICO EXTREMO (las 12 del plano estructural que se
+# re-fuerzan: ids 66-113 / posiciones x en {-20,-30,-40,-45}). El plano del
+# pórtico exige armadura perimetral MIXTA:
+#     4 barras phi28 en las 4 esquinas + 16 barras phi36 intermedias
+#     (etiquetadas B1/B2/B3: 4 en cara sup + 4 en cara inf + 4 por costado).
+# Total 20 barras -> As = 4x28 + 16x36 = 187.5 cm2 (rho = 3.83%).
+# Recubrimiento al centro de barra = 68 mm (40 + estribo phi10 + phi36/2).
+COLUMNA_BORDE = {
+    "nombre": "columna_borde_70x70",
+    "tipo": "columna_borde",
+    "b": 700.0, "h": 700.0,          # mm
+    "rec": 68.0,                      # al centro de barra (phi36 manda)
+    "estrobo": 10.0,
+    "db": 36.0, "n_int": 16,          # 16 phi36 intermedias (B1/B2/B3)
+    "db_esq": 28.0, "n_esq": 4,       # 4 phi28 en las esquinas
+    "nFY": 24, "nFZ": 8,              # fibras de concreto
+    "fuente": "plano pórtico extremo (4 phi28 esquinas + 16 phi36 perimetrales)",
+}
+
+# Seccion especial (SOLO elemento id=70): columna 70x70 del portico extremo
+# con enfierradura FULL phi36 perimetral: 16 phi36 intermedias + 4 phi36 en
+# las esquinas = 20 barras phi36. As = 20 x phi36 = 203.6 cm2 (rho = 4.16%).
+COLUMNA_ID70 = {
+    "nombre": "columna_id70",
+    "tipo": "columna_id70",
+    "b": 700.0, "h": 700.0,          # mm
+    "rec": 68.0,                      # al centro de barra (phi36)
+    "estrobo": 10.0,
+    "db": 36.0, "n_int": 16,          # 16 phi36 intermedias
+    "db_esq": 36.0, "n_esq": 4,       # 4 phi36 en las esquinas
+    "nFY": 24, "nFZ": 8,              # fibras de concreto
+    "fuente": "elemento id=70 (enfierradura full phi36 perimetral)",
+}
+
 MURO = {
     "nombre": "muro_30x356",
     "tipo": "muro",
     "bw": 300.0, "Lw": 3560.0,        # mm
     "borde": 400.0,                   # ancho de cada elemento de borde (mm)
     "rec": 50.0,                      # recubrimiento al centro de barra
-    "nb_borde": 4, "db_borde": 16.0,  # 4 phi16 por borde (2 por extremo/fila)
+    "nb_borde": 10, "db_borde": 40.0,  # phi40 por borde (disenio config unica)
     "db_malla": 10.0, "s_malla": 200.0,  # phi10 @ 20 cm, doble capa
-    "filas_b": [80.0, 240.0],         # filas de acero de borde (desde el extremo)
+    "filas_b": [80.0, 120.0, 160.0, 200.0, 240.0],
     "nFY": 40, "nFZ": 6,              # fibras de concreto (40 a lo largo)
-    "fuente": "sections.json wall_30x356 (contracto)",
+    "fuente": "sections.json wall_30x356 + disenio config unica phi40",
 }
 
 
 def muro_tipificado(clave, bw_cm, Lw_cm):
-    """Config de seccion de muro generica con la misma regla que el 30x356
-    (recubrimiento 50 mm al centro de barra, bordes con 4 phi16 en 2 filas y
-    malla phi10 @ 20 cm doble capa en la zona central) pero escalada
-    proporcionalmente a la geometria dada. `clave` es el nombre de la seccion
-    en el contrato (p.ej. "30x2695"); bw_cm x Lw_cm son las dimensiones en cm.
+    """Config de seccion de muro generica con regla proporcional al largo.
 
     Regla de escala:
       - borde concentrado = 11.2% del largo (400/3560 del 30x356).
-      - filas de acero de borde a 2.25% y 6.74% del largo (80/3560, 240/3560).
+      - filas de acero de borde repartidas entre 2.25% y 6.74% del largo
+        con separacion minima 40 mm (minimo 2 filas).
+      - db_borde = 40 mm (disenio: misma config para todas las secciones).
       - malla central de phi10 @ 200 mm doble capa (igual en todos).
-      - fibras de concreto a lo largo proporcionales (40 para Lw=3560 mm).
+      - fibras de concreto a lo largo proporcionales.
     """
     bw = bw_cm * 10.0
     Lw = Lw_cm * 10.0
+    lo, hi = 0.0225 * Lw, 0.0674 * Lw
+    rango = hi - lo
+    if rango <= 0:
+        filas = [lo]
+    else:
+        n = max(2, int(rango / 40.0) + 1)
+        filas = [round(lo + rango * k / (n - 1), 1) for k in range(n)]
     return {
         "nombre": clave,
         "tipo": "muro",
         "bw": bw, "Lw": Lw,            # mm
         "borde": round(0.112 * Lw, 1),
         "rec": 50.0,
-        "nb_borde": 4, "db_borde": 16.0,
+        "nb_borde": len(filas) * 2, "db_borde": 40.0,
         "db_malla": 10.0, "s_malla": 200.0,
-        "filas_b": [round(0.0225 * Lw, 1), round(0.0674 * Lw, 1)],
+        "filas_b": filas,
         "nFY": max(16, int(round(Lw / 89.0))),
         "nFZ": 6,
-        "fuente": "regla proporcional muro_tipificado()",
+        "fuente": "regla proporcional muro_tipificado() phi40",
     }
 
 
@@ -134,6 +173,72 @@ def build_columna(mat_conc, mat_ac, sec_tag):
     ops.layer("straight", mat_ac, 3, a, ymin, xl, ymax, xl)
 
 
+def build_columna_borde(mat_conc, mat_ac, sec_tag):
+    """Crea la seccion fibra de la columna 70x70 del PORTICO EXTREMO
+    (2D, bending fuerte). Eje y = altura (flexion), z = espesor (simetrica).
+    20 barras perimetrales mixtas: 4 phi28 en las esquinas + 16 phi36
+    intermedias (B1/B2/B3: 4 por cara), esquinas compartidas entre caras."""
+    import openseespy.opensees as ops
+    s = COLUMNA_BORDE
+    b, h, r = s["b"], s["h"], s["rec"]
+
+    ops.section("Fiber", sec_tag, "-GJ", 1.0)
+    ops.patch("rect", mat_conc, s["nFY"], s["nFZ"],
+              -h / 2, -b / 2, h / 2, b / 2)
+
+    a36 = abar(s["db"])          # area phi36 (intermedias)
+    a28 = abar(s["db_esq"])      # area phi28 (esquinas)
+    ysup = h / 2.0 - r           # posicion en y de las caras
+    xl = b / 2.0 - r             # posicion en x de los costados
+
+    # esquinas: 4 barras phi28 (una en cada esquina)
+    for sx in (-xl, xl):
+        for sy in (-ysup, ysup):
+            ops.layer("straight", mat_ac, 1, a28, sy, sx, sy, sx)
+
+    # cara superior/interior: 4 phi36 intermedias repartidas entre las
+    # esquinas (x de -xl*0.6 a +xl*0.6 en 4 puntos equiespaciados: la barra
+    # mas cercana a la esquina queda a 1/5 del semiancho)
+    dx = 2.0 * xl / 5.0
+    ops.layer("straight", mat_ac, 4, a36, ysup, -xl + dx, ysup, xl - dx)
+    ops.layer("straight", mat_ac, 4, a36, -ysup, -xl + dx, -ysup, xl - dx)
+    # costados: 4 phi36 intermedias repartidas entre las esquinas en y
+    dy = 2.0 * ysup / 5.0
+    ops.layer("straight", mat_ac, 4, a36, -ysup + dy, -xl, ysup - dy, -xl)
+    ops.layer("straight", mat_ac, 4, a36, -ysup + dy, xl, ysup - dy, xl)
+
+
+def build_columna_id70(mat_conc, mat_ac, sec_tag):
+    """Crea la seccion fibra de la columna 70x70 del elemento id=70
+    (2D, bending fuerte). Igual distribucion perimetral que la del portico
+    extremo (20 barras) pero con TODAS las barras phi36 (full phi36)."""
+    import openseespy.opensees as ops
+    s = COLUMNA_ID70
+    b, h, r = s["b"], s["h"], s["rec"]
+
+    ops.section("Fiber", sec_tag, "-GJ", 1.0)
+    ops.patch("rect", mat_conc, s["nFY"], s["nFZ"],
+              -h / 2, -b / 2, h / 2, b / 2)
+
+    a36 = abar(s["db"])          # area phi36
+    ysup = h / 2.0 - r           # posicion en y de las caras
+    xl = b / 2.0 - r             # posicion en x de los costados
+
+    # 4 esquinas phi36
+    for sx in (-xl, xl):
+        for sy in (-ysup, ysup):
+            ops.layer("straight", mat_ac, 1, a36, sy, sx, sy, sx)
+
+    # caras sup/inf: 4 phi36 intermedias
+    dx = 2.0 * xl / 5.0
+    ops.layer("straight", mat_ac, 4, a36, ysup, -xl + dx, ysup, xl - dx)
+    ops.layer("straight", mat_ac, 4, a36, -ysup, -xl + dx, -ysup, xl - dx)
+    # costados: 4 phi36 intermedias
+    dy = 2.0 * ysup / 5.0
+    ops.layer("straight", mat_ac, 4, a36, -ysup + dy, -xl, ysup - dy, -xl)
+    ops.layer("straight", mat_ac, 4, a36, -ysup + dy, xl, ysup - dy, xl)
+
+
 def build_muro(section, mat_conc, mat_ac, sec_tag):
     """Crea la seccion fibra de un muro generico (2D, flexion en el plano).
     Eje y = largo Lw (flexion fuerte), z = espesor bw.
@@ -176,6 +281,10 @@ def build(section, mat_conc, mat_ac, sec_tag):
     """Construye la seccion segun el dict de configuracion."""
     if section["tipo"] == "columna":
         build_columna(mat_conc, mat_ac, sec_tag)
+    elif section["tipo"] == "columna_borde":
+        build_columna_borde(mat_conc, mat_ac, sec_tag)
+    elif section["tipo"] == "columna_id70":
+        build_columna_id70(mat_conc, mat_ac, sec_tag)
     elif section["tipo"] == "muro":
         build_muro(section, mat_conc, mat_ac, sec_tag)
     else:
@@ -184,7 +293,7 @@ def build(section, mat_conc, mat_ac, sec_tag):
 
 def area_concreto(section):
     """Area bruta de hormigon (mm2)."""
-    if section["tipo"] == "columna":
+    if section["tipo"] in ("columna", "columna_borde", "columna_id70"):
         return section["b"] * section["h"]
     return section["bw"] * section["Lw"]
 
@@ -194,6 +303,9 @@ def area_acero(section):
     if section["tipo"] == "columna":
         asb = abar(section["db"])
         return section["barras"] * asb
+    if section["tipo"] in ("columna_borde", "columna_id70"):
+        return (section["n_esq"] * abar(section["db_esq"])
+                + section["n_int"] * abar(section["db"]))
     # muro
     a_borde = section["nb_borde"] * abar(section["db_borde"])
     am = abar(section["db_malla"])

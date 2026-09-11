@@ -260,6 +260,20 @@ La envolvente P-M se genera barriendo una grilla de cargas axiales `P = [0, 500,
 
 La envolvente tiene forma de "ojo": el momento máximo ocurre en la zona de balance (P ≈ 6 000 kN), donde el acero de tracción alcanza fy justo cuando el concreto llega a ε_cu. Para P > P_balance, el momento disminuye porque la sección está dominada por compresión. El refuerzo perimetral (16 φ28, configuración original del plano) aporta A_s = 98.5 cm² y desplaza la envolvente respecto a la simplificación anterior (18 φ25): el momento máximo sube de 1 817.6 a 2 071.5 kN·m.
 
+### 6.3 Columna del pórtico extremo (reforzada: 4 φ28 + 16 φ36)
+
+En el plano estructural, las **12 columnas 70×70 del pórtico extremo** (los 4 ejes × las 3 líneas del extremo X−, ids 66-113) tienen una enfierradura **distinta** a la del resto: **20 barras perimetrales mixtas** — 4 φ28 en las esquinas + 16 φ36 intermedias (etiquetadas B1/B2/B3 en el plano: 4 en la cara superior, 4 en la inferior, 4 por costado), con recubrimiento al centro de barra de 68 mm. A_s = 4×6.16 + 16×10.18 = **187.5 cm²** (ρ = 3.83 %). Se implementó como sección `columna_borde_70x70` en `sections.py` y se generó su envolvente P-M con la misma metodología (`pm_columna_borde_70x70.json/.png`):
+
+| P (kN) | M_cap (kN·m) | Descripción |
+|---|---|---|
+| 0 | 2 127.3 | Flexión pura (P=0) |
+| 6 000 | **2 699.0** | Momento máximo absoluto de la envolvente |
+| 10 000 | 2 392.8 | Compresión alta |
+| 15 000 | 1 689.3 | Compresión muy alta |
+| 23 500 | 239.5 | Compresión pura (P_0 analítico ≈ 21 894 kN) |
+
+La curva equivale a ~1.7× la capacidad de la columna base (flexión pura 2 127 vs 1 233 kN·m; pico 2 699 vs 2 072 kN·m). Esta sección se asigna en el mapa (`borde: true`) a los **48 elementos** que forman las 12 columnas reales del pórtico extremo (4 tramos apilados por cada columna).
+
 ---
 
 ## 7. Curva P-M de muro
@@ -307,10 +321,12 @@ La comparación automatizada (`scripts/comparacion_rc.py`, salida en `resultados
 |---|---|---|---|---|
 | Columna 70×70 | Flexión pura | 1 214.4 | 1 232.7 | 1.5% |
 | Columna 70×70 | Balanceado (P = 6 542 kN) | 2 018.8 | 2 050.3 | 1.6% |
+| Columna pórtico extremo (4φ28+16φ36) | Flexión pura | 2 137.2 | 2 127.3 | -0.5% |
+| Columna pórtico extremo | Balanceado (P = 6 843 kN) | 2 674.9 | 2 632.7 | -1.6% |
 | Muro 30×356 | Flexión pura | 3 323.6 | 3 400.8 | 2.3% |
 | Muro 30×356 | Balanceado (P = 14 930 kN) | 14 884.5 | 16 376.2 | 10.0% |
 
-Las diferencias son esperables: el modelo de fibras captura la distribución de esfuerzos más refinada (Concrete02 con degradación, Steel01 con endurecimiento), mientras que el bloque rectangular asume distribución uniforme de esfuerzo en el concreto. La concordancia es buena en flexión pura y en el balanceado de la columna (≤ 2.3%), y se mantiene razonable en el balanceado del muro (10%).
+Las diferencias son esperables: el modelo de fibras captura la distribución de esfuerzos más refinada (Concrete02 con degradación, Steel01 con endurecimiento), mientras que el bloque rectangular asume distribución uniforme de esfuerzo en el concreto. La concordancia es buena en flexión pura y en el balanceado de las columnas (≤ 2.3% en la base, ≤ 1.6% en la del pórtico extremo), y se mantiene razonable en el balanceado del muro (10%).
 
 ---
 
@@ -318,21 +334,38 @@ Las diferencias son esperables: el modelo de fibras captura la distribución de 
 
 ### 9.1 Barrido automático
 
-El script `scripts/demanda_capacidad.py` barre las **128 columnas** del modelo con el caso COMBO (λ_G=1.2, λ_Q=1.0, λ_EX=1.4, λ_EY=1.4): para cada columna toma el P axial y el momento resultante del extremo con mayor demanda y los contrasta contra la curva P-M de su sección (`M_cap` interpolado a la misma carga axial, criterio `Pcap`/`Mcap` de `demanda_capacidad_critica.json`).
+El script `scripts/demanda_capacidad.py` barre las **118 columnas de hormigón** del modelo con el caso COMBO (λ_G=1.2, λ_Q=1.0, λ_EX=1.4, λ_EY=1.4): para cada columna toma el P axial y el momento resultante del extremo con mayor demanda y los contrasta contra la curva P-M de **su** sección (`columna` 16 φ28 o `columna_borde` 4 φ28+16 φ36 según el flag `borde` del elemento; criterio `Pcap`/`Mcap` de `demanda_capacidad_critica.json`).
 
-### 9.2 Columna crítica: id=70 (sección 70×70)
+### 9.2 Columna crítica: id=70 (sección 70×70 del pórtico extremo)
 
 | Campo | Valor |
 |---|---|
-| Elemento | Columna id=70, sección 70×70 |
+| Elemento | Columna id=70, sección 70×70 (pórtico extremo, curva reforzada 4φ28+16φ36) |
 | P_demanda | 1 145.8 kN |
 | M_demanda | 2 383.2 kN·m |
-| **Radio de utilización (M_d / M_cap)** | **1.612** |
-| **Resultado** | **FUERA de la curva** |
+| **Radio de utilización (M_d / M_cap)** | **1.031** |
+| **Resultado** | **~3 % por encima de la curva** |
 
-### 9.3 Top 10 por radio
+### 9.3 Columnas que no cumplen
 
-Las 10 columnas más exigidas son todas de sección 70×70 (radios 1.612 → 1.196); la columna id=70 es la única por encima de 1.6. Con el refuerzo perimetral original (16 φ28, A_s = 98.5 cm²) el radio crítico baja de 1.854 a 1.612 respecto a la simplificación anterior (18 φ25), y las columnas 70×70 que quedan fuera de la curva pasan de 17 a **12** (se recuperan las columnas id=285, 275, 30, 280 y 260, todas del Piso 2). La interpretación coincide con la Sección 8: varias columnas 70×70 del modelo superan la capacidad nominal a flexión bajo la combinación de diseño, lo que sugiere revisar la distribución de rigidez del sótano y/o considerar redistribución plástica.
+Con la corrección del pórtico extremo (las 12 columnas 70×70 en x = -20/-30/-40/-45 pasan a su enfierradura real del plano: 4 φ28 + 16 φ36), el número de columnas **fuera de la curva pasa de 12 a 1** (solo la id=70, +3.1 %). Las 11 columnas críticas que antes fallaban (ids 66-77) bajan su radio máximo de 1.612 a 1.031:
+
+| id | P (kN) | M (kN·m) | radio (base) | radio (borde) |
+|---|---|---|---|---|
+| 70 | 1 145.8 | 2 383.2 | 1.612 | **1.031** |
+| 66 | 930.5 | 2 169.2 | 1.514 | **0.952** |
+| 74 | 991.0 | 2 171.8 | 1.503 | **0.949** |
+| 71 | 981.5 | 2 119.8 | 1.469 | **0.927** |
+| 67 | 789.2 | 1 969.0 | 1.404 | **0.872** |
+| 75 | 862.1 | 1 929.5 | 1.361 | **0.851** |
+| 72 | 861.2 | 1 876.9 | 1.324 | **0.827** |
+| 68 | 749.4 | 1 836.2 | 1.317 | **0.816** |
+| 73 | 751.2 | 1 721.9 | 1.235 | **0.765** |
+| 69 | 600.6 | 1 629.2 | 1.196 | **0.731** |
+| 76 | 698.2 | 1 637.0 | 1.183 | **0.730** |
+| 77 | 564.7 | 1 444.7 | 1.066 | **0.650** |
+
+La pronta columna que permanece fuera (id=70) queda solo 3.1 % por encima con su enfierradura real del plano: su demanda (M_d = 2 383 kN·m) excede incluso el pico absoluto de la curva base (2 072 kN·m), y la nueva curva alcanza ~2 312 kN·m en ese nivel de carga axial — la corrección de enfierradura recupera 11 de las 12 columnas críticas y deja la restante al borde del criterio nominal (sin factores φ, ver sección 10). Las 106 columnas restantes (no pórtico extremo) se mantienen todas dentro: el radio máximo fuera del pórtico extremo es 0.933 (id=285).
 
 ---
 
@@ -373,6 +406,7 @@ El agente inicialmente propuso usar el **momento último** de la curva M-φ como
 | Verificación superposición (CSV) | `resultados/06_superposicion/verificacion.csv` |
 | Curva M-φ columna | `resultados/07_capacidad/mom_curv/mom_curv_columna_70x70.json/.png` |
 | P-M columna | `resultados/07_capacidad/pm_columnas/pm_columna_70x70.json/.png` |
+| P-M columna pórtico extremo (4φ28+16φ36) | `resultados/07_capacidad/pm_columnas/pm_columna_borde_70x70.json/.png` |
 | P-M muro 30×356 | `resultados/07_capacidad/pm_muros/pm_muro_30x356.json/.png` |
 | P-M muros adicionales | `resultados/07_capacidad/pm_muros/pm_<seccion>.json/.png` (14 archivos) |
 | Sensibilidad (JSON) | `resultados/07_capacidad/sensibilidad/sensibilidad_secciones.json` |
@@ -386,13 +420,14 @@ El agente inicialmente propuso usar el **momento último** de la curva M-φ como
 - La masa sísmica `W = G + 0.5Q` excluye la fundación (Subterráneo) porque no hay diafragma rígido en z=0.
 - La fuerza sísmica se aplica en el CM real (no en el master), con momento correctivo `Mz` para equivalentar la traslación.
 - La superposición lineal es exacta en modelos elásticos lineales: la verificación directa vs explícita da error ≤ 7e-09 (tol 1e-6).
-- El barrido automático de demanda-capacidad encuentra que las columnas 70×70 más solicitadas superan la capacidad nominal (máx. radio 1.612 en la columna id=70 con la enfierradura perimetral 16 φ28, frente a 1.854 con la simplificación 18 φ25), consistente con la malla del sótano.
+- El barrido automático de demanda-capacidad encontró que las columnas 70×70 más solicitadas superaban la capacidad nominal (máx. radio 1.612 en la columna id=70 con la enfierradura perimetral 16 φ28 en todo el edificio).
+- El plano estructural usa **dos configuraciones de enfierradura** para las columnas 70×70: la perimetral 16 φ28 (interior) y la del **pórtico extremo** (4 φ28 esquinas + 16 φ36 intermedias, A_s = 187.5 cm²). Asignar cada columna a su curva real (flag `borde`) recuperó 11 de las 12 columnas críticas: el radio máximo baja de 1.612 a **1.031** (id=70, única que queda ~3 % por encima del criterio nominal, sin factores φ).
 - La verificación independiente (bloque rectangular ACI/NCh) muestra concordancia ≤ 2.3% en flexión pura y hasta 10% en el balanceado del muro con el modelo de fibras.
 
 ## Próximos pasos (Semana 4)
 
-- Revisar la distribución de rigidez en el sótano (columna id=70 con radio 1.612).
-- Considerar redistribución plástica o ajuste de idealización para elementos con utilización > 100%.
-- Completar verificación con factores phi de diseño (ACI 318 / NCh430).
+- Revisar la columna id=70 (radio 1.031 con la enfierradura real del pórtico extremo; +3.1 % sobre el criterio nominal sin factores φ).
+- Considerar redistribución plástica o ajuste de idealización para esa única columna con utilización > 100%.
+- Completar verificación con factores phi de diseño (ACI 318 / NCh430): con φ ≈ 0.65-0.9 el radio subiría y la id=70 quedaría claramente fuera de la curva de diseño.
 - Documentar sensibilidad de la discretización de fibras (ya auditada en `sensibilidad_secciones.json`).
-- Preparar visualización interactiva de curvas P-M en el visor 3D.
+- Preparar visualización interactiva de curvas P-M en el visor 3D (la curva `columna_borde` ya se exporta y el visor la usa para los elementos marcados con `borde`).

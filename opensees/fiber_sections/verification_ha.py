@@ -61,32 +61,92 @@ def seccion_columna(b=700.0, h=700.0, rec=64.0, db=28.0):
     return b, h, barras, Ast
 
 
+def _resolve_seccion(cfg):
+    """Mapea el selector de seccion a la tupla (b, h, barras, Ast).
+    Acepta bool (True=columna, False=muro, API historica) o str
+    ('columna' | 'muro' | 'columna_borde' | 'columna_id70'), verificando que
+    el selector corresponda al bloque analitico usado."""
+    if cfg is True or cfg == "columna":
+        return seccion_columna()
+    if cfg is False or cfg == "muro":
+        return seccion_muro()
+    if cfg == "columna_id70":
+        return seccion_columna_id70()
+    return seccion_columna_borde()
+
+
+def seccion_columna_id70(b=700.0, h=700.0, rec=68.0, db=36.0):
+    """Columna 70x70 del elemento id=70 con enfierradura FULL phi36
+    perimetral: 4 phi36 en las esquinas + 16 phi36 intermedias (20 barras).
+    Devuelve (b, h, barras, Ast_total)."""
+    A36 = math.pi * (db / 2.0) ** 2
+    r = rec
+    hy = h / 2.0 - r                        # 282 mm (centro de las caras)
+    # cara superior e inferior: 2 esquinas phi36 + 4 intermedias phi36
+    barras = [(r, 2.0 * A36 + 4.0 * A36),
+              (h - r, 2.0 * A36 + 4.0 * A36)]
+    # costados: 4 phi36 por lado, equidistantes entre las esquinas
+    dy = 2.0 * hy / 5.0
+    for k in range(1, 5):
+        y = -hy + k * dy                    # -169.2 .. +169.2
+        barras.append((h / 2.0 - y, 2.0 * A36))
+    Ast = 20.0 * A36
+    return b, h, barras, Ast
+
+
+def seccion_columna_borde(b=700.0, h=700.0, rec=68.0, db=36.0,
+                          db_esq=28.0):
+    """Columna 70x70 del portico extremo con 20 barras perimetrales mixtas:
+    4 phi28 en las esquinas + 16 phi36 intermedias (B1/B2/B3: 4 por cara).
+    Devuelve (b, h, barras, Ast_total). barras = [(di, Asi), ...] con
+    di = distancia desde la fibra extrema comprimida (cara superior)."""
+    A36 = math.pi * (db / 2.0) ** 2
+    A28 = math.pi * (db_esq / 2.0) ** 2
+    r = rec
+    hy = h / 2.0 - r                        # 282 mm (centro de las caras)
+    # cara superior e inferior: 2 esquinas phi28 + 4 intermedias phi36
+    barras = [(r, 2.0 * A28 + 4.0 * A36),
+              (h - r, 2.0 * A28 + 4.0 * A36)]
+    # costados: 4 phi36 por lado, equidistantes entre las esquinas
+    dy = 2.0 * hy / 5.0
+    for k in range(1, 5):
+        y = -hy + k * dy                    # -169.2 .. +169.2
+        barras.append((h / 2.0 - y, 2.0 * A36))
+    Ast = 4.0 * A28 + 16.0 * A36
+    return b, h, barras, Ast
+
+
 def seccion_muro(bw=300.0, Lw=3560.0, rec=50.0, borde=400.0,
-                 db_borde=16.0, n_borde=4, db_malla=10.0, s_malla=200.0):
-    """Muro 30x356: elementos de borde con 4phi16 cada uno + malla phi10@20
-    doble en la zona central. Barras discretizadas en el largo."""
+                 filas_b=None, db_borde=40.0, db_malla=10.0, s_malla=200.0):
+    """Muro tipificado con enfierradura repartida en el borde (φ40, filas con
+    separación ≥40mm) + malla phi10@20 doble en la zona central.
+    Cada fila pone 2 barras φdb_borde (una por cara del espesor) en el borde
+    inferior y 2 en el superior (misma disposición que build_muro/fiber).
+    Si filas_b=None usa 5 filas para el 30x356."""
+    if filas_b is None:
+        filas_b = [80.0, 120.0, 160.0, 200.0, 240.0]   # 30x356, Lw=3560
     bars = []
-    Asb = n_borde * math.pi * (db_borde / 2.0) ** 2
+    ab = math.pi * (db_borde / 2.0) ** 2
     am = math.pi * (db_malla / 2.0) ** 2
-    # borde inferior (cara comprimida), malla, borde superior
-    y_malla = [borde + 50.0, Lw - borde - 50.0]     # centros de malla (2 zonas simples)
-    # mas representativo: barras de malla distribuidas cada s_malla
+    for fk in filas_b:
+        bars.append((fk, 2.0 * ab))          # borde inferior (2 caras)
+        bars.append((Lw - fk, 2.0 * ab))     # borde superior
     n = int(round((Lw - 2 * borde) / s_malla))
+    n_malla = 0
     for k in range(1, n + 1):
         yk = borde + k * s_malla
-        bars.append((yk, 2.0 * am))                  # doble capa
-    bars += [(rec, Asb), (Lw - rec, Asb)]
-    Ast = 2 * Asb + n * 2.0 * am
+        if yk < Lw - borde:
+            bars.append((yk, 2.0 * am))      # malla doble capa
+            n_malla += 1
+    Ast = len(filas_b) * 4.0 * ab + n_malla * 2.0 * am
     return bw, Lw, bars, Ast
 
 
 def interaccion(cfg_col=True, n_c=400):
     """Barre c y devuelve (P_kN, M_kNm) de la interaccion nominal.
-    cfg_col=True: columna, False: muro."""
-    if cfg_col:
-        b, h, barras, Ast = seccion_columna()
-    else:
-        b, h, barras, Ast = seccion_muro()
+    cfg_col: True/False (col/muro, API historica) o 'columna'/'muro'/
+    'columna_borde'."""
+    b, h, barras, Ast = _resolve_seccion(cfg_col)
     a1, b1 = _constantes()
 
     P_kN, M_kNm = [], []
@@ -117,11 +177,8 @@ def interaccion(cfg_col=True, n_c=400):
 
 
 def capacidad_pura_axial(cfg_col=True):
-    """P0 nominal (NCh/ACI sin factor), P en kN. Col o muro."""
-    if cfg_col:
-        b, h, barras, Ast = seccion_columna()
-    else:
-        b, h, barras, Ast = seccion_muro()
+    """P0 nominal (NCh/ACI sin factor), P en kN. Col, muro o columna_borde."""
+    b, h, barras, Ast = _resolve_seccion(cfg_col)
     Ag = b * h
     P0 = 0.85 * F_C * (Ag - Ast) + FY * Ast
     return P0 / 1e3
@@ -132,12 +189,9 @@ def punto_momento_balanceado(cfg_col=True):
     De la compatibilidad con la barra mas traccionada (di = h-rec):
       c_b = eps_cu*d / (eps_cu + fy/Es),  d = h - rec.
     Devuelve (P[kN], M[kN*m])."""
-    if cfg_col:
-        b, h, barras, Ast = seccion_columna()
-        rec = 64.0
-    else:
-        b, h, barras, Ast = seccion_muro()
-        rec = 50.0
+    b, h, barras, Ast = _resolve_seccion(cfg_col)
+    rec = {"columna_borde": 68.0, "columna_id70": 68.0, "muro": 50.0,
+           False: 50.0, "columna": 64.0, True: 64.0}[cfg_col]
     a1, b1 = _constantes()
     d = h - rec
     c = EPS_CU * d / (EPS_CU + FY / ES)

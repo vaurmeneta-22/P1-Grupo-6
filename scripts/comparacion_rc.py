@@ -66,6 +66,8 @@ def main():
     cfg = [
         ("columna_70x70", True,
          os.path.join(CAP_7, "pm_columnas", "pm_columna_70x70.json")),
+        ("columna_borde_70x70", "columna_borde",
+         os.path.join(CAP_7, "pm_columnas", "pm_columna_borde_70x70.json")),
         ("muro_30x356", False,
          os.path.join(CAP_7, "pm_muros", "pm_muro_30x356.json")),
     ]

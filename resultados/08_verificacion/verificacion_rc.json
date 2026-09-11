@@ -20,6 +20,27 @@
    "M_kNm": 1232.6942169514798
   }
  },
+ "columna_borde_70x70": {
+  "seccion": "columna_borde_70x70",
+  "P0": {
+   "analitico_kN": 21894.306989322467
+  },
+  "balanceado": {
+   "P_analitico_kN": 6842.979131595695,
+   "M_analitico_kNm": 2674.8643898877885,
+   "M_fiber_en_Pb_kNm": 2632.7319695057,
+   "dif_rel_pct": -1.5751236040738539
+  },
+  "flexion_pura": {
+   "M_analitico_kNm": 2137.226652007237,
+   "M_fiber_kNm": 2127.2992613612737,
+   "dif_rel_pct": -0.4644987295399789
+  },
+  "pico_fiber": {
+   "P_kN": 6842.979131595695,
+   "M_kNm": 2127.2992613612737
+  }
+ },
  "muro_30x356": {
   "seccion": "muro_30x356",
   "P0": {

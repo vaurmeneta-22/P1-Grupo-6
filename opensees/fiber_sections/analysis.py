@@ -34,7 +34,7 @@ TOL_TEST = 1e-8
 
 def _h_elem(section):
     """Altura en la direccion de flexion (mm) usada para la fibra extrema."""
-    if section["tipo"] == "columna":
+    if section["tipo"] in ("columna", "columna_borde", "columna_id70"):
         return section["h"]
     return section["Lw"]
 

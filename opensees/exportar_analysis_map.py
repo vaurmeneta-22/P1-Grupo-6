@@ -97,6 +97,18 @@ def main():
     # ------------------------------------------------------------------
     elements_out = []
     node_uses = {}
+    # Posiciones en planta del portico extremo (borde re-forzado 4x36+4x28):
+    # x = {-45,-40,-30,-20} m x y = {0, 7.25, 16.15} m. El elemento columna se
+    # marca con borde=True si su nodo inferior (ni) cae en esas coordenadas.
+    def es_borde(ci, cj):
+        for p in (ci, cj):
+            if abs(p[0] - -45.0) < 1.0 or abs(p[0] - -40.0) < 1.0 or \
+               abs(p[0] - -30.0) < 1.0 or abs(p[0] - -20.0) < 1.0:
+                if abs(p[1] - 0.0) < 1.0 or abs(p[1] - 7.25) < 0.05 or \
+                   abs(p[1] - 16.15) < 0.05:
+                    return True
+        return False
+
     for e in elements_json:
         t = e["type"]
         if t == "loza":
@@ -107,8 +119,16 @@ def main():
             ni, nj = wall_ends[e["id"]]
         else:
             ni, nj = e["node_i"], e["node_j"]
-        elements_out.append({"id": e["id"], "type": t,
-                             "section": e["section"], "ni": ni, "nj": nj})
+        ep = {"id": e["id"], "type": t, "section": e["section"],
+              "ni": ni, "nj": nj}
+        if t == "column" and e["section"] == "70x70":
+            ci = conx["tag_coord"].get(ni)
+            cj = conx["tag_coord"].get(nj)
+            if ci is not None and cj is not None and es_borde(ci, cj):
+                ep["borde"] = True
+        if e["id"] == 70:
+            ep["id70"] = True
+        elements_out.append(ep)
         node_uses.setdefault(ni, 0)
         node_uses.setdefault(nj, 0)
 
@@ -202,6 +222,8 @@ def main():
 
     capacidad = {
         "columna": load_pm("pm_columna_70x70.json"),
+        "columna_borde": load_pm("pm_columna_borde_70x70.json"),
+        "columna_id70": load_pm("pm_columna_id70.json"),
         "muro": load_pm("pm_muro_30x356.json"),
         "muros": muros_capacidad,
     }
