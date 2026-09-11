@@ -536,7 +536,8 @@ for eid, ed in elem_data.items():
         "T": round(f[3], 10), "M2": round(f[4], 10), "M3": round(f[5], 10)
     }
 
-results_dir = os.path.join(os.path.dirname(__file__), 'results')
+results_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           'resultados', '08_verificacion')
 os.makedirs(results_dir, exist_ok=True)
 json_path = os.path.join(results_dir, 'benchmark_3d.json')
 

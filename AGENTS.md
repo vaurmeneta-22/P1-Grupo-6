@@ -37,7 +37,7 @@ SI. Siempre: kN, m, kg, Pa, N·m. Todos los campos JSON deben tener unidades exp
 ## Run command
 - Run all cases: `python opensees_edificio_v2.py`
 - Run single case: `python opensees_edificio_v2.py --case G` (or Q, EX, EY)
-- Output: `opensees/results/edificio_full_results.json` (G), `*_Q.json`, `*_EX.json`, `*_EY.json`
+- Output: `resultados/01_casos_base/edificio_full_results.json` (G), `*_Q.json`, `*_EX.json`, `*_EY.json`
 
 ## Architecture
 - OpenSeesPy owns structural analysis.
@@ -48,7 +48,7 @@ SI. Siempre: kN, m, kg, Pa, N·m. Todos los campos JSON deben tener unidades exp
 
 ## File structure
 - `opensees/` → Python scripts for analysis
-- `opensees/results/` → JSON files exported from OpenSees
+- `resultados/` → All analysis outputs (casos, CSVs, capacidad, verificación, figuras, mapa_visor, reportes)
 - `unity/` → Unity project (Assets, Scripts, Scenes)
 - `data/` → Shared data files (geometry, materials, tributary areas)
 - `tests/` → Verification scripts

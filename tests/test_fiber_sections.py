@@ -2,7 +2,7 @@
 Test de la Parte D - secciones de fibra / capacidades de HA (Grupo 6)
 
 Verifica (sin OpenSees, solo el contraste analitico del curso):
-1. Geometria del acero de la columna 70x70: 8 phi25, Ast esperada.
+1. Geometria del acero de la columna 70x70: 18 phi25 (9+9), Ast esperada.
 2. Geometria del muro 30x356: bordes 4phi16 + malla phi10@20 doble.
 3. Capacidad axial pura P0 (bloque ACI/NCh) dentro de rango fisico.
 4. Momento balanceado > momento en flexio'n pura (columna).
@@ -21,15 +21,20 @@ def test_columna_areas():
     b, h, barras, Ast = vh.seccion_columna()
     assert b == 700.0 and h == 700.0
     n = sum(int(round(a / ABAR25)) for _, a in barras)
-    assert n == 8                       # 3+2+3 barras phi25
-    esperada = 8 * ABAR25
+    assert n == 18                      # 9+9 barras phi25 (3 x 3 por cara)
+    esperada = 18 * ABAR25
     assert math.isclose(Ast, esperada, rel_tol=1e-9)
     # recubrimiento de las guas: todas dentro de la seccion
     for di, _ in barras:
         assert 0 < di < h
     # misma geometria la reporta sections.py
-    assert sections.COLUMNA["barras"] == 8
+    assert sections.COLUMNA["barras"] == 18
     assert sections.COLUMNA["db"] == 25.0
+    # filas simetricas: las 3 superiores y las 3 inferiores espejadas
+    sup = [di for di, _ in barras[:3]]
+    inf = [h - di for di, _ in barras[3:]]
+    for a, b in zip(sorted(sup), sorted(inf)):
+        assert math.isclose(a, b, rel_tol=1e-9, abs_tol=1e-6)
 
 
 def test_muro_tipificado_escala():
@@ -114,7 +119,7 @@ def test_curva_pm_bloque():
     assert len(P) == len(M) >= 100
     # P monotona creciente y positiva
     assert all(b > a for a, b in zip(P, P[1:]))
-    assert P[0] > -2000 and P[-1] > 1e4
+    assert P[0] > -4000 and P[-1] > 1e4
     # M > 0 en el interior y pico unico (sube y luego baja)
     ip = int(max(range(len(M)), key=lambda k: M[k]))
     assert all(M[k] <= M[k + 1] for k in range(ip))
@@ -128,13 +133,14 @@ def test_mom_curv_p0_resultado():
     import json
     import os
     ruta = os.path.join(os.path.dirname(os.path.dirname(__file__)),
-                        "figures", "mom_curv_columna_70x70.json")
+                        "resultados", "07_capacidad", "mom_curv",
+                        "mom_curv_columna_70x70.json")
     if not os.path.exists(ruta):
         return
     with open(ruta, encoding="utf-8") as f:
         datos = json.load(f)
     assert len(datos["phi_1m"]) == len(datos["M_kNm"]) > 100
-    assert datos["M_ult_kNm"] > 300 and datos["M_ult_kNm"] < 900
+    assert datos["M_ult_kNm"] > 300 and datos["M_ult_kNm"] < 1300
     Mmax = max(datos["M_kNm"])
     # orden tipico de capacidad de flexion de la columna 70x70 (kN*m)
-    assert 400 < Mmax < 900
+    assert 600 < Mmax < 1300

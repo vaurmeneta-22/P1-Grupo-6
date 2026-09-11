@@ -37,7 +37,7 @@ q_G = γ · t + terminaciones
 q_Q = 4.0 kN/m²
 ```
 
-Cada caso se resuelve de forma independiente (`python opensees_edificio_v2.py --case G`). Los resultados se exportan a `opensees/results/edificio_full_results[_Q,_EX,_EY].json`.
+Cada caso se resuelve de forma independiente (`python opensees_edificio_v2.py --case G`). Los resultados se exportan a `resultados/01_casos_base/edificio_full_results[_Q,_EX,_EY].json`.
 
 ### Verificación de cada caso base
 
@@ -363,15 +363,15 @@ El agente inicialmente propuso usar el **momento último** de la curva M-φ como
 | Fiber sections | `opensees/fiber_sections/{sections,analysis,materials,verification_ha}.py` |
 | Generador M-φ + P-M columna/muro | `scripts/parte_d_fiber.py` |
 | P-M muros adicionales | `scripts/parte_d_muros.py` |
-| Resultados G | `opensees/results/edificio_full_results.json` |
-| Resultados Q | `opensees/results/edificio_full_results_Q.json` |
-| Resultados EX | `opensees/results/edificio_full_results_EX.json` |
-| Resultados EY | `opensees/results/edificio_full_results_EY.json` |
-| Resultados COMBO | `opensees/results/edificio_full_results_COMBO.json` |
-| Curva M-φ columna | `figures/mom_curv_columna_70x70.json/.png` |
-| P-M columna | `figures/pm_columna_70x70.json/.png` |
-| P-M muro 30×356 | `figures/pm_muro_30x356.json/.png` |
-| P-M muros adicionales | `figures/pm_<seccion>.json/.png` (14 archivos) |
+| Resultados G | `resultados/01_casos_base/edificio_full_results.json` |
+| Resultados Q | `resultados/01_casos_base/edificio_full_results_Q.json` |
+| Resultados EX | `resultados/01_casos_base/edificio_full_results_EX.json` |
+| Resultados EY | `resultados/01_casos_base/edificio_full_results_EY.json` |
+| Resultados COMBO | `resultados/01_casos_base/edificio_full_results_COMBO.json` |
+| Curva M-φ columna | `resultados/07_capacidad/mom_curv/mom_curv_columna_70x70.json/.png` |
+| P-M columna | `resultados/07_capacidad/pm_columnas/pm_columna_70x70.json/.png` |
+| P-M muro 30×356 | `resultados/07_capacidad/pm_muros/pm_muro_30x356.json/.png` |
+| P-M muros adicionales | `resultados/07_capacidad/pm_muros/pm_<seccion>.json/.png` (14 archivos) |
 | Validación PM | `docs/validacion_pm/` |
 | Tests superposición | `tests/test_superposicion.py` |
 

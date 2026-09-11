@@ -42,7 +42,7 @@ Como correr:
     python opensees_edificio_v2.py            (todos los casos)
     python opensees_edificio_v2.py --case G   (caso individual)
 
-Salida: resultados en opensees/results/
+Salida: resultados en resultados/01_casos_base/
 """
 
 import json
@@ -66,8 +66,9 @@ from conexiones import plan_conexiones
 # ---------------------------------------------------------------------------
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JSON_PATH = os.path.join(REPO, "Edificio.json")
-# Los resultados quedan en opensees/results/ (dentro del repo).
-BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
+# Los resultados quedan en resultados/01_casos_base/ (raiz del repo).
+BASE = os.path.join(REPO, "resultados", "01_casos_base")
+os.makedirs(BASE, exist_ok=True)
 OUT_JSON = os.path.join(BASE, "edificio_full_results.json")
 
 USE_DIAPHRAGM = True       # diafragma rigido por piso (AGENTS.md)

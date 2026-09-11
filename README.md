@@ -39,7 +39,7 @@ Accesible desde `edificio_3d.html` con `TAB` o el botón `ANALISIS` de la barra 
 - **Refuerzos metálicos**: 20 elementos de acero A240ES (10 columnas `300x300x20` y 10 vigas diagonales `300x300x50`, en color amarillo) insertados entre los niveles 2–3 y 4–Techo. Su capacidad P-M (tubo, fy=240 MPa) está exportada en `capacidad.steel` del `analysis_map.js`, pero por diseño el visor solo les muestra el reporte N/V/M/DEF.
 - Deformada amplificable con el deslizador `x` (escala x120 por defecto, rango 10–600). M/N/V en respuesta lineal del modelo global.
 
-Los datos se cargan desde `opensees/results/analysis_map.js`, generado por `exportar_analysis_map.py` a partir de los resultados `edificio_full_results*.json`.
+Los datos se cargan desde `resultados/11_mapa_visor/analysis_map.js`, generado por `exportar_analysis_map.py` a partir de los resultados `edificio_full_results*.json`.
 
 ### Atajos de teclado
 
@@ -79,10 +79,20 @@ En `edificio_3d.html` las capas se alternan con los checkboxes del panel izquier
 │   ├── _rebuild_html_elements.py  # Regenera el array de elementos embebido en el HTML desde el JSON
 │   ├── exportar_analysis_map.py   # Resultados → analysis_map.js (modo análisis del visor)
 │   ├── exportar_resultados_csv.py # Resultados → CSV
-│   └── results/          # Resultados exportados (JSON/JS)
-│       ├── analysis_map.js        # Deformada, M, N, V y capacidad P-M por caso (G/Q/EX/EY/COMBO)
-│       ├── edificio_full_results*.json   # Resultados por caso (G, Q, EX, EY, COMBO)
-│       └── tributary_map.js        # Áreas y cargas tributarias (inspector por clic)
+├── resultados/                    # Resultados del análisis (carpeta tipo)
+│   ├── 00_readme.md               # Índice y semántica de sobrescritura
+│   ├── 01_casos_base/             # edificio_full_results*.json (G/Q/EX/EY/COMBO)
+│   ├── 02_reacciones/             # reacciones.csv
+│   ├── 03_desplazamientos/        # desplazamientos.csv
+│   ├── 04_fuerzas_elementos/      # fuerzas_elementos.csv
+│   ├── 05_sismo/                  # sismo_por_piso.csv (EX/EY)
+│   ├── 06_superposicion/          # verificacion.csv de la superposición COMBO
+│   ├── 07_capacidad/              # M-φ y P-M: mom_curv/, pm_columnas/, pm_muros/, sensibilidad/
+│   ├── 08_verificacion/           # benchmark_3d.json, verification.md, verificacion_rc.json
+│   ├── 09_demanda_capacidad/      # demanda_capacidad_*.png + critica.json
+│   ├── 10_figuras/                # Diagramas 2D/3D y marco_3d interactivo
+│   ├── 11_mapa_visor/             # analysis_map.js, tributary_map.js, deformada_elements.js
+│   └── 12_reportes/               # Avances semana01/02/03 y plan de empalmes
 ├── Unity/                # Proyecto Unity
 │   └── Assets/
 │       ├── Scripts/      # EdificioLoader.cs, CameraController.cs,
@@ -93,7 +103,6 @@ En `edificio_3d.html` las capas se alternan con los checkboxes del panel izquier
 ├── scripts/              # Utilidades (html_to_json.py, parte_d_fiber.py, parte_d_muros.py)
 ├── reports/              # Reportes de avance y del plan de empalmes viga-viga
 ├── regla_g_walls.json    # Selección de muros para la regla G de conexiones
-├── figures/              # Figuras: P-M de columnas/muros, diagramas 2D/3D
 └── Enunciado_Proyecto1/  # Enunciado, cronograma y recursos
 ```
 
@@ -106,7 +115,7 @@ data/ ──► opensees ──► Edificio.json ──► Unity (visualización
                 ▲            │
                 └────────────┘  opensees/_rebuild_html_elements.py: JSON→HTML
     edificio_3d.html ──► scripts/html_to_json.py: HTML→JSON
-    opensees/results/edificio_full_results*.json ──► exportar_analysis_map.py ──► analysis_map.js
+    resultados/01_casos_base/edificio_full_results*.json ──► exportar_analysis_map.py ──► analysis_map.js
 ```
 
 Los tipos de elemento soportados por el modelo: `column`, `beam_x`, `beam_y`, `wall`, `loza`, `steel_column` y `steel_beam` (acero A240ES). El orden del array de elementos es **1:1** entre `edificio_3d.html`, `Edificio.json` y `analysis_map.js`: agregar elementos a uno requiere regenerar los otros dos para que el modo análisis del visor siga indexando correctamente (usar `_rebuild_html_elements.py` y `html_to_json.py` en ese orden).
@@ -127,12 +136,12 @@ El FE principal es `opensees_edificio_v2.py`. Cada caso construye el modelo desd
 
 ```bash
 cd opensees
-python opensees_edificio_v2.py --case G     # → results/edificio_full_results.json
-python opensees_edificio_v2.py --case Q     # → results/edificio_full_results_Q.json
-python opensees_edificio_v2.py --case EX    # → results/edificio_full_results_EX.json
-python opensees_edificio_v2.py --case EY    # → results/edificio_full_results_EY.json
+python opensees_edificio_v2.py --case G     # → resultados/01_casos_base/edificio_full_results.json
+python opensees_edificio_v2.py --case Q     # → resultados/01_casos_base/edificio_full_results_Q.json
+python opensees_edificio_v2.py --case EX    # → resultados/01_casos_base/edificio_full_results_EX.json
+python opensees_edificio_v2.py --case EY    # → resultados/01_casos_base/edificio_full_results_EY.json
 python opensees_edificio_v2.py --case COMBO --lambda-g 1.2 --lambda-q 1.0 --lambda-ex 1.4 --lambda-ey 1.4
-                                            # → results/edificio_full_results_COMBO.json
+                                            # → resultados/01_casos_base/edificio_full_results_COMBO.json
 ```
 
 - **G**: peso propio + losa permanente; **Q**: sobrecarga de uso; **EX/EY**: sismo pseudostático en X/Y (carga lateral en el centro de masa de cada diafragma, `F = α·(G + 0.5·Q)` con `α=0.20`).
@@ -142,7 +151,7 @@ python opensees_edificio_v2.py --case COMBO --lambda-g 1.2 --lambda-q 1.0 --lamb
 También disponible: `benchmark_3d.py` (módulo de prueba 2D/3D) y `superposicion.py` (auditoría de la combinación).
 
 ### Modo análisis del visor (regenerar resultados)
-Los resultados del análisis (deformada, M/N/V por caso y capacidad P-M) se exportan a `opensees/results/analysis_map.js`, que el visor carga con `<script>`. Regenerarlos tras un análisis nuevo:
+Los resultados del análisis (deformada, M/N/V por caso y capacidad P-M) se exportan a `resultados/11_mapa_visor/analysis_map.js`, que el visor carga con `<script>`. Regenerarlos tras un análisis nuevo:
 
 ```bash
 cd opensees
@@ -160,7 +169,7 @@ Luego abrir `edificio_3d.html` y usar `TAB` para el modo análisis.
 4. Hacer clic en un elemento para abrir su inspector (propiedades y cargas tributarias G/Q en las vigas).
 5. Usar las teclas de la tabla anterior para alternar capas, ejes y el modo hormigón.
 
-Si se actualizó `Edificio.json`, copiarlo a `Unity/Assets/StreamingAssets/Edificio.json` (o seguir el flujo del visor con `html_to_json.py`). El inspector por clic lee sus cargas desde `StreamingAssets/tributary_map.js` (generado por el análisis tributario); ambos deben estar sincronizados con el `Edificio.json`. El modo análisis del visor lee `opensees/results/analysis_map.js` y no está disponible en Unity.
+Si se actualizó `Edificio.json`, copiarlo a `Unity/Assets/StreamingAssets/Edificio.json` (o seguir el flujo del visor con `html_to_json.py`). El inspector por clic lee sus cargas desde `StreamingAssets/tributary_map.js` (generado por el análisis tributario); ambos deben estar sincronizados con el `Edificio.json`. El modo análisis del visor lee `resultados/11_mapa_visor/analysis_map.js` y no está disponible en Unity.
 
 ## Conexiones y camino de carga
 
@@ -180,7 +189,7 @@ python test_empalmes_viga_viga.py
 python test_fiber_sections.py
 ```
 
-Además hay verificaciones *ad hoc* en `opensees/test_asymmetric.py`, `opensees/test_eleforce.py`, `opensees/verificador_camino_carga.py` y `fiber_sections/verification_ha.py`. El detalle del modelo (masa por piso, momentos, equilibrios) queda auditado en consola por `opensees_edificio_v2.py`; resumen en `opensees/results/verification.md`.
+Además hay verificaciones *ad hoc* en `opensees/test_asymmetric.py`, `opensees/test_eleforce.py`, `opensees/verificador_camino_carga.py` y `fiber_sections/verification_ha.py`. El detalle del modelo (masa por piso, momentos, equilibrios) queda auditado en consola por `opensees_edificio_v2.py`; resumen en `resultados/08_verificacion/verification.md`.
 
 ## Ciclo de desarrollo
 

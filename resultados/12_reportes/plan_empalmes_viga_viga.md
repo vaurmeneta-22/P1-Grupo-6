@@ -96,7 +96,7 @@ Coexistencia con la regla B (muros):
 - **Auditorías existentes:** 5 casos (G/Q/EX/EY/COMBO), equilibrio global
   (~1e-15), corte basal con signo, W_CM==W_F, FASE 3 (verificador de camino de
   carga), pytest completo (28 + nuevos).
-- Regenerar `analysis_map.js` y abrir el viewer: las vigas 440/432/438/437 y
+- Regenerar `resultados/11_mapa_visor/analysis_map.js` y abrir el viewer: las vigas 440/432/438/437 y
   similares deben deformarse **coherentes** con sus primarias (fin del "volando").
 - Revisión manual de los 20 casos especiales con el usuario.
 

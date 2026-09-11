@@ -4,8 +4,8 @@ del contrato (secciones `sections.WALLS`), usando la regla proporcional de
 enfierradura de muro_tipificado(). El 30x356 (MURO) se genera en
 parte_d_fiber.py y se reutiliza tal cual (no se regenera aqui).
 
-Para cada muro escribe figures/pm_<clave_contrato>.json con el mismo formato
-de pm_muro_30x356.json: {"seccion", "P_kN_fiber", "M_kNm_fiber"}.
+Para cada muro escribe resultados/07_capacidad/pm_muros/pm_<clave_contrato>.json
+con el mismo formato de pm_muro_30x356.json: {"seccion", "P_kN_fiber", "M_kNm_fiber"}.
 
 La grilla de carga axial es proporcional a la capacidad axial bruta
 P0 ~ 0.85*f'c*Ag (kN) para no fijar valores que no escalan a muros largos
@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.join(BASE, "opensees"))
 from fiber_sections import analysis, sections  # noqa: E402
 from fiber_sections.verification_ha import F_C  # noqa: E402
 
-FIG_DIR = os.path.join(BASE, "figures")
+FIG_DIR = os.path.join(BASE, "resultados", "07_capacidad", "pm_muros")
 os.makedirs(FIG_DIR, exist_ok=True)
 
 FRACCIONES_P = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.97]
@@ -70,6 +70,14 @@ def guardar_png(section, P, M):
 
 
 def main():
+    # Solo queda la version actual: borra curvas previas del destino, salvo
+    # pm_muro_30x356 (lo genera parte_d_fiber.py; aqui no se regenera).
+    for f in os.listdir(FIG_DIR):
+        if f.startswith("pm_") and f.endswith(".json") or \
+           (f.startswith("pm_") and f.endswith(".png")):
+            if f == "pm_muro_30x356.json" or f == "pm_muro_30x356.png":
+                continue
+            os.remove(os.path.join(FIG_DIR, f))
     print(f"== Curvas P-M de {len(sections.WALLS)} muros ({F_C} MPa) ==")
     for sec in sections.WALLS:
         print(f"-- {sec['nombre']:10s}  bw={sec['bw']:.0f} Lw={sec['Lw']:.0f} "

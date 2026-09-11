@@ -42,16 +42,19 @@ def _constantes(fc=F_C):
     return a1, b1
 
 
-def seccion_columna(b=700.0, h=700.0, rec=62.5, db=25.0,
-                    n_arriba=3, n_lat=2, n_abajo=3):
-    """Columna 70x70 con 8phi25: devuelve (b, h, barras, Ast_total).
+def seccion_columna(b=700.0, h=700.0, rec=62.5, db=25.0, n_por_fila=3):
+    """Columna 70x70 con 18phi25 (9 arriba + 9 abajo): devuelve
+    (b, h, barras, Ast_total).
     barras = [(di, Asi), ...] con di = distancia desde fibra extrema
-    comprimida (la cara superior en la flexion)."""
+    comprimida (la cara superior en la flexion). 3 filas por cara, cada una
+    con n_por_fila barras, simetricas."""
     As = math.pi * (db / 2.0) ** 2
-    barras = [(rec, n_arriba * As),
-              (h / 2.0, n_lat * As),
-              (h - rec, n_abajo * As)]
-    Ast = (n_arriba + n_lat + n_abajo) * As
+    r = rec
+    step = (h / 2.0 - r) / 3.0
+    d_sup = [r + k * step for k in range(3)]       # 62.5, 158.3, 254.2
+    barras = [(d, n_por_fila * As) for d in d_sup] + \
+             [(h - d, n_por_fila * As) for d in reversed(d_sup)]
+    Ast = 6 * n_por_fila * As
     return b, h, barras, Ast
 
 

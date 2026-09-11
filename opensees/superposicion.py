@@ -31,6 +31,7 @@ excepto lambda_G que por defecto vale 1.0 (superposicion de servicio completa).
 """
 
 import json
+import csv
 import math
 import os
 import subprocess
@@ -38,7 +39,8 @@ import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OPENSEES = os.path.join(REPO, "opensees")
-RESULTS = os.path.join(OPENSEES, "results")
+RESULTS = os.path.join(REPO, "resultados", "01_casos_base")
+SUPERPOSICION_OUT = os.path.join(REPO, "resultados", "06_superposicion")
 V2_SCRIPT = os.path.join(OPENSEES, "opensees_edificio_v2.py")
 
 CASES = {"G": "edificio_full_results.json",
@@ -202,6 +204,20 @@ def compare_maps(direct, expl, key_map, n_comp, atol=ATOL):
     return err, len(keys), details, worst
 
 
+def exportar_verificacion_csv(lambdas, checks):
+    """Guarda resultados/06_superposicion/verificacion.csv con el resumen de la
+    ultima corrida (sobrescribe; solo queda la version actual)."""
+    os.makedirs(SUPERPOSICION_OUT, exist_ok=True)
+    path = os.path.join(SUPERPOSICION_OUT, "verificacion.csv")
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["campo", "max_err_rel", "n", "ok", "tol"])
+        for label, me, nn, ok in checks:
+            w.writerow([label, me, nn, ok, TOL])
+    print(f"[CSV] {os.path.relpath(path, REPO)}")
+    return path
+
+
 def main():
     if sys.platform == "win32":
         try:
@@ -287,6 +303,7 @@ def main():
                   f"n={n:5d}  [{estado}]")
         err = max(c[1] for c in checks)
         ok = all_ok
+        exportar_verificacion_csv(lambdas, checks)
         print("-" * 70)
         print(f"  RESULTADO: {'SUPERPOSICION CORRECTA' if ok else 'DIFIERE — revisar'}")
         print("=" * 70)

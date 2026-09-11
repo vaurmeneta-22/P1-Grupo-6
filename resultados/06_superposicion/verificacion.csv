@@ -1,0 +1,4 @@
+campo,max_err_rel,n,ok,tol
+desplazamiento,6.780307797609213e-09,516,True,1e-06
+reaccion,2.2841122658295758e-14,99,True,1e-06
+fuerza interna,4.880225420945902e-12,701,True,1e-06

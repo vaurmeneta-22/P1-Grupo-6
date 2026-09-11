@@ -2,16 +2,16 @@
 Parte D - capacidad de hormigon armado (fiber sections vs bloque ACI)
 (Grupo 6)
 
-Genera en figures/ los resultados de la Parte D:
+Genera en resultados/07_capacidad/ los resultados de la Parte D:
   - curva mom-curvatura (M-phi) de la seccion representativa columna_70x70,
   - interaccion P-M de la columna y del muro_30x356 (OpenSees, fibers),
   - comparacion con la verificacion independiente del curso H.A.
     (bloque rectangular alpha1/beta1, compatibility of strains).
 
-Salidas (figures/):
-  * mom_curv_columna_70x70.json / .png
-  * pm_columna_70x70.json / .png   (fiber + HA)
-  * pm_muro_30x356.json / .png     (fiber + HA)
+Salidas (resultados/07_capacidad/):
+  * mom_curv/mom_curv_columna_70x70.json / .png
+  * pm_columnas/pm_columna_70x70.json / .png   (fiber + HA)
+  * pm_muros/pm_muro_30x356.json / .png     (fiber + HA)
 """
 
 import json
@@ -27,12 +27,27 @@ sys.path.insert(0, os.path.join(BASE, "opensees"))
 
 from fiber_sections import analysis, sections, verification_ha as vh  # noqa: E402
 
-FIG_DIR = os.path.join(BASE, "figures")
-os.makedirs(FIG_DIR, exist_ok=True)
+CAP_7 = os.path.join(BASE, "resultados", "07_capacidad")
+FIG_DIR = {
+    "mom_curv": os.path.join(CAP_7, "mom_curv"),
+    "pm": os.path.join(CAP_7, "pm_columnas"),   # contenedor segun caso
+}
+
+
+def dir_de(nombre, section):
+    """Por el prefijo del archivo: mom_curv_* -> mom_curv; pm columna ->
+    pm_columnas; pm muro -> pm_muros."""
+    if nombre.startswith("mom_curv"):
+        return os.path.join(CAP_7, "mom_curv")
+    if "muro" in section["nombre"]:
+        return os.path.join(CAP_7, "pm_muros")
+    return os.path.join(CAP_7, "pm_columnas")
 
 
 def guardar_json(nombre, section, datos):
-    path = os.path.join(FIG_DIR, f"{nombre}_{section['nombre']}.json")
+    d = dir_de(nombre, section)
+    os.makedirs(d, exist_ok=True)
+    path = os.path.join(d, f"{nombre}_{section['nombre']}.json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump(datos, f, indent=1, ensure_ascii=False)
     print(f"  json -> {os.path.relpath(path, BASE)}")
@@ -40,7 +55,9 @@ def guardar_json(nombre, section, datos):
 
 
 def guardar_png(nombre, section, title):
-    path = os.path.join(FIG_DIR, f"{nombre}_{section['nombre']}.png")
+    d = dir_de(nombre, section)
+    os.makedirs(d, exist_ok=True)
+    path = os.path.join(d, f"{nombre}_{section['nombre']}.png")
     plt.title(title)
     plt.grid(alpha=0.3)
     plt.tight_layout()
@@ -97,8 +114,8 @@ def main():
     curva_mom_curv_columna()
     interaccion(sections.COLUMNA, True,
                 [0, 500, 1500, 2500, 3500, 4500, 5000, 5500, 6000,
-                 6331, 7000, 8000, 9000, 10000, 11000, 12000, 13000,
-                 14000, 15000, 16110],
+                 7000, 8000, 9000, 10000, 11000, 12000, 13000,
+                 14000, 15000, 16000, 17000, 18000],
                 "pm", "Interaccion P-M - columna 70x70")
     interaccion(sections.MURO, False,
                 [0, 2000, 5000, 8000, 11000, 14000, 17000, 20000,

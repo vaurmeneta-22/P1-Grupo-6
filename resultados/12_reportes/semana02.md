@@ -228,7 +228,7 @@ en runtime y construye la escena:
 | **Selección / IDs** | Cada nodo muestra su id como etiqueta (billboard); elementos con nombre `COLUMN_n`, `BEAM_X_n`, etc. |
 | **Ejes** | `CreateAxisLine` → `LineRenderer` por elemento, color por tipo; helper de ejes X/Y/Z |
 | **Apoyos** | `CreateWeldSupport` → esfera + cubo de fundación, material morado |
-| **Áreas tributarias** | Datos por viga en `opensees/results/tributary_map.js` y `tributary_by_viga`; visualización de polígonos tributarios |
+| **Áreas tributarias** | Datos por viga en `resultados/11_mapa_visor/tributary_map.js` y `tributary_by_viga`; visualización de polígonos tributarios |
 | **Losas / muros** | Cubos semitransparentes (losas) y por tramo (muros) |
 
 La cámara orbital se controla con `CameraController.cs`. También hay un visor

@@ -11,7 +11,7 @@ import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OPENSEES = os.path.join(REPO, "opensees")
-RESULTS = os.path.join(OPENSEES, "results")
+RESULTS = os.path.join(REPO, "resultados", "01_casos_base")
 if OPENSEES not in sys.path:
     sys.path.insert(0, OPENSEES)
 

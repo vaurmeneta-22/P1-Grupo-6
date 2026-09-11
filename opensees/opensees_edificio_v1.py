@@ -24,7 +24,7 @@ Unidades internas (SI): metros, kN, kN·m. El contrato viene en centimetros.
 Como correr:
     python opensees_edificio_v1.py
 
-Salida: resultados en opensees/results/edificio_full_results.json
+Salida: resultados en resultados/01_casos_base/edificio_full_results.json
 """
 
 import json

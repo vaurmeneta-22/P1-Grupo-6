@@ -70,6 +70,37 @@
   #legendScale .ls-swat { width: 18px; height: 10px; border: 1px solid #555; border-radius: 2px; flex-shrink: 0; }
   #legendScale .ls-range { color: #ddd; }
   .slot { display: inline-block; width: 14px; height: 14px; border: 1px solid #888; vertical-align: middle; margin: 0 4px 0 0; border-radius: 2px; }
+  #modebar #btnDatos { background: #3a5a8c; margin-left: 8px; }
+  #modebar #btnDatos.on { background: #0aa; color: #000; }
+  #datosPanel {
+    display: none; position: absolute; right: 10px; top: 10px;
+    background: rgba(0,0,0,0.88); border: 1px solid #0aa; border-radius: 6px;
+    color: #0ff; font-size: 12px; z-index: 30; line-height: 1.5;
+    max-width: 460px; width: 460px; max-height: 82vh; overflow: auto;
+    padding: 8px 12px 10px;
+  }
+  #datosPanel .dt-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  #datosPanel .dt-close { background: none; border: none; color: #f66; font: bold 15px/1 monospace; cursor: pointer; }
+  #datosPanel .dt-close:hover { color: #faa; }
+  #datosPanel .dt-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+  #datosPanel .dt-tabs button {
+    background: #111; color: #9ff; border: 1px solid #0aa; border-radius: 4px;
+    padding: 3px 10px; cursor: pointer; font-family: monospace; font-size: 11px;
+  }
+  #datosPanel .dt-tabs button.active { background: #0aa; color: #000; font-weight: bold; }
+  #datosPanel .dt-tab { display: none; }
+  #datosPanel .dt-tab.active { display: block; }
+  #datosPanel select {
+    background: #111; color: #0ff; border: 1px solid #0aa; border-radius: 3px;
+    font-family: monospace; font-size: 12px; padding: 1px 4px;
+  }
+  #datosPanel table { border-collapse: collapse; width: 100%; font-family: monospace; font-size: 11px; }
+  #datosPanel th, #datosPanel td { border: 1px solid #2a2a44; padding: 2px 6px; text-align: right; color: #cfc; }
+  #datosPanel th { color: #0ff; background: rgba(0,170,170,0.12); position: sticky; top: 0; }
+  #datosPanel td.lbl, #datosPanel th.lbl { text-align: left; color: #9ff; }
+  #datosPanel .dt-note { color: #999; font-size: 11px; margin-top: 6px; }
+  #datosPanel .dt-table-wrap { max-height: 46vh; overflow: auto; border: 1px solid #2a2a44; }
+  #datosPanel canvas { background: #0a0a14; border: 1px solid #2a2a44; display: block; margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -102,6 +133,23 @@
 <div id="modebar">
   Modo: <button id="btnMode" onclick="toggleMode()">VISUALIZACION</button>
   <span class="kbd">[TAB]</span>
+  <button id="btnDatos" onclick="toggleDatos()">DATOS</button>
+</div>
+<div id="datosPanel">
+  <div class="dt-head"><span style="color:#0ff;font-weight:bold">DATOS del análisis</span>
+    <button type="button" class="dt-close" onclick="toggleDatos()" title="Cerrar">X</button></div>
+  <div class="dt-tabs">
+    <button data-tab="dt-sismo" class="active">Sismo</button>
+    <button data-tab="dt-momcurv">Mom-Curv</button>
+    <button data-tab="dt-pm">P-M</button>
+    <button data-tab="dt-reac">Reacciones</button>
+    <button data-tab="dt-tribu">Tributarias</button>
+  </div>
+  <div class="dt-tab active" id="dt-sismo"></div>
+  <div class="dt-tab" id="dt-momcurv"></div>
+  <div class="dt-tab" id="dt-pm"></div>
+  <div class="dt-tab" id="dt-reac"></div>
+  <div class="dt-tab" id="dt-tribu"></div>
 </div>
 <div id="analysisPanel">
   <div class="row">
@@ -128,8 +176,8 @@ Nota: respuesta lineal del modelo global. Doble clic en columna/muro -> P-M. Dob
   <div id="inspectorBody"></div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="opensees/results/tributary_map.js"></script>
-<script src="opensees/results/analysis_map.js"></script>
+<script src="resultados/11_mapa_visor/tributary_map.js"></script>
+<script src="resultados/11_mapa_visor/analysis_map.js"></script>
 <script>
   const elements = [{"type":"column","section":"70x70","xi":0.0,"yi":0.0,"zi":0.0,"xj":0.0,"yj":3.56,"zj":0.0,"b":0.7,"h":0.7},
   {"type":"column","section":"70x70","xi":-10.0,"yi":0.0,"zi":0.0,"xj":-10.0,"yj":3.56,"zj":0.0,"b":0.7,"h":0.7},
@@ -1498,6 +1546,7 @@ Nota: respuesta lineal del modelo global. Doble clic en columna/muro -> P-M. Dob
       mesh.position.copy(center);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
+      mesh.userData = {elem: e, type: e.type};
       ag.add(mesh);
     } else if (e.type === 'steel_beam') {
       // Diagonal metalica: caja orientada a lo largo del eje ni->nj.
@@ -1531,6 +1580,7 @@ Nota: respuesta lineal del modelo global. Doble clic en columna/muro -> P-M. Dob
       wmesh.position.copy(center);
       wmesh.castShadow = true;
       wmesh.receiveShadow = true;
+      wmesh.userData = {elem: e, type: e.type};
       ag.add(wmesh);
     } else if (e.type === 'loza') {
       const w = Math.abs(e.xj - e.xi);
@@ -1542,6 +1592,7 @@ Nota: respuesta lineal del modelo global. Doble clic en columna/muro -> P-M. Dob
       mesh.position.copy(center);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
+      mesh.userData = {elem: e, type: e.type};
       ag.add(mesh);
     } else {
       const w = e.b;
@@ -2065,6 +2116,52 @@ spherical.theta -= dx * 0.01;
     ];
   }
 
+  // picking por CLUSTER de rayos alrededor del cursor: gana el elemento que
+  // aparece en la mayoria de rayos (+/- 5px, 3x3). Resuelve los casos donde
+  // una viga fina se proyecta DELANTE de una columna: la columna llena mas
+  // area en pantalla, asi que recibe mas votos y se elige ella.
+  const PICK_TARGETS = [];
+  [groupBeamX, groupBeamY, groupColumn, groupWall, groupSteel].forEach(g =>
+    g.traverse(o => { if (o.userData && o.userData.type) PICK_TARGETS.push(o); })
+  );
+  const PICK_OFFS = [[0,0],[8,0],[0,8],[-8,0],[0,-8],[6,6],[-6,6],[6,-6],[-6,-6]]; // 3x3 matriz
+
+  // Un rayo que golpea una viga tambien puede tener una columna/muro DETRAS
+  // (la viga tapa la columna en ese pixel). Para que la columna no pierda,
+  // esas columnas cuentan como "medias votos": acumulan casi lo mismo que la
+  // viga cuando el cursor esta dentro de la columna.
+  function isVerticalType(ud) {
+    return ud.type === 'column' || ud.type === 'wall' || ud.type === 'steel_column';
+  }
+
+  function pickAt(ev) {
+    const r = renderer.domElement.getBoundingClientRect();
+    const cx = ev.clientX - r.left, cy = ev.clientY - r.top;
+    const votes = new Map();     // objeto -> votos ponderados
+    for (const [dx, dy] of PICK_OFFS) {
+      const v = new THREE.Vector2(((cx + dx) / r.width) * 2 - 1, -((cy + dy) / r.height) * 2 + 1);
+      raycaster.setFromCamera(v, camera);
+      const hs = raycaster.intersectObjects(PICK_TARGETS, false);
+      if (!hs.length) continue;
+      const o = hs[0].object;              // el mas cercano en ese rayo
+      if (!o.userData || !o.userData.elem) continue;
+      votes.set(o, (votes.get(o) || 0) + 1);
+      if (!isVerticalType(o.userData.elem)) {
+        // si el mas cercano es una viga y detras hay columna/muro, medio voto
+        for (const h of hs.slice(1)) {
+          const u = h.object.userData;
+          if (u && u.elem && isVerticalType(u.elem)) {
+            votes.set(h.object, (votes.get(h.object) || 0) + 0.5);
+            break;
+          }
+        }
+      }
+    }
+    let best = null, bestVotes = 0;
+    votes.forEach((vn, o) => { if (vn > bestVotes) { bestVotes = vn; best = o; } });
+    return best;
+  }
+
   renderer.domElement.addEventListener('click', (ev) => {
     // En modo ANALISIS el clic lo gestiona el overlay P-M/diagramas
     if (typeof S !== 'undefined' && S.mode === 'analysis') return;
@@ -2078,54 +2175,41 @@ spherical.theta -= dx * 0.01;
     // limpiar resaltados anteriores
     clearHighlight();
 
-    // ORDEN de picking (prioridad): vigas > columnas/muros > diafragma/losas.
-    // Esto garantiza que el diafragma (plano horizontal en la altura de las
-    // vigas) NO tape el clic sobre cualquier viga, incluso bajo la losa.
-    const beamTargets = [];
-    groupBeamX.traverse(o => { if (o.userData && o.userData.type) beamTargets.push(o); });
-    groupBeamY.traverse(o => { if (o.userData && o.userData.type) beamTargets.push(o); });
-
-    // 1) VIGAS (X/Y, interior/perimetro, bajo losa/diafragma)
-    const hits = raycaster.intersectObjects(beamTargets, false);
-    if (hits.length) {
-      const ud = hits[0].object.userData.elem;
-      const t = resolveTributary(ud);
-      inspectorEl.style.display = 'block';
-      if (t) {
-        inspectorBody.innerHTML = buildBeamRows(ud, t).join('<br>');
-        // resaltar la viga (caja transparente)
-        const o = hits[0].object;
-        const b = new THREE.Box3().setFromObject(o);
-        const size = b.getSize(new THREE.Vector3());
-        const center = b.getCenter(new THREE.Vector3());
-        const hl = new THREE.Mesh(new THREE.BoxGeometry(size.x, size.y, size.z), highlightMat);
-        hl.position.copy(center);
-        scene.add(hl);
-        highlightMesh = hl;
-        // visualizacion grafica del area tributaria + flechas de carga
-        showTribGraphics(ud, t);
-      } else {
-        inspectorBody.innerHTML =
-          'Viga ' + ud.type + '  (id no indexado, sin area tributaria de losa).' +
-          '<br>[Rampa/escalera/parapeto sin losa tributaria -> sin dato]';
+    // Picking por cluster de rayos: el elemento que llena mas area en
+    // pantalla cerca del cursor (ver pickAt arriba).
+    const o = pickAt(ev);
+    if (o) {
+      const ud = o.userData.elem;
+      const isBeam = (ud.type === 'beam_x' || ud.type === 'beam_y');
+      if (isBeam) {
+        const t = resolveTributary(ud);
+        inspectorEl.style.display = 'block';
+        if (t) {
+          inspectorBody.innerHTML = buildBeamRows(ud, t).join('<br>');
+          // resaltar la viga (caja transparente)
+          const b = new THREE.Box3().setFromObject(o);
+          const size = b.getSize(new THREE.Vector3());
+          const center = b.getCenter(new THREE.Vector3());
+          const hl = new THREE.Mesh(new THREE.BoxGeometry(size.x, size.y, size.z), highlightMat);
+          hl.position.copy(center);
+          scene.add(hl);
+          highlightMesh = hl;
+          // visualizacion grafica del area tributaria + flechas de carga
+          showTribGraphics(ud, t);
+        } else {
+          inspectorBody.innerHTML =
+            'Viga ' + ud.type + '  (id no indexado, sin area tributaria de losa).' +
+            '<br>[Rampa/escalera/parapeto sin losa tributaria -> sin dato]';
+        }
+        return;
       }
-      return;
-    }
-
-    // 2) COLUMNAS y MUROS (elemento estructural vertical bajo el cursor)
-    const structTargets = [];
-    groupColumn.traverse(o => { if (o.userData && o.userData.type) structTargets.push(o); });
-    groupWall.traverse(o => { if (o.userData && o.userData.type) structTargets.push(o); });
-    groupSteel.traverse(o => { if (o.userData && o.userData.type) structTargets.push(o); });
-    const schits = raycaster.intersectObjects(structTargets, false);
-    if (schits.length) {
-      const ud = schits[0].object.userData.elem;
+      // columna / muro / acero
       const L = new THREE.Vector3(ud.xj, ud.yj, ud.zj)
         .distanceTo(new THREE.Vector3(ud.xi, ud.yi, ud.zi));
       inspectorEl.style.display = 'block';
       inspectorBody.innerHTML = (ud.type === 'column' ? 'Columna' :
-                              ud.type === 'steel_column' ? 'Columna MET' :
-                              ud.type === 'steel_beam' ? 'Viga MET' : 'Muro') + '  (id ' + (ud.type) + ')' +
+                             ud.type === 'steel_column' ? 'Columna MET' :
+                             ud.type === 'steel_beam' ? 'Viga MET' : 'Muro') + '  (id ' + (ud.type) + ')' +
         '<br>Nodos: (' + ud.xi.toFixed(2) + ',' + ud.zi.toFixed(2) + ') -> (' + ud.xj.toFixed(2) + ',' + ud.zj.toFixed(2) + ')' +
         '<br>Altura: ' + L.toFixed(2) + ' m' +
         '<br>' + (ud.type === 'column'
@@ -2165,7 +2249,7 @@ spherical.theta -= dx * 0.01;
   // ==================================================================
   // MODO ANALISIS: superpone resultados (deformada, M, N, V, P-M) al
   // visor 3D. Activacion con [TAB] o el boton de la barra superior.
-  // Datos: opensees/results/analysis_map.js (analisis_map lineal FI).
+  // Datos: resultados/11_mapa_visor/analysis_map.js (analisis_map lineal FI).
   // ==================================================================
   const ANALYSIS = (typeof ANALYSIS_MAP !== 'undefined') ? ANALYSIS_MAP : null;
   const S = { mode: 'view', caso: 'COMBO', vista: 'deformada', factor: 120 };
@@ -2324,10 +2408,11 @@ const F = ANALYSIS.forces[S.caso] || {};
           new THREE.Vector3(0, 1, 0),
           new THREE.Vector3(ddx / len, ddy / len, ddz / len)
         );
-        mesh.userData = { elem: e, tipo: meta.type, sec: meta.section };
+        mesh.userData = { elem: e, tipo: meta.type, sec: meta.section, p0: p0.slice(), p1: p1.slice() };
         analysisGroup.add(mesh);
       }
     }
+    paintReactions();
     updateScale();
   }
 
@@ -2349,7 +2434,7 @@ const F = ANALYSIS.forces[S.caso] || {};
 
   function toggleMode() {
     if (!ANALYSIS) {
-      alert('analysis_map.js no encontrado. Genera opensees/results/analysis_map.js\n'
+      alert('analysis_map.js no encontrado. Genera resultados/11_mapa_visor/analysis_map.js\n'
             + 'con: python opensees/exportar_analysis_map.py');
       return;
     }
@@ -2524,9 +2609,31 @@ const F = ANALYSIS.forces[S.caso] || {};
       ': N=axial, V=corte, M=momento resultante en cada extremo, DEF=modulo del desplazamiento nodal.';
     // marca el extremo con la mayor demanda de momento
     const worst = maxM > 0 ? ((a.M >= b.M) ? 'i' : 'j') : '-';
+    // tramos tributarios reales de esta viga (aporte de losas)
+    let tribHtml = '';
+    const tr = (ANALYSIS.tributarias || {})[meta.id];
+    if (tr) {
+      const rows2 = (tr.aportes || []).map(ap => [
+        ap.losa, ap.borde, (ap.tramo_m[0] !== undefined ? ap.tramo_m[0].toFixed(1) : '-') + '…' +
+        (ap.tramo_m[1] !== undefined ? ap.tramo_m[1].toFixed(1) : '-'),
+        (ap.area_m2 || 0).toFixed(2), (ap.W_G_kN || 0).toFixed(1)
+      ]);
+      tribHtml = '<div style="color:#9ff;margin-top:6px">Carga de losa (tributaria):</div>' +
+        '<table style="border-collapse:collapse;font-family:monospace;font-size:11px">' +
+        '<tr style="color:#0ff"><th style="border:1px solid #2a2a44;padding:1px 6px">Losa</th>' +
+        '<th style="border:1px solid #2a2a44;padding:1px 6px">Borde</th>' +
+        '<th style="border:1px solid #2a2a44;padding:1px 6px">Tramo [m]</th>' +
+        '<th style="border:1px solid #2a2a44;padding:1px 6px">A [m²]</th>' +
+        '<th style="border:1px solid #2a2a44;padding:1px 6px">G [kN]</th></tr>' +
+        rows2.map(r => '<tr>' + r.map((c, i) =>
+          '<td style="border:1px solid #2a2a44;padding:1px 6px;text-align:' + (i >= 3 ? 'right' : 'left') + ';color:#cfc">'
+          + c + '</td>').join('') + '</tr>').join('') + '</table>' +
+        '<div class="dt-note">Σ A = ' + (tr.area_tributaria_m2 || 0).toFixed(2) + ' m² · W_G = ' +
+        (tr.W_G_kN || 0).toFixed(1) + ' kN · W_Q = ' + (tr.W_Q_kN || 0).toFixed(1) + ' kN</div>';
+    }
     inspectorEl.style.display = 'block';
     inspectorBody.innerHTML = html +
-      '<br>Max M = <b>' + maxM.toFixed(1) + '</b> kN·m en extremo ' + worst;
+      '<br>Max M = <b>' + maxM.toFixed(1) + '</b> kN·m en extremo ' + worst + tribHtml;
   }
 
   function highColor(row) {
@@ -2536,45 +2643,78 @@ const F = ANALYSIS.forces[S.caso] || {};
     return r > 0.9 ? '#f66' : (r > 0.6 ? '#fc6' : '#cfc');
   }
 
+  // Palito del modo analisis mas cercano al cursor (distancia en pantalla al
+  // segmento proyectado). MISMA logica que el hover: sirve para que el doble
+  // clic abra el MISMO elemento que se puso rosado.
+  function palitoAt(ev) {
+    const r = renderer.domElement.getBoundingClientRect();
+    const px = ev.clientX - r.left, py = ev.clientY - r.top;
+    let best = null, bestDist = 12;
+    const v0 = new THREE.Vector3(), v1 = new THREE.Vector3();
+    for (const o of analysisGroup.children) {
+      const ud = o.userData;
+      if (!ud || !ud.p0) continue;
+      v0.set(ud.p0[0], ud.p0[1], ud.p0[2]).project(camera);
+      v1.set(ud.p1[0], ud.p1[1], ud.p1[2]).project(camera);
+      const sx0 = (v0.x + 1) / 2 * r.width, sy0 = (1 - v0.y) / 2 * r.height;
+      const sx1 = (v1.x + 1) / 2 * r.width, sy1 = (1 - v1.y) / 2 * r.height;
+      const dx = sx1 - sx0, dy = sy1 - sy0;
+      const ll = dx * dx + dy * dy;
+      let tt = ll > 0 ? ((px - sx0) * dx + (py - sy0) * dy) / ll : 0;
+      tt = Math.max(0, Math.min(1, tt));
+      const d = Math.hypot(px - (sx0 + tt * dx), py - (sy0 + tt * dy));
+      if (d < bestDist) { bestDist = d; best = o; }
+    }
+    return best;
+  }
+
   renderer.domElement.addEventListener('dblclick', (ev) => {
     if (S.mode !== 'analysis') return;
-    const r = renderer.domElement.getBoundingClientRect();
-    const mx = ((ev.clientX - r.left) / r.width) * 2 - 1;
-    const my = -((ev.clientY - r.top) / r.height) * 2 + 1;
-    const rc = new THREE.Raycaster();
-    rc.setFromCamera(new THREE.Vector2(mx, my), camera);
-
-    // Prioridad de picking: vigas primero; luego columnas/muros (mismo
-    // orden que el inspector de visualizacion).
-    const beamTargets = [];
-    [groupBeamX, groupBeamY, groupSteel].forEach(g => {
-      g.traverse(o => { if (o.userData && o.userData.type) beamTargets.push(o); });
-    });
-    const bhits = rc.intersectObjects(beamTargets, false);
-    if (bhits.length) {
-      const elemObj = bhits[0].object.userData.elem;
+    // 1) Primero el palito (lo que el usuario VE y lo que se puso rosado):
+    //    como los solido estan en posicion NO deformada y los palitos si,
+    //    el raycast sobre solidos podia caer en otra viga. Palito = angulo
+    //    exacto que estaba mirando.
+    const pal = palitoAt(ev);
+    if (pal) {
+      const elemObj = pal.userData.elem;
+      const ix = elemIdx.get(elemObj);
+      if (ix !== undefined) {
+        const meta = ANALYSIS.elements[ix];
+        if (meta) {
+          const type = meta.type;
+          if (type === 'beam_x' || type === 'beam_y' || type === 'steel_beam') {
+            showBeamReport(meta, elemObj, S.caso);
+            return;
+          }
+          // columna / muro / acero -> P-M
+          const frec = (ANALYSIS.forces[S.caso] || {})[meta.id] || {};
+          const f = frec.i || frec.j;
+          let P = 0, M = 0;
+          if (f) {
+            const L = Math.hypot(elemObj.xj - elemObj.xi, elemObj.yj - elemObj.yi, elemObj.zj - elemObj.zi) || 1;
+            const ux = (elemObj.xj - elemObj.xi) / L, uy = (elemObj.yj - elemObj.yi) / L, uz = (elemObj.zj - elemObj.zi) / L;
+            const fvx = f[0], fvy = f[2], fvz = f[1];
+            P = Math.abs(fvx * ux + fvy * uy + fvz * uz);
+            M = Math.hypot(f[3], f[4], f[5]);
+          }
+          drawPM(meta, P, M, S.caso);
+          return;
+        }
+      }
+    }
+    // 2) fallback: picking por cluster sobre solidos
+    const o = pickAt(ev);
+    if (o) {
+      const elemObj = o.userData.elem;
       const ix = elemIdx.get(elemObj);
       if (ix === undefined) return;
       const meta = ANALYSIS.elements[ix];
       if (!meta) return;
-      showBeamReport(meta, elemObj, S.caso);
-      return;
-    }
-
-    const targets = [];
-    const srcTypes = { column: groupColumn, wall: groupWall };
-    for (const k in srcTypes) {
-      srcTypes[k].traverse(o => {
-        if (o.userData && o.userData.type) targets.push(o);
-      });
-    }
-    const hits = rc.intersectObjects(targets, false);
-    if (hits.length) {
-      const elemObj = hits[0].object.userData.elem;
-      const ix = elemIdx.get(elemObj);
-      if (ix === undefined) return;
-      const meta = ANALYSIS.elements[ix];
-      if (!meta) return;
+      const type = meta.type;
+      if (type === 'beam_x' || type === 'beam_y' || type === 'steel_beam') {
+        showBeamReport(meta, elemObj, S.caso);
+        return;
+      }
       // punto de demanda (caso activo) sobre ese elemento
       const frec = (ANALYSIS.forces[S.caso] || {})[meta.id] || {};
       const f = frec.i || frec.j;
@@ -2682,6 +2822,358 @@ const F = ANALYSIS.forces[S.caso] || {};
 
   // Activar por defecto en modo visualizacion
   if (btnMode) btnMode.textContent = 'VISUALIZACION';
+
+  // ==================================================================
+  // PANEL DATOS: tabla sismo, momento-curvatura, P-M fibra vs HA,
+  // reacciones de apoyo y tributarias. Solo lectura/consulta.
+  // ==================================================================
+  const datosPanel = document.getElementById('datosPanel');
+  const btnDatos = document.getElementById('btnDatos');
+
+  function toggleDatos(force) {
+    if (!datosPanel) return;
+    const show = (force !== undefined) ? force : (datosPanel.style.display === 'none');
+    datosPanel.style.display = show ? 'block' : 'none';
+    if (btnDatos) btnDatos.classList.toggle('on', show);
+    if (show) renderDatosTab(document.querySelector('#datosPanel .dt-tabs button.active'));
+  }
+
+  // Cambio de pestana
+  datosPanel.addEventListener('click', (ev) => {
+    const b = ev.target.closest('.dt-tabs button');
+    if (!b) return;
+    document.querySelectorAll('#datosPanel .dt-tabs button').forEach(x => x.classList.toggle('active', x === b));
+    document.querySelectorAll('#datosPanel .dt-tab').forEach(x => x.classList.toggle('active', x.id === b.dataset.tab));
+    renderDatosTab(b);
+  });
+
+  function renderDatosTab(b) {
+    if (!b) return;
+    const id = b.dataset.tab;
+    if (id === 'dt-sismo') renderSismo();
+    else if (id === 'dt-momcurv') renderMomCurv();
+    else if (id === 'dt-pm') renderPM();
+    else if (id === 'dt-reac') renderReac();
+    else if (id === 'dt-tribu') renderTribu();
+  }
+
+  function th(rows, headers, cls) {
+    const h = headers.map((x, i) => `<th class="${(cls && cls[i]) || 'num'}">${x}</th>`).join('');
+    const b = rows.map(r => '<tr>' + r.map((c, i) =>
+      `<td class="${(cls && cls[i]) || 'num'}">${c}</td>`).join('') + '</tr>').join('');
+    return '<div class="dt-table-wrap"><table><thead><tr>' + h + '</tr></thead><tbody>' + b + '</tbody></table></div>';
+  }
+
+  // ------------------------------------------------------------------
+  // T A B  1  —  SISMO por piso (EX/EY)
+  // ------------------------------------------------------------------
+  function renderSismo() {
+    const el = document.getElementById('dt-sismo');
+    if (!el) return;
+    const sd = ANALYSIS.sismo || {};
+    const casos = Object.keys(sd);
+    if (!casos.length) { el.innerHTML = '<div class="dt-note">Sin datos de sismo en analysis_map.js.</div>'; return; }
+    el.innerHTML =
+      '<label>Caso: <select id="selSismo">' + casos.map(c =>
+        `<option value="${c}">${c}</option>`).join('') + '</select></label>' +
+      '<div id="sismoBody" style="margin-top:6px"></div>';
+    const paint = () => {
+      const c = document.getElementById('selSismo').value;
+      const rows = (sd[c] || []).map(v => [
+        v.piso, v.z_m.toFixed(2),
+        v.G_kN.toFixed(0), v.Q_kN.toFixed(0), v.W_kN.toFixed(0),
+        (v.masa_kg / 1000).toFixed(1),
+        v.F_X_kN.toFixed(1), v.F_Y_kN.toFixed(1),
+        (Math.hypot(v.F_X_kN, v.F_Y_kN) || 0).toFixed(1),
+        v.ux_mm.toFixed(2), v.uy_mm.toFixed(2), v.Rz_rad.toExponential(2)
+      ]);
+      document.getElementById('sismoBody').innerHTML = th(rows,
+        ['Piso', 'z[m]', 'G[kN]', 'Q[kN]', 'W[kN]', 'm[t]', 'F_X[kN]', 'F_Y[kN]', '|F|', 'ux[mm]', 'uy[mm]', 'Rz[rad]'],
+        ['lbl', 'num', 'num', 'num', 'num', 'num', 'num', 'num', 'num', 'num', 'num', 'num']) +
+        '<div class="dt-note">Masa sísmica W = G + 50% Q. Desplazamientos del CM de cada diafragma. ' +
+        'Corte basal |F| = ' + rows.reduce((a, r) => a + parseFloat(r[8]), 0).toFixed(1) + ' kN.</div>';
+    };
+    el.addEventListener('change', (ev) => { if (ev.target && ev.target.id === 'selSismo') paint(); });
+    paint();
+  }
+
+  // ------------------------------------------------------------------
+  // T A B  2  —  MOMENTO-CURVATURA (columna 70x70)
+  // ------------------------------------------------------------------
+  function renderMomCurv() {
+    const el = document.getElementById('dt-momcurv');
+    if (!el) return;
+    const mc = ANALYSIS.momcurv;
+    if (!mc || !mc.phi_1m || !mc.phi_1m.length) { el.innerHTML = '<div class="dt-note">Sin curva M-φ (generar figures con part_d_fiber.py).</div>'; return; }
+    const W = 420, H = 220, px = 52, py = 14, pw = W - px - 14, ph = H - py - 26;
+    el.innerHTML = '<div class="dt-note">Curva M-φ de la columna 70x70 (fiber, P = 0 kN).</div>' +
+      '<canvas id="cvMomCurv" width="' + W + '" height="' + H + '"></canvas>' +
+      '<div class="dt-note" id="mcStats"></div>';
+    const cv = document.getElementById('cvMomCurv');
+    const ctx = cv.getContext('2d');
+    const phi = mc.phi_1m, M = mc.M_kNm;
+    let Mmax = 0, phimax = 0;
+    M.forEach(v => { if (Math.abs(v) > Mmax) Mmax = Math.abs(v); });
+    phimax = phi[phi.length - 1];
+    function sx(p) { return px + pw * p / phimax; }
+    function sy(m) { return py + ph - ph * m / Mmax; }
+    ctx.fillStyle = '#0a0a14'; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = '#2a2a44'; ctx.lineWidth = 1;
+    [-Mmax, -Mmax / 2, 0, Mmax / 2, Mmax].forEach((m, i) => {
+      const y = sy(m); ctx.beginPath(); ctx.moveTo(px, y); ctx.lineTo(px + pw, y); ctx.stroke();
+      ctx.fillStyle = '#666'; ctx.font = '10px monospace'; ctx.textAlign = 'right';
+      ctx.fillText(m.toFixed(0), px - 4, y + 3);
+    });
+    [0, 0.25, 0.5, 0.75, 1].forEach(f => {
+      const x = px + pw * f; ctx.beginPath(); ctx.moveTo(x, py); ctx.lineTo(x, py + ph); ctx.stroke();
+      ctx.fillStyle = '#666'; ctx.textAlign = 'center';
+      ctx.fillText((f * phimax).toFixed(4), x, py + ph + 12);
+    });
+    ctx.strokeStyle = '#0ff'; ctx.lineWidth = 2; ctx.beginPath();
+    for (let i = 0; i < phi.length; i++) {
+      const x = sx(phi[i]), y = sy(M[i]);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#0ff'; ctx.font = '11px monospace'; ctx.textAlign = 'left';
+    ctx.fillText('φ [1/m]', px + pw / 2 - 40, H - 2);
+    ctx.save(); ctx.translate(10, py + ph / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('M [kN·m]', 0, 0); ctx.restore();
+    // rigid. inicial (pendiente primeros 2 puntos) y M ultimo
+    const k0 = (M[1] - M[0]) / (phi[1] - phi[0]);
+    const Mfin = M[M.length - 1];
+    const stats = document.getElementById('mcStats');
+    if (stats) stats.innerHTML =
+      'Rigidez inicial (EI~) = <b>' + (k0 / 1000).toFixed(0) + '</b> MN·m²  |  ' +
+      'M_último = <b>' + Mfin.toFixed(1) + '</b> kN·m a φ = ' + phimax.toFixed(5) + ' 1/m  |  ' +
+      'pasos convergidos = ' + (mc.n_ok || M.length);
+  }
+
+  // ------------------------------------------------------------------
+  // T A B  3  —  P-M FIBRA vs HA
+  // ------------------------------------------------------------------
+  function renderPM() {
+    const el = document.getElementById('dt-pm');
+    if (!el) return;
+    const ph = ANALYSIS.pm_ha || {};
+    const secs = Object.keys(ph);
+    if (!secs.length) { el.innerHTML = '<div class="dt-note">Sin P-M fibra/HA (generar figures/pm_*.json).</div>'; return; }
+    el.innerHTML =
+      '<label>Sección: <select id="selPM">' + secs.map(s =>
+        `<option value="${s}">${s}</option>`).join('') + '</select></label>' +
+      '<div class="dt-note">Línea cian = fibra (OpenSees); verde = HA bloque rectangular (ACI/NCh). Compresión positiva.</div>' +
+      '<canvas id="cvPMha" width="420" height="260"></canvas>' +
+      '<div id="pmMol" class="dt-note"></div>';
+    const paint = () => {
+      const s = document.getElementById('selPM').value;
+      const d = ph[s];
+      const cv = document.getElementById('cvPMha');
+      const ctx = cv.getContext('2d');
+      const W = cv.width, H = cv.height, px = 52, py = 14, pw = W - px - 14, phh = H - py - 26;
+      function maxAbs(a) { let m = 0; a.forEach(x => { if (Math.abs(x) > m) m = Math.abs(x); }); return m; }
+      const Mmax = Math.max(maxAbs(d.M_fiber), maxAbs(d.M_HA), 1);
+      const Pmax = Math.max(maxAbs(d.P_fiber), maxAbs(d.P_HA), 1);
+      function sx(m) { return px + pw * Math.abs(m) / Mmax; }
+      function sy(p) { return py + phh - phh * p / Pmax; }
+      ctx.fillStyle = '#0a0a14'; ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = '#2a2a44'; ctx.lineWidth = 1;
+      [0, 0.25, 0.5, 0.75, 1].forEach(f => {
+        const x = px + pw * f; ctx.beginPath(); ctx.moveTo(x, py); ctx.lineTo(x, py + phh); ctx.stroke();
+        ctx.fillStyle = '#666'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+        ctx.fillText((Mmax * f).toFixed(0), x, py + phh + 12);
+      });
+      for (let i = 0; i <= 4; i++) {
+        const y = py + phh - phh * i / 4;
+        ctx.beginPath(); ctx.moveTo(px, y); ctx.lineTo(px + pw, y); ctx.stroke();
+        ctx.fillStyle = '#666'; ctx.textAlign = 'right';
+        ctx.fillText((Pmax * i / 4).toFixed(0), px - 4, y + 3);
+      }
+      function line(P, M, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath();
+        for (let i = 0; i < P.length; i++) {
+          const x = sx(M[i]), y = sy(P[i]);
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+      if (d.M_fiber && d.M_fiber.length) line(d.P_fiber, d.M_fiber, '#0ff');
+      if (d.M_HA && d.M_HA.length) line(d.P_HA, d.M_HA, '#2ecc71');
+      ctx.fillStyle = '#0ff'; ctx.fillRect(px + 8, py + 8, 18, 4);
+      ctx.strokeStyle = '#2ecc71'; ctx.strokeRect(px + 8, py + 18, 18, 4);
+      ctx.fillStyle = '#cfc'; ctx.font = '11px monospace'; ctx.textAlign = 'left';
+      ctx.fillText('fibra', px + 30, py + 13);
+      ctx.fillText('HA', px + 30, py + 23);
+      ctx.fillStyle = '#999'; ctx.font = '10px monospace';
+      ctx.fillText('M [kN·m]', px + pw / 2, H - 2);
+      const note = document.getElementById('pmMol');
+      if (note) note.innerHTML =
+        ((d.alpha1 !== undefined) ? 'α1 = ' + d.alpha1 + ', β1 = ' + d.beta1 + '  |  ' : '') +
+        'Capacidad axial pura fibra ≈ ' + (d.P_fiber && d.P_fiber.length ? d.P_fiber[d.P_fiber.length - 1].toFixed(0) : '-') + ' kN';
+      // linea y-axis (muros simetricos -> doble lado)
+      ctx.strokeStyle = '#2a2a44'; ctx.beginPath(); ctx.moveTo(px + pw / 2, py); ctx.lineTo(px + pw / 2, py + phh); ctx.stroke();
+    };
+    el.addEventListener('change', (ev) => { if (ev.target && ev.target.id === 'selPM') paint(); });
+    paint();
+  }
+
+  // ------------------------------------------------------------------
+  // T A B  4  —  REACCIONES de apoyo (caso activo) + pintado 3D
+  // ------------------------------------------------------------------
+  S.pintarReac = false;
+  function renderReac() {
+    const el = document.getElementById('dt-reac');
+    if (!el) return;
+    const rc = ANALYSIS.reacciones || {};
+    if (!Object.keys(rc).length) { el.innerHTML = '<div class="dt-note">Sin reacciones en analysis_map.js.</div>'; return; }
+    el.innerHTML =
+      '<label>Reacciones del caso <select id="selReac">' + ANALYSIS.casos.map(c =>
+        `<option value="${c}" ${c === S.caso ? 'selected' : ''}>${c}</option>`).join('') + '</select></label>' +
+      '<label style="margin-left:10px"><input type="checkbox" id="chkPintarReac" ' +
+      (S.pintarReac ? 'checked' : '') + '> Pintar en 3D</label>' +
+      '<div id="reacBody" style="margin-top:6px"></div>';
+    const paint = () => {
+      const c = document.getElementById('selReac').value;
+      const rmap = rc[c] || {};
+      const rows = Object.keys(rmap).map(tag => {
+        const r = rmap[tag];
+        const Rz = r[2];
+        return { tag: +tag, Rz: Rz, absR: Math.hypot(r[0], r[1], r[2]) };
+      }).sort((a, b) => Math.abs(b.Rz) - Math.abs(a.Rz));
+      const body = rows.map(o => [o.tag, o.Rz.toFixed(1), o.absR.toFixed(1)]);
+      const suma = rows.reduce((a, o) => a + o.Rz, 0);
+      document.getElementById('reacBody').innerHTML = th(body,
+        ['Apoyo', 'R_vertical [kN]', '|R| [kN]'], ['lbl', 'num', 'num']) +
+        '<div class="dt-note">' + rows.length + ' apoyos EN EL SUELO (z=0). Σ R_vert = ' + suma.toFixed(1) + ' kN. ' +
+        'El pintado 3D colorea cada apoyo por |R| según el caso.</div>';
+    };
+    el.addEventListener('change', (ev) => {
+      const t = ev.target;
+      if (t && t.id === 'selReac') paint();
+      if (t && t.id === 'chkPintarReac') {
+        S.pintarReac = t.checked;
+        if (S.mode === 'analysis') buildAnalysis();
+      }
+    });
+    paint();
+  }
+
+  // ------------------------------------------------------------------
+  // T A B  5  —  TRIBUTARIAS por viga
+  // ------------------------------------------------------------------
+  function renderTribu() {
+    const el = document.getElementById('dt-tribu');
+    if (!el) return;
+    const tb = ANALYSIS.tributarias || {};
+    const keys = Object.keys(tb);
+    if (!keys.length) { el.innerHTML = '<div class="dt-note">Sin tributarias en analysis_map.js.</div>'; return; }
+    el.innerHTML =
+      '<label>Buscar viga: <input id="inpTribu" style="background:#111;color:#0ff;border:1px solid #0aa;border-radius:3px;width:120px" placeholder="id…"></label>' +
+      '<div id="tribuBody" style="margin-top:6px"></div>';
+    const paint = (q) => {
+      const list = keys.filter(k => !q || String(k).indexOf(q) >= 0);
+      const rows = list.sort((a, b) => (tb[b].area_tributaria_m2 || 0) - (tb[a].area_tributaria_m2 || 0))
+        .map(k => [k, tb[k].section, (tb[k].area_tributaria_m2 || 0).toFixed(1),
+                   (tb[k].W_G_kN || 0).toFixed(0), (tb[k].W_Q_kN || 0).toFixed(0),
+                   (tb[k].p_G_kN_m || 0).toFixed(2), (tb[k].p_Q_kN_m || 0).toFixed(2)]);
+      document.getElementById('tribuBody').innerHTML = th(rows,
+        ['Viga', 'Sec.', 'A_trib[m²]', 'W_G[kN]', 'W_Q[kN]', 'p_G[kN/m]', 'p_Q[kN/m]'],
+        ['lbl', 'lbl', 'num', 'num', 'num', 'num', 'num']) +
+        '<div class="dt-note">' + list.length + ' vigas con carga de losa (G y Q). El dbl-clic en el 3D ' +
+        'muestra estos tramos por viga.</div>';
+    };
+    el.addEventListener('input', (ev) => { if (ev.target && ev.target.id === 'inpTribu') paint(ev.target.value.trim()); });
+    paint('');
+  }
+
+  // Pintar reacciones en 3D (se llama al final de buildAnalysis)
+  function paintReactions() {
+    const rc = ANALYSIS.reacciones || {};
+    const rmap = rc[S.caso] || {};
+    const nc = ANALYSIS.node_coords || {};
+    let maxR = 0;
+    for (const t in rmap) { const R = Math.hypot(rmap[t][0], rmap[t][1], rmap[t][2]); if (R > maxR) maxR = R; }
+    if (!maxR || !S.pintarReac) return;
+    const g = new THREE.SphereGeometry(0.35, 14, 14);
+    for (const t in rmap) {
+      const c = nc[t];
+      if (!c) continue;
+      const R = Math.hypot(rmap[t][0], rmap[t][1], rmap[t][2]);
+      const col = heat(R / maxR);
+      const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: col }));
+      m.position.set(c[0], c[2], c[1]);
+      analysisGroup.add(m);
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Hover: resalta el elemento bajo el cursor (en cualquier modo).
+  // Las losas tapan a vigas/columnas/muros: el rayo las atraviesa y toma
+  // como objetivo el primer elemento estructural NO-loza.
+  // Los PALITOS del modo analisis (cilindros con userData {elem,tipo,sec}
+  // en analysisGroup) SIEMPRE se resaltan a si mismos al tocarlos (los
+  // muros solidos estan ocultos en analisis, asi el feedback es visible).
+  // ------------------------------------------------------------------
+  const solidTargets = [];
+  [groupColumn, groupBeamX, groupBeamY, groupWall, groupLoza, groupSteel].forEach(g =>
+    g.traverse(o => { if (o.isMesh && o.userData && o.userData.type) solidTargets.push(o); })
+  );
+  const solidForElem = new Map();
+  solidTargets.forEach(o => { if (o.userData && o.userData.elem) solidForElem.set(o.userData.elem, o); });
+  const hoverRay = new THREE.Raycaster();
+  let hoveredObjs = [];   // lista de {mesh, origColor, origEmissive} resaltados
+  function clearHover() {
+    for (const h of hoveredObjs) {
+      if (h.mesh.userData) {
+        h.mesh.material.color.setHex(h.origColor);
+        if (h.mesh.material.emissive) h.mesh.material.emissive.setHex(h.origEmissive);
+      }
+    }
+    hoveredObjs = [];
+  }
+  function addHover(mesh) {
+    if (!mesh || !mesh.material) return;
+    const origColor = mesh.material.color.getHex();
+    const origEmissive = mesh.material.emissive ? mesh.material.emissive.getHex() : 0;
+    mesh.material.color.setHex(0xff00ff);
+    if (mesh.material.emissive) mesh.material.emissive.setHex(0x550022);
+    hoveredObjs.push({mesh, origColor, origEmissive});
+  }
+  renderer.domElement.addEventListener('mousemove', e => {
+    if (isRotating || isPanning) { clearHover(); return; }
+    const r = renderer.domElement.getBoundingClientRect();
+    const ndc = (cx, cy) => new THREE.Vector2(
+      ((e.clientX - r.left + cx) / r.width) * 2 - 1,
+      -((e.clientY - r.top + cy) / r.height) * 2 + 1
+    );
+    // 1) PALITOS del modo analisis: el mismo criterio por distancia en
+    //    pantalla que usa el doble clic (palitoAt). Umbral ~12 px para que
+    //    sea facil tocarlos aunque sean cilindros finos/deformados.
+    let bestPalito = palitoAt(e);
+
+    let hitObjs = [];
+    if (bestPalito) {
+      hitObjs = [bestPalito];
+      const real = solidForElem.get(bestPalito.userData.elem);
+      if (real) hitObjs.push(real);
+    } else {
+      // 2) SOLIDOS (cola/base visible): rayo fino sobre los solidos
+      hoverRay.setFromCamera(ndc(0, 0), camera);
+      const hs = hoverRay.intersectObjects(solidTargets, false);
+      for (const h of hs) {
+        const o = h.object;
+        if (!o.userData) continue;
+        if (o.userData.type === 'loza') continue;
+        hitObjs = [o]; break;
+      }
+    }
+    // si ya resaltamos los mismos objetos, no tocar nada
+    const same = hoveredObjs.length === hitObjs.length &&
+      hitObjs.every((x, i) => hoveredObjs[i] && hoveredObjs[i].mesh === x);
+    if (same) return;
+    clearHover();
+    hitObjs.forEach(addHover);
+  });
+  renderer.domElement.addEventListener('mouseleave', clearHover);
 </script>
 </body>
 </html>

@@ -120,8 +120,8 @@ Los resultados cumplen las simetrías del problema (uniform load, marco con apoy
 ```
 P1-Grupo-6/
 ├── opensees/            # Scripts de análisis (benchmark_3d.py, tests de verificación)
-│   └── results/         # JSON exportado = contrato OpenSees ↔ Unity
-├── figures/             # Diagramas 2D/3D y visualización interactiva
+│   └── resultados/      # Resultados del análisis (carpetas por tipo)
+├── figures/             # (renombrada -> resultados/10_figuras) Diagramas 2D/3D
 ├── tests/               # Scripts de verificación (equilibrio, etc.)
 ├── docs/                # Documentación e informes
 ├── data/                # Datos compartidos (geometría, materiales, áreas tributarias)
@@ -133,12 +133,12 @@ Decisión clave: **el JSON exportado es el contrato entre OpenSees (análisis) y
 ## 7. Entregables / visualización
 
 - `opensees/benchmark_3d.py` — modelo benchmark 3D completo
-- `opensees/results/benchmark_3d.json` — resultados exportados (G)
-- `figures/Diagrama de Momento 2D y 3D.png`
-- `figures/Diagrama Esfuerzo Axial 2D y 3D.png`
-- `figures/Diagrama Esfuerzo de Corte 2D y 3D.png`
-- `figures/marco_3d_resultados.png` — deformada, desplazamientos, reacciones y cargas
-- `figures/marco_3d_interactivo.html` — vista 3D interactiva (girar/zoom + animación de la deformada + momentos sobre las barras)
+- `resultados/08_verificacion/benchmark_3d.json` — resultados exportados (G)
+- `resultados/10_figuras/Diagrama de Momento 2D y 3D.png`
+- `resultados/10_figuras/Diagrama Esfuerzo Axial 2D y 3D.png`
+- `resultados/10_figuras/Diagrama Esfuerzo de Corte 2D y 3D.png`
+- `resultados/10_figuras/marco_3d_resultados.png` — deformada, desplazamientos, reacciones y cargas
+- `resultados/10_figuras/marco_3d_interactivo.html` — vista 3D interactiva (girar/zoom + animación de la deformada + momentos sobre las barras)
 
 ## 8. Lecciones aprendidas
 

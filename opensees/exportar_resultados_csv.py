@@ -9,7 +9,7 @@ contrato Edificio.json:
   - tipo y seccion           -> para agrupar columnas, vigas, muros
   - nodos i/j y longitud     -> para revisar elementos
 
-Salida (en results/):
+Salida (en resultados/02_reacciones, 03_desplazamientos, 04_fuerzas_elementos):
   1. desplazamientos.csv  por nodo (mm y rad)
   2. reacciones.csv       por nodo de apoyo (kN y kN.m)
   3. fuerzas_elementos.csv por elemento en nodo i (kN y kN.m)
@@ -21,10 +21,15 @@ import csv
 import math
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-RESULTS = os.path.join(HERE, "results")
-IN_JSON = os.path.join(RESULTS, "edificio_full_results.json")
-# Contrato en el repo (fuente de geometria / piso / secciones)
 REPO = os.path.dirname(HERE)
+RESULTS = os.path.join(REPO, "resultados", "01_casos_base")
+IN_JSON = os.path.join(RESULTS, "edificio_full_results.json")
+OUT_DIRS = {
+    "desplazamientos.csv": os.path.join(REPO, "resultados", "03_desplazamientos"),
+    "reacciones.csv": os.path.join(REPO, "resultados", "02_reacciones"),
+    "fuerzas_elementos.csv": os.path.join(REPO, "resultados", "04_fuerzas_elementos"),
+}
+# Contrato en el repo (fuente de geometria / piso / secciones)
 CONTRACT = os.path.join(REPO, "Edificio.json")
 
 CM_TO_M = 0.01
@@ -106,7 +111,8 @@ def main():
 
     # ---------- 1. Desplazamientos ----------
     disp = data["displacements_m"]
-    out1 = os.path.join(RESULTS, "desplazamientos.csv")
+    out1 = os.path.join(OUT_DIRS["desplazamientos.csv"], "desplazamientos.csv")
+    os.makedirs(os.path.dirname(out1), exist_ok=True)
     with open(out1, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["id", "piso", "x_cm", "y_cm", "z_cm",
@@ -130,7 +136,8 @@ def main():
 
     # ---------- 2. Reacciones ----------
     reac = data["reactions_kN"]
-    out2 = os.path.join(RESULTS, "reacciones.csv")
+    out2 = os.path.join(OUT_DIRS["reacciones.csv"], "reacciones.csv")
+    os.makedirs(os.path.dirname(out2), exist_ok=True)
     with open(out2, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["id", "piso", "x_cm", "y_cm", "z_cm",
@@ -173,7 +180,8 @@ def main():
                              "section": e.get("section", ""), **dims}
 
     forces = data["element_forces_global"]
-    out3 = os.path.join(RESULTS, "fuerzas_elementos.csv")
+    out3 = os.path.join(OUT_DIRS["fuerzas_elementos.csv"], "fuerzas_elementos.csv")
+    os.makedirs(os.path.dirname(out3), exist_ok=True)
     with open(out3, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["id", "tipo", "seccion", "b_cm", "h_cm", "A_m2",

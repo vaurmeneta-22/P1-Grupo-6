@@ -5,10 +5,13 @@ Las fibras van en el plano local de la seccion (y: altura de flexion, z: espesor
 en mm. El concreto se discretiza con patches y el acero con layers.
 
   COLUMNA 70x70  (data/sections.json: width=0.70, height=0.70 m)
-    8 barras 25 mm  +  estribos 10 mm (se anade como confinamiento implicito
-    en el material)  -  recubrimiento = 40 mm al estribo, luego la barra queda
-    a r = 40 + 10 + 25/2 = 62.5 mm del borde.
-    Disposicion: 3 arriba, 2 laterales, 3 abajo (8 total).
+    18 barras 25 mm (9 arriba + 9 abajo)  +  estribos 10 mm (se anade como
+    confinamiento implicito en el material)  -  recubrimiento = 40 mm al
+    estribo, luego la barra queda a r = 40 + 10 + 25/2 = 62.5 mm del borde.
+    Disposicion: 3 filas x 3 barras por fila en la cara superior y otras
+    3 filas x 3 barras en la cara inferior (18 total, simetricas).
+    Simplificacion de trabajo del armado real del plano (6O22 + 12O28)
+    a acero uniforme O25 conservando el area (~88.4 cm2 vs 96.7 cm2).
 
   MURO 30x356  (la seccion mas frecuente del contrato: wall_30x356)
     espesor bw = 300 mm, largo total Lw = 3560 mm.
@@ -27,7 +30,7 @@ COLUMNA = {
     "b": 700.0, "h": 700.0,          # mm
     "rec": 62.5,                      # recubrimiento al centro de barra (mm)
     "estrobo": 10.0,
-    "barras": 8, "db": 25.0,          # 8 phi25
+    "barras": 18, "db": 25.0,         # 18 phi25 (9 arriba + 9 abajo)
     "nFY": 24, "nFZ": 8,              # fibras de concreto
     "fuente": "sections.json column_70x70",
 }
@@ -106,7 +109,8 @@ def abar(d):
 def build_columna(mat_conc, mat_ac, sec_tag):
     """Crea la seccion fibra de la columna 70x70 (2D, bending fuerte).
     Eje y = altura (flexion), z = espesor (simetrica).
-    Barras en 3 filas: 3 arriba / 2 centrales / 3 abajo."""
+    18 barras: 3 filas x 3 barras en la cara superior y 3 filas x 3 barras
+    en la cara inferior (simetricas en y)."""
     import openseespy.opensees as ops
     s = COLUMNA
     b, h, r = s["b"], s["h"], s["rec"]
@@ -115,17 +119,17 @@ def build_columna(mat_conc, mat_ac, sec_tag):
     ops.patch("rect", mat_conc, s["nFY"], s["nFZ"],
               -h / 2, -b / 2, h / 2, b / 2)
 
-    y_top = h / 2 - r
-    y_mid = 0.0
-    y_bot = -h / 2 + r
-    x1 = -b / 2 + r
-    x2 = b / 2 - r
     db = s["db"]
     a = abar(db)
-    # fila superior (3), central (2) e inferior (3)
-    ops.layer("straight", mat_ac, 3, a, y_top, x1, y_top, x2)
-    ops.layer("straight", mat_ac, 2, a, y_mid, x1, y_mid, x2)
-    ops.layer("straight", mat_ac, 3, a, y_bot, x1, y_bot, x2)
+    x1 = -b / 2 + r
+    x2 = b / 2 - r
+    # 3 filas en la mitad superior, separadas hasta cubrir h/2 - r
+    step = (h / 2.0 - r) / 3.0
+    ys_sup = [h / 2.0 - r - k * step for k in range(3)]
+    for y in ys_sup:
+        # 3 barras por fila a lo ancho (x)
+        ops.layer("straight", mat_ac, 3, a, y, x1, y, x2)
+        ops.layer("straight", mat_ac, 3, a, -y, x1, -y, x2)
 
 
 def build_muro(section, mat_conc, mat_ac, sec_tag):
