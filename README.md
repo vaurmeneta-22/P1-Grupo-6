@@ -35,7 +35,7 @@ Accesible desde `edificio_3d.html` con `TAB` o el botón `ANALISIS` de la barra 
 - **Vistas**: deformada (con amplificación ajustable), Momento M, Axial N y Corte V.
 - **Casos de carga**: G (permanente), Q (sobrecarga), EX, EY y COMBO (combinación por superposición `R = λG·G + λQ·Q + λEX·EX + λEY·EY`). El COMBO actual se exportó con `λG=1.2, λQ=1.0, λEX=1.4, λEY=1.4` (sismo X e Y simultáneos; corte basal ±21722 kN por eje). Los lambdas los define la corrida de OpenSees vía CLI (ver *Ejecución*).
 - **Color por valor**: cada elemento se pinta con un colormap azul→verde→rojo normalizado por el **percentil 90** de los valores (evita que uno o dos muros en la base dominen la escala y dejen el resto en azul). La leyenda inferior derecha muestra los rangos reales en las unidades de cada vista (mm en deformada, kN·m en momento, kN en axial/corte).
-- **Doble clic en análisis**: sobre una **columna o muro de hormigón** dibuja en el inspector la **curva de capacidad** P-M (de las secciones de fibra RC) y marca el punto de demanda del caso activo (P axial y M resultante del extremo i del elemento), reportando el % de la **capacidad interpolada a esa misma carga axial** y si la demanda cae dentro de la curva (una demanda fuera de la curva se marca en rojo). Sobre una **viga** —y también sobre los **refuerzos metálicos** (columnas y vigas de acero, que no usan P-M)— muestra una tabla con los valores **numéricos** de N (axial), V (corte), M (momento resultante) y DEF (desplazamiento nodal) para los **dos extremos** i y j del elemento del caso activo. El inspector se cierra con la **X** de su esquina superior.
+- **Doble clic en análisis**: sobre una **columna o muro de hormigón** dibuja en el inspector la **curva de capacidad** P-M (de las secciones de fibra RC, como **diamante completo simétrico**: rama +M a la derecha y su espejo −M a la izquierda) y marca el punto de demanda del caso activo (P axial y M resultante del extremo i del elemento), reportando el % de la **capacidad interpolada a esa misma carga axial** y si la demanda cae dentro de la curva (una demanda fuera de la curva se marca en rojo). Sobre una **viga** —y también sobre los **refuerzos metálicos** (columnas y vigas de acero, que no usan P-M)— muestra una tabla con los valores **numéricos** de N (axial), V (corte), M (momento resultante) y DEF (desplazamiento nodal) para los **dos extremos** i y j del elemento del caso activo. El inspector se cierra con la **X** de su esquina superior.
 - **Refuerzos metálicos**: 20 elementos de acero A240ES (10 columnas `300x300x20` y 10 vigas diagonales `300x300x50`, en color amarillo) insertados entre los niveles 2–3 y 4–Techo. Su capacidad P-M (tubo, fy=240 MPa) está exportada en `capacidad.steel` del `analysis_map.js`, pero por diseño el visor solo les muestra el reporte N/V/M/DEF.
 - Deformada amplificable con el deslizador `x` (escala x120 por defecto, rango 10–600). M/N/V en respuesta lineal del modelo global.
 
@@ -158,14 +158,14 @@ cd opensees
 python exportar_analysis_map.py
 ```
 
-La capacidad P-M se genera con `scripts/parte_d_fiber.py` (columna 70x70 y muro 30x356) y `scripts/parte_d_muros.py` (los **14 muros del contrato restantes**, con la enfierradura proporcional de `sections.muro_tipificado()`). Las `curvas` P-M y M-φ se escriben en `resultados/07_capacidad/` (`mom_curv/`, `pm_columnas/`, `pm_muros/`). Para el acero, `exportar_analysis_map.py` calcula las curvas P-M de los tubos `300x300x20` y `300x300x50` (elásticas, fy=240 MPa, `A` y `Zp`) en `capacidad.steel`; el visor no las dibuja (los metálicos muestran N/V/M/DEF en su lugar). El visor busca cada curva por el nombre de sección del elemento.
+La capacidad P-M se genera con `scripts/parte_d_fiber.py` (columna 70×70 y muro 30×356) y `scripts/parte_d_muros.py` (los **14 muros del contrato restantes**, con la enfierradura proporcional de `sections.muro_tipificado()`). Las curvas P-M y M-φ se escriben en `resultados/07_capacidad/` (`mom_curv/`, `pm_columnas/`, `pm_muros/`). Los diagramas P-M se dibujan como **diamante completo simétrico** (rama ±M, espejo por simetría de la sección). Para el acero, `exportar_analysis_map.py` calcula las curvas P-M de los tubos `300×300×20` y `300×300×50` (elásticas, fy=240 MPa, `A` y `Zp`) en `capacidad.steel`; el visor no las dibuja (los metálicos muestran N/V/M/DEF en su lugar). El visor busca cada curva por el nombre de sección del elemento.
 
 Además, al regenerar resultados de capacidad se corre el resto del módulo de capacidad (`scripts/`), que sobrescribe `resultados/`:
 
 ```bash
 python scripts/sensibilidad_secciones.py   # audita convergencia de la malla de fibras → 07_capacidad/sensibilidad/
 python scripts/comparacion_rc.py           # verificación RC (bloque ACI/NCh vs fiber) → 08_verificacion/verificacion_rc.json
-python scripts/demanda_capacidad.py        # barre las 128 columnas con el COMBO → 09_demanda_capacidad/
+python scripts/demanda_capacidad.py        # barre 128 columnas + 79 muros con el COMBO → 09_demanda_capacidad/
 ```
 
 Luego abrir `edificio_3d.html` y usar `TAB` para el modo análisis.

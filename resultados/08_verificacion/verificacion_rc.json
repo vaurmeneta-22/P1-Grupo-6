@@ -44,22 +44,22 @@
  "muro_30x356": {
   "seccion": "muro_30x356",
   "P0": {
-   "analitico_kN": 33258.91991807286
+   "analitico_kN": 42377.956510998556
   },
   "balanceado": {
-   "P_analitico_kN": 14930.334451899813,
-   "M_analitico_kNm": 14884.545827598422,
-   "M_fiber_en_Pb_kNm": 16376.18921355697,
-   "dif_rel_pct": 10.021423584136468
+   "P_analitico_kN": 15421.846020480678,
+   "M_analitico_kNm": 30042.79984348332,
+   "M_fiber_en_Pb_kNm": 30762.96799901281,
+   "dif_rel_pct": 2.39714061033397
   },
   "flexion_pura": {
-   "M_analitico_kNm": 3323.566382532999,
-   "M_fiber_kNm": 3400.819000252226,
-   "dif_rel_pct": 2.324389190034784
+   "M_analitico_kNm": 18640.09618622923,
+   "M_fiber_kNm": 19970.93389126121,
+   "dif_rel_pct": 7.139650416692401
   },
   "pico_fiber": {
-   "P_kN": 14930.334451899813,
-   "M_kNm": 3400.819000252226
+   "P_kN": 15421.846020480678,
+   "M_kNm": 19970.93389126121
   }
  }
 }
