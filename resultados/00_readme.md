@@ -18,7 +18,6 @@ Ingeniería. Cada subcarpeta corresponde a un tipo de resultado.
 | `09_demanda_capacidad/` | `demanda_capacidad_*.png`, `demanda_capacidad_critica.json` | `scripts/demanda_capacidad.py` |
 | `10_figuras/` | Diagramas 2D/3D, `marco_3d_interactivo.html`, `marco_3d_resultados.png` | `opensees/benchmark_3d.py` + visualizadores |
 | `11_mapa_visor/` | `analysis_map.js`, `tributary_map.js`, `deformada_elements.js` | `python opensees/exportar_analysis_map.py` |
-| `12_reportes/` | Avances `semana01/02/03.md` y `plan_empalmes_viga_viga.md` | manual |
 
 ## Semántica de sobrescritura
 
@@ -32,5 +31,4 @@ Ingeniería. Cada subcarpeta corresponde a un tipo de resultado.
 
 - Los Cascos JSON de `01_casos_base/` son la fuente del mapa del visor y de los
   CSVs; todo lo demás se deriva de ellos.
-- `12_reportes/` son los avances históricos (moverlos aquí no cambia su
-  contenido).
+- Los avances y planes (semana01/02/03, empalmes, PDF) viven en `reports/`.

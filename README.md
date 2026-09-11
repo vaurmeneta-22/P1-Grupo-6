@@ -92,7 +92,7 @@ En `edificio_3d.html` las capas se alternan con los checkboxes del panel izquier
 │   ├── 09_demanda_capacidad/      # demanda_capacidad_*.png + critica.json
 │   ├── 10_figuras/                # Diagramas 2D/3D y marco_3d interactivo
 │   ├── 11_mapa_visor/             # analysis_map.js, tributary_map.js, deformada_elements.js
-│   └── 12_reportes/               # Avances semana01/02/03 y plan de empalmes
+├── reports/              # Entregables semana01/02/03 y plan de empalmes
 ├── Unity/                # Proyecto Unity
 │   └── Assets/
 │       ├── Scripts/      # EdificioLoader.cs, CameraController.cs,
@@ -102,7 +102,6 @@ En `edificio_3d.html` las capas se alternan con los checkboxes del panel izquier
 ├── tests/                # Verificaciones (equilibrio, superposición, tributarias, empalmes, camino de carga)
 ├── scripts/              # Utilidades (html_to_json.py, parte_d_fiber.py, parte_d_muros.py,
 │                         #   sensibilidad_secciones.py, comparacion_rc.py, demanda_capacidad.py)
-├── reports/              # Entregables obligatorios (reports/semana03.md)
 ├── regla_g_walls.json    # Selección de muros para la regla G de conexiones
 └── Enunciado_Proyecto1/  # Enunciado, cronograma y recursos
 ```
@@ -184,7 +183,7 @@ Si se actualizó `Edificio.json`, copiarlo a `Unity/Assets/StreamingAssets/Edifi
 
 - **Conexiones** (`opensees/conexiones.py`): implementa las reglas A-E que deciden qué nodos se conectan al FE con `rigidLink`, qué apoyos quedan fijos y cuáles "huérfanos" se soportan verticalmente. La selección de muros para la regla G se configura en `regla_g_walls.json` (editada con `muro_seleccion.html`, que vive fuera del repo como herramienta local).
 - **Camino de carga** (`opensees/verificador_camino_carga.py` + `tests/test_camino_carga.py`): verifica que cada losa se apoye y transmita su carga a través de vigas → columnas/muros → fundación, sin tramos perdidos ni elementos "flotantes".
-- **Empalmes viga-viga** (`tests/test_empalmes_viga_viga.py` + `resultados/12_reportes/plan_empalmes_viga_viga.md`): documenta cómo se subdividen las vigas (reglas B/F) y se conectan entre sí y con los muros; el visor dibuja las fracciones reales del FE para que el doblez del empalme se vea y no parezca flotar.
+- **Empalmes viga-viga** (`tests/test_empalmes_viga_viga.py` + `reports/plan_empalmes_viga_viga.md`): documenta cómo se subdividen las vigas (reglas B/F) y se conectan entre sí y con los muros; el visor dibuja las fracciones reales del FE para que el doblez del empalme se vea y no parezca flotar.
 
 ## Verificaciones
 
@@ -210,4 +209,4 @@ Issue → Plan → Build → Test → Review → Merge
 
 - [Enunciado del proyecto](Enunciado_Proyecto1/)
 - [Agentes IA](AGENTS.md)
-- [Avance Semana 3 (entregable)](reports/semana03.md) — casos base, curvas M-φ/P-M, verificación RC y demanda-capacidad (copia oficial en `resultados/12_reportes/semana03.md`)
+- [Avance Semana 3 (entregable)](reports/semana03.md) — casos base, curvas M-φ/P-M, verificación RC y demanda-capacidad
