@@ -211,7 +211,9 @@ def main():
         Mcap = cur.get("M")
     if Pcap and Mcap:
         plt.figure(figsize=(7, 5))
-        plt.plot(Mcap, Pcap, "b-o", ms=3, lw=1.5, label="Capacidad P-M (fiber)")
+        Mcar = list(Mcap) + list(reversed([-m for m in Mcap]))
+        Pcar = list(Pcap) + list(reversed(Pcap))
+        plt.plot(Mcar, Pcar, "b-o", ms=3, lw=1.5, label="Capacidad P-M (fiber)")
         plt.plot([0, crit["M_d_kNm"]], [crit["P_d_kN"], crit["P_d_kN"]],
                  "k--", lw=0.8, alpha=0.5)
         plt.plot([crit["M_d_kNm"], crit["M_d_kNm"]], [0, crit["P_d_kN"]],
@@ -224,7 +226,7 @@ def main():
                   f"- caso {CASO}")
         plt.legend()
         plt.grid(alpha=0.3)
-        plt.gca().invert_xaxis()
+        plt.axvline(0, color="w", lw=0.8, alpha=0.4)
         plt.tight_layout()
         out = os.path.join(FIG, f"demanda_capacidad_{crit['id']}.png")
         plt.savefig(out, dpi=150)

@@ -92,14 +92,18 @@ def interaccion(section, cfg_col, grid, nombre, titulo, figura=True):
     a1, b1 = vh._constantes()
     if figura:
         plt.figure(figsize=(7, 5))
-        plt.plot(M, P, "b-o", ms=3, lw=1.5,
+        # diamante completo: reflejar rama simetrica (M negativo)
+        M_full = list(M) + list(reversed([-m for m in M]))
+        P_full = list(P) + list(reversed(P))
+        Mh_full = list(Mh) + list(reversed([-m for m in Mh]))
+        Ph_full = list(Ph) + list(reversed(Ph))
+        plt.plot(M_full, P_full, "b-o", ms=3, lw=1.5,
                  label="OpenSees fiber (capacidad M-phi)")
-        plt.plot(Mh, Ph, "r-s", ms=2.5, lw=1.2,
+        plt.plot(Mh_full, Ph_full, "r-s", ms=2.5, lw=1.2,
                  label="H.A. bloque rectangular $\\alpha_1,\\beta_1$")
         plt.xlabel("momento M  [kN* m]")
         plt.ylabel("carga axial P  [kN]  (compresion +)")
         plt.legend()
-        plt.gca().invert_xaxis()
     guardar_json(nombre, section, {
         "tipo": "interaccion_PM",
         "seccion": section["nombre"],

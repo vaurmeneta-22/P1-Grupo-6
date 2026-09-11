@@ -58,7 +58,9 @@ def guardar_pm(section, P, M):
 def guardar_png(section, P, M):
     path = os.path.join(FIG_DIR, f"pm_{section['nombre']}.png")
     plt.figure(figsize=(7, 5))
-    plt.plot(M, P, "b-o", ms=3, lw=1.5)
+    M_full = list(M) + list(reversed([-m for m in M]))
+    P_full = list(P) + list(reversed(P))
+    plt.plot(M_full, P_full, "b-o", ms=3, lw=1.5)
     plt.xlabel("momento M [kN*m]")
     plt.ylabel("carga axial P [kN] (compresion +)")
     plt.title(f"Interaccion P-M - {section['nombre']} (fiber)")

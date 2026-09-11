@@ -2777,10 +2777,10 @@ const F = ANALYSIS.forces[S.caso] || {};
       return;
     }
     const P = cur.P, Mc = cur.M;
-    // escalas
-    let Pmax = 0, Mmax = 0;
+    // diamante completo: escalas simetricas en M (ramas + y -)
+    let Pmax = 0, Mabs = 0;
     P.forEach(p => Pmax = Math.max(Pmax, p));
-    Mc.forEach(m => Mmax = Math.max(Mmax, m));
+    Mc.forEach(m => Mabs = Math.max(Mabs, m));
 
     const W = 360, H = 240, px = 46, py = 16, pw = W - px - 14, ph = H - py - 30;
     const cv = document.createElement('canvas');
@@ -2799,13 +2799,22 @@ const F = ANALYSIS.forces[S.caso] || {};
     ctx.fillText('M [kNm]', px + pw / 2, H - 6);
     ctx.save(); ctx.translate(12, py + ph / 2); ctx.rotate(-Math.PI / 2);
     ctx.fillText('P [kN]', 0, 0); ctx.restore();
+    // eje vertical (M=0) en el centro
+    ctx.strokeStyle = '#3a3a5a'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px + pw / 2, py); ctx.lineTo(px + pw / 2, py + ph);
+    ctx.stroke();
 
-    function sx(m) { return px + pw * m / Mmax; }
+    function sx(m) { return px + pw / 2 + pw * m / (2 * Mabs); }
     function sy(p) { return py + ph - ph * p / Pmax; }
 
+    // rama positiva (M >= 0)
     ctx.beginPath(); ctx.moveTo(sx(Mc[0]), sy(P[0]));
     for (let i = 1; i < Mc.length; i++) ctx.lineTo(sx(Mc[i]), sy(P[i]));
     ctx.strokeStyle = '#0ff'; ctx.lineWidth = 2; ctx.stroke();
+    // rama negativa (espejo M <= 0)
+    ctx.beginPath(); ctx.moveTo(sx(-Mc[0]), sy(P[0]));
+    for (let i = 1; i < Mc.length; i++) ctx.lineTo(sx(-Mc[i]), sy(P[i]));
+    ctx.strokeStyle = '#0aa'; ctx.lineWidth = 1.5; ctx.stroke();
 
     // capacidad M interpolada al mismo nivel de carga axial Pd
     function mcapAt(p) {
