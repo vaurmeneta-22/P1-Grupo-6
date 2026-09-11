@@ -100,8 +100,8 @@ En `edificio_3d.html` las capas se alternan con los checkboxes del panel izquier
 │       └── StreamingAssets/   # Edificio.json + tributary_map.js (leídos en runtime)
 ├── data/                 # Datos compartidos (geometría, materiales, secciones)
 ├── tests/                # Verificaciones (equilibrio, superposición, tributarias, empalmes, camino de carga)
-├── scripts/              # Utilidades (html_to_json.py, parte_d_fiber.py, parte_d_muros.py)
-├── reports/              # Reportes de avance y del plan de empalmes viga-viga
+├── scripts/              # Utilidades (html_to_json.py, parte_d_fiber.py, parte_d_muros.py,
+│                         #   sensibilidad_secciones.py, comparacion_rc.py, demanda_capacidad.py)
 ├── regla_g_walls.json    # Selección de muros para la regla G de conexiones
 └── Enunciado_Proyecto1/  # Enunciado, cronograma y recursos
 ```
@@ -148,7 +148,7 @@ python opensees_edificio_v2.py --case COMBO --lambda-g 1.2 --lambda-q 1.0 --lamb
 - **COMBO**: superposición `R = λG·G + λQ·Q + λEX·EX + λEY·EY`, concurrente en X e Y. Sin argumentos usa los defaults `λG=λQ=λEX=λEY=1.0`; pasar explícitamente los lambdas para cualquier otra combinación.
 - El script imprime auditorías de equilibrio (ΣR = W), conservación de carga de losa, diafragma rígido, masa sísmica por piso y superposición del COMBO. Si usas los 5 casos, verifica cada resultado y luego regenera el mapa del visor.
 
-También disponible: `benchmark_3d.py` (módulo de prueba 2D/3D) y `superposicion.py` (auditoría de la combinación).
+También disponible: `benchmark_3d.py` (módulo de prueba 2D/3D) y `superposicion.py` (auditoría de la combinación; al correr completo exporta el resumen a `resultados/06_superposicion/verificacion.csv`). `exportar_analysis_map.py` adicionalmente exporta el sismo por piso a `resultados/05_sismo/sismo_por_piso.csv`.
 
 ### Modo análisis del visor (regenerar resultados)
 Los resultados del análisis (deformada, M/N/V por caso y capacidad P-M) se exportan a `resultados/11_mapa_visor/analysis_map.js`, que el visor carga con `<script>`. Regenerarlos tras un análisis nuevo:
@@ -158,7 +158,15 @@ cd opensees
 python exportar_analysis_map.py
 ```
 
-La capacidad P-M se genera con `scripts/parte_d_fiber.py` (columna 70x70 y muro 30x356) y `scripts/parte_d_muros.py` (los **14 muros del contrato restantes**, con la enfierradura proporcional de `sections.muro_tipificado()`). Para el acero, `exportar_analysis_map.py` calcula las curvas P-M de los tubos `300x300x20` y `300x300x50` (elásticas, fy=240 MPa, `A` y `Zp`) en `capacidad.steel`; el visor no las dibuja (los metálicos muestran N/V/M/DEF en su lugar). El visor busca cada curva por el nombre de sección del elemento.
+La capacidad P-M se genera con `scripts/parte_d_fiber.py` (columna 70x70 y muro 30x356) y `scripts/parte_d_muros.py` (los **14 muros del contrato restantes**, con la enfierradura proporcional de `sections.muro_tipificado()`). Las `curvas` P-M y M-φ se escriben en `resultados/07_capacidad/` (`mom_curv/`, `pm_columnas/`, `pm_muros/`). Para el acero, `exportar_analysis_map.py` calcula las curvas P-M de los tubos `300x300x20` y `300x300x50` (elásticas, fy=240 MPa, `A` y `Zp`) en `capacidad.steel`; el visor no las dibuja (los metálicos muestran N/V/M/DEF en su lugar). El visor busca cada curva por el nombre de sección del elemento.
+
+Además, al regenerar resultados de capacidad se corre el resto del módulo de capacidad (`scripts/`), que sobrescribe `resultados/`:
+
+```bash
+python scripts/sensibilidad_secciones.py   # audita convergencia de la malla de fibras → 07_capacidad/sensibilidad/
+python scripts/comparacion_rc.py           # verificación RC (bloque ACI/NCh vs fiber) → 08_verificacion/verificacion_rc.json
+python scripts/demanda_capacidad.py        # barre las 128 columnas con el COMBO → 09_demanda_capacidad/
+```
 
 Luego abrir `edificio_3d.html` y usar `TAB` para el modo análisis.
 
@@ -175,7 +183,7 @@ Si se actualizó `Edificio.json`, copiarlo a `Unity/Assets/StreamingAssets/Edifi
 
 - **Conexiones** (`opensees/conexiones.py`): implementa las reglas A-E que deciden qué nodos se conectan al FE con `rigidLink`, qué apoyos quedan fijos y cuáles "huérfanos" se soportan verticalmente. La selección de muros para la regla G se configura en `regla_g_walls.json` (editada con `muro_seleccion.html`, que vive fuera del repo como herramienta local).
 - **Camino de carga** (`opensees/verificador_camino_carga.py` + `tests/test_camino_carga.py`): verifica que cada losa se apoye y transmita su carga a través de vigas → columnas/muros → fundación, sin tramos perdidos ni elementos "flotantes".
-- **Empalmes viga-viga** (`tests/test_empalmes_viga_viga.py` + `reports/plan_empalmes_viga_viga.md`): documenta cómo se subdividen las vigas (reglas B/F) y se conectan entre sí y con los muros; el visor dibuja las fracciones reales del FE para que el doblez del empalme se vea y no parezca flotar.
+- **Empalmes viga-viga** (`tests/test_empalmes_viga_viga.py` + `resultados/12_reportes/plan_empalmes_viga_viga.md`): documenta cómo se subdividen las vigas (reglas B/F) y se conectan entre sí y con los muros; el visor dibuja las fracciones reales del FE para que el doblez del empalme se vea y no parezca flotar.
 
 ## Verificaciones
 
@@ -189,7 +197,7 @@ python test_empalmes_viga_viga.py
 python test_fiber_sections.py
 ```
 
-Además hay verificaciones *ad hoc* en `opensees/test_asymmetric.py`, `opensees/test_eleforce.py`, `opensees/verificador_camino_carga.py` y `fiber_sections/verification_ha.py`. El detalle del modelo (masa por piso, momentos, equilibrios) queda auditado en consola por `opensees_edificio_v2.py`; resumen en `resultados/08_verificacion/verification.md`.
+Además hay verificaciones *ad hoc* en `opensees/test_asymmetric.py`, `opensees/test_eleforce.py`, `opensees/verificador_camino_carga.py`, `fiber_sections/verification_ha.py` y en el módulo de capacidad (`scripts/sensibilidad_secciones.py`, `scripts/comparacion_rc.py`, `scripts/demanda_capacidad.py`). El detalle del modelo (masa por piso, momentos, equilibrios) queda auditado en consola por `opensees_edificio_v2.py`; resumen en `resultados/08_verificacion/verification.md`, con resultados RC en `verificacion_rc.json`.
 
 ## Ciclo de desarrollo
 

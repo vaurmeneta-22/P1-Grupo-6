@@ -111,20 +111,22 @@ Se verifica independientemente: la fuerza calculada desde `G_floor` y `Q_floor` 
 
 ### 3.4 Desplazamientos
 
-| Piso | Ux_master (m) | Uy_master (m) | Uy_CM (m) |
-|---|---|---|---|
-| Piso 1 | 7.09e-4 (EX) | 4.85e-3 (EY) | — |
-| Piso 2 | 2.34e-3 | 9.71e-3 | — |
-| Piso 3 | 4.28e-3 | 1.76e-2 | — |
-| Piso 4 | 6.06e-3 | 2.22e-2 | — |
-| Techo | **7.54e-3** | **2.55e-2** | — |
+Los desplazamientos de CM por piso se exportan junto con el resto en `resultados/05_sismo/sismo_por_piso.csv`:
+
+| Piso | ux (EX, mm) | uy (EY, mm) |
+|---|---|---|
+| Piso 1 | 0.71 | 4.78 |
+| Piso 2 | 2.34 | 10.18 |
+| Piso 3 | 4.28 | 17.87 |
+| Piso 4 | 6.06 | 23.67 |
+| Techo | **7.54** | **26.91** |
 
 - **EX:** desplazamiento máximo en el techo = **7.5 mm** en X.
-- **EY:** desplazamiento máximo en el techo = **25.5 mm** en Y (sistema más flexible en Y).
+- **EY:** desplazamiento máximo en el techo = **26.9 mm** en Y (sistema más flexible en Y).
 
 ### 3.5 Rotación de diafragmas
 
-Las rotaciones `Rz` son del orden de 10⁻⁵ rad, lo que confirma que el diafragma rígido trabaja como disco rígido en planta. La mayor rotación ocurre en el Piso 2 bajo EY, consistente con la asimetría de la planta.
+Las rotaciones `Rz` son del orden de 10⁻⁵ rad en EX y hasta 8.8e-5 rad en EY (Piso 2), lo que confirma que el diafragma rígido trabaja como disco rígido en planta. La mayor rotación ocurre en el Piso 2 bajo EY (8.8e-5 rad), consistente con la asimetría de la planta. Todo ello se exporta en `resultados/05_sismo/sismo_por_piso.csv`.
 
 ---
 
@@ -153,15 +155,15 @@ El script `superposicion.py` compara dos enfoques:
 1. **Superposición directa** (sin OpenSees): lee los JSON de cada caso base y combina linealmente desplazamientos, reacciones y fuerzas internas.
 2. **Corrida explícita** (OpenSees): resuelve el modelo con la combinación de cargas aplicada directamente en un solo paso.
 
-**Resultado para λ_G = 1.2, λ_Q = 1.0, λ_EX = 1.4, λ_EY = 1.4:**
+**Resultado para λ_G = 1.2, λ_Q = 1.0, λ_EX = 1.4, λ_EY = 1.4:** (valores reales del `resultados/06_superposicion/verificacion.csv`)
 
-| Cantidad | Error relativo (norma) | n_elementos | ¿OK? |
+| Cantidad | Error relativo (norma) | n_medidas | ¿OK? |
 |---|---|---|---|
-| Desplazamientos | < 1e-6 | 536 nodos | ✓ |
-| Reacciones | < 1e-6 | 64 apoyos | ✓ |
-| Fuerzas internas | < 1e-6 | 702 elementos | ✓ |
+| Desplazamientos | 6.78e-09 | 516 nodos | ✓ |
+| Reacciones | 2.28e-14 | 99 reacciones | ✓ |
+| Fuerzas internas | 4.88e-12 | 701 elementos | ✓ |
 
-**Conclusión:** la superposición lineal es exacta dentro de la tolerancia numérica, confirmando que el modelo es elástico lineal y la implementación es correcta.
+**Conclusión:** la superposición lineal es exacta dentro de la tolerancia numérica (tol = 1e-6), confirmando que el modelo es elástico lineal y la implementación es correcta. El resultado se exporta automáticamente a `resultados/06_superposicion/verificacion.csv` al final de la corrida completa de `superposicion.py`.
 
 ### 4.3 Resultados del caso COMBO (λ_G=1.2, λ_Q=1.0, λ_EX=1.4, λ_EY=1.4)
 
@@ -204,9 +206,9 @@ La curva se obtiene con un modelo de viga cantilever de un solo elemento (`dispB
 | Parámetro | Valor |
 |---|---|
 | Curvatura inicial | φ ≈ 6.0 × 10⁻⁶ 1/m |
-| Curvatura máxima (falla) | φ_falla = 0.0524 1/m |
-| Momento último | **M_ult = 533.61 kN·m** |
-| Pasos convergidos | 8 736 |
+| Curvatura máxima (falla) | φ_falla = 0.0255 1/m |
+| Momento último | **M_ult = 1059.38 kN·m** |
+| Pasos convergidos | 4 253 |
 | Criterio de término | ε_fibra_extrema ≤ −ε_cu = −0.0035 |
 
 La curva muestra el comportamiento elástico lineal inicial, seguido de la plastificación del acero y finalmente la falla por compresión del concreto.
@@ -219,7 +221,7 @@ La rigidez inicial se obtiene como la pendiente de la rama elástica:
 EI = M / φ ≈ (M_elast) / (φ_elast)
 ```
 
-Para la columna 70×70 con P=0: `EI_teorico = E_c · I = 27 800 000 · (0.7⁴/12) = 555.4 kN·m²`.
+Para la columna 70×70 con P=0 la sensibilidad numérica reporta `EI = 701 342 kN·m²` (rama elástica convergida, incluye el refuerzo).
 
 ### 5.5 Criterio de término
 
@@ -227,7 +229,14 @@ El análisis se detiene cuando la deformación de la fibra extrema comprimida al
 
 ### 5.6 Sensibilidad de discretización
 
-La sección se discretiza con 24 × 8 = 192 fibras de concreto y 8 barras de acero. La resolución de la curva depende del incremento de rotación `dPhi = 6 × 10⁻⁷ rad/paso`. Con 8 736 pasos convergentes, la curva tiene resolución suficiente para identificar el pico de momento y el punto de falla.
+La convergencia de la discretización de fibras se audita con `scripts/sensibilidad_secciones.py` (`resultados/07_capacidad/sensibilidad/sensibilidad_secciones.json`), barriendo la malla de fibras para ambas secciones con P = 0:
+
+| Sección | Escenarios (n_fib) | M_ult (kN·m) | ΔM máx rel. |
+|---|---|---|---|
+| Columna 70×70 | 48 → 3072 | 1059.38 (invariante) | 0.0% |
+| Muro 30×356 | 80 → 960 | 3400.85 → 3401.14 | 0.02% |
+
+La columna converge desde 48 fibras (M_ult idéntico en los 4 escenarios); el muro varía ≤ 0.02% en momento último y ≤ 3% en curvatura de falla entre 80 y 960 fibras. La malla de trabajo (columna 24×8 = 192 fibras, muro 40×6 = 240) está por tanto dentro del rango convergido.
 
 ---
 
@@ -241,15 +250,15 @@ La envolvente P-M se genera barriendo una grilla de cargas axiales `P = [0, 500,
 
 | P (kN) | M_cap (kN·m) | Descripción |
 |---|---|---|
-| 0 | 539.3 | Flexión pura (P=0) |
-| 2 500 | ~1 400 | Zona de compresión moderada |
-| 6 331 | **1 629.9** | Punto aproximado de balance (M_max) |
-| 7 000 | **1 637.1** | Momento máximo absoluto de la envolvente |
-| 10 000 | ~1 200 | Compresión alta (acero cede en tracción) |
-| 15 000 | ~700 | Compresión muy alta |
-| 16 110 | 536.4 | Compresión pura (P_0 ≈ 16 110 kN) |
+| 0 | 1 059.4 | Flexión pura (P=0) |
+| 3 500 | 1 665.3 | Zona de compresión moderada |
+| 6 000 | **1 817.6** | Momento máximo absoluto de la envolvente |
+| 7 000 | 1 805.1 | Compresión alta (meseta de balance) |
+| 10 000 | 1 717.4 | Compresión alta (acero cede en tracción) |
+| 15 000 | 1 060.3 | Compresión muy alta |
+| 18 000 | 512.4 | Compresión pura (P_0 analítico ≈ 18 026 kN) |
 
-La envolvente tiene forma de "ojo": el momento máximo ocurre en la zona de balance (P ≈ 6 300–7 000 kN), donde el acero de tracción alcanza fy justo cuando el concreto llega a ε_cu. Para P > P_balance, el momento disminuye porque la sección está dominada por compresión.
+La envolvente tiene forma de "ojo": el momento máximo ocurre en la zona de balance (P ≈ 6 000 kN), donde el acero de tracción alcanza fy justo cuando el concreto llega a ε_cu. Para P > P_balance, el momento disminuye porque la sección está dominada por compresión.
 
 ---
 
@@ -282,7 +291,7 @@ La regla de escala usa las proporciones del muro 30×356 como referencia: borde 
 
 ### 8.1 Método independiente: bloque rectangular ACI/NCh
 
-Se implementó una verificación independiente (`opensees/fiber_sections/verification_ha.py`) usando el **diagrama de compresión rectangular equivalente** del curso de Hormigón Armado:
+Se implementó una verificación independiente (`opensees/fiber_sections/verification_ha.py` + `scripts/comparacion_rc.py`, que la automatiza sobre los P-M reales de fibras) usando el **diagrama de compresión rectangular equivalente** del curso de Hormigón Armado:
 
 - **α₁ = β₁ = 0.80** (para f'c = 35 MPa: `0.85 − 0.05 × (35−28)/7 = 0.80`)
 - **ε_cu = 0.0035** (ruina controlada por concreto)
@@ -292,49 +301,38 @@ Se implementó una verificación independiente (`opensees/fiber_sections/verific
 
 ### 8.2 Comparación fiber vs bloque rectangular
 
-| Sección | P (kN) | M_fiber (kN·m) | M_HA (kN·m) | Diferencia |
-|---|---|---|---|---|
-| Columna 70×70 | 2 500 | ~1 400 | ~1 380 | ~1.8% |
-| Columna 70×70 | 6 331 | 1 629.9 | 1 546.5 | ~5.1% |
-| Columna 70×70 | 8 000 | ~1 500 | ~1 330 | ~11.8% |
-| Muro 30×356 | 8 000 | ~14 000 | ~13 500 | ~3.9% |
-| Muro 30×356 | 17 000 | 16 682.2 | 14 886.6 | ~10.8% |
+La comparación automatizada (`scripts/comparacion_rc.py`, salida en `resultados/08_verificacion/verificacion_rc.json`):
 
-Las diferencias son esperables: el modelo de fibras captura la distribución de esfuerzos más refinada (Concrete02 con degradación, Steel01 con endurecimiento), mientras que el bloque rectangular asume distribución uniforme de esfuerzo en el concreto. La concordancia es razonable (~2–12%).
+| Sección | Punto | M_analítico (kN·m) | M_fiber (kN·m) | Diferencia |
+|---|---|---|---|---|
+| Columna 70×70 | Flexión pura | 1 047.9 | 1 059.4 | 1.1% |
+| Columna 70×70 | Balanceado (P = 6 746 kN) | 1 783.7 | 1 808.2 | 1.4% |
+| Muro 30×356 | Flexión pura | 3 323.6 | 3 400.8 | 2.3% |
+| Muro 30×356 | Balanceado (P = 14 930 kN) | 14 884.5 | 16 376.2 | 10.0% |
+
+Las diferencias son esperables: el modelo de fibras captura la distribución de esfuerzos más refinada (Concrete02 con degradación, Steel01 con endurecimiento), mientras que el bloque rectangular asume distribución uniforme de esfuerzo en el concreto. La concordancia es buena en flexión pura y en el balanceado de la columna (≤ 2.3%), y se mantiene razonable en el balanceado del muro (10%).
 
 ---
 
 ## 9. Primera demanda-capacidad
 
-### 9.1 Elemento elegido: Columna 113 (sección 70×70)
+### 9.1 Barrido automático
 
-Se obtienen las fuerzas del extremo `i` del caso COMBO (λ_G=1.2, λ_Q=1.0, λ_EX=1.4, λ_EY=1.4) y se comparan con la curva P-M de la sección correspondiente.
+El script `scripts/demanda_capacidad.py` barre las **128 columnas** del modelo con el caso COMBO (λ_G=1.2, λ_Q=1.0, λ_EX=1.4, λ_EY=1.4): para cada columna toma el P axial y el momento resultante del extremo con mayor demanda y los contrasta contra la curva P-M de su sección (`M_cap` interpolado a la misma carga axial, criterio `Pcap`/`Mcap` de `demanda_capacidad_critica.json`).
 
-| Campo | Valor |
-|---|---|
-| Elemento | Columna 113, sección 70×70 |
-| P_demanda | 485.1 kN |
-| M_demanda | 757.7 kN·m |
-| M_capacidad @ P=485.1 kN | 672.7 kN·m |
-| **Utilización (M_d / M_cap)** | **1.13 (113%)** |
-| **Resultado** | **FUERA de la curva** |
-
-### 9.2 Elemento elegido: Muro 446 (sección 30×1000)
+### 9.2 Columna crítica: id=70 (sección 70×70)
 
 | Campo | Valor |
 |---|---|
-| Elemento | Muro 446, sección 30×1000 |
-| P_demanda | 41.7 kN |
-| M_demanda | 37 334.4 kN·m |
-| M_capacidad @ P=41.7 kN | 25 875.5 kN·m |
-| **Utilización (M_d / M_cap)** | **1.44 (144%)** |
+| Elemento | Columna id=70, sección 70×70 |
+| P_demanda | 1 145.8 kN |
+| M_demanda | 2 383.2 kN·m |
+| **Radio de utilización (M_d / M_cap)** | **1.854** |
 | **Resultado** | **FUERA de la curva** |
 
-### 9.3 Interpretación
+### 9.3 Top 10 por radio
 
-- La **columna 113** supera la capacidad nominal en ~13%. Esto indica que bajo la combinación de diseño (λ_G=1.2, λ_EX=1.4), la columna está sobrecargada a flexión.
-- El **muro 446** (30×1000) es el segmento más rígido del sótano (I = 25 m⁴ por elemento). A igualdad de desplazamiento impuesto, absorbe momentos muy grandes que superan la capacidad nominal ~44%.
-- Ambos casos sugieren que la idealización elástica lineal subestima la demanda en elementos rígidos del sótano. Se recomienda revisar la conectividad de muros en el sótano y/o considerar redistribución plástica.
+Las 10 columnas más exigidas son todas de sección 70×70 (radios 1.854 → 1.377); la columna id=70 es la única por encima de 1.8. La interpretación coincide con la Sección 8: varias columnas 70×70 del modelo superan la capacidad nominal a flexión bajo la combinación de diseño, lo que sugiere revisar la distribución de rigidez del sótano y/o considerar redistribución plástica.
 
 ---
 
@@ -363,15 +361,23 @@ El agente inicialmente propuso usar el **momento último** de la curva M-φ como
 | Fiber sections | `opensees/fiber_sections/{sections,analysis,materials,verification_ha}.py` |
 | Generador M-φ + P-M columna/muro | `scripts/parte_d_fiber.py` |
 | P-M muros adicionales | `scripts/parte_d_muros.py` |
+| Sensibilidad de fibras | `scripts/sensibilidad_secciones.py` |
+| Verificación RC | `scripts/comparacion_rc.py` |
+| Demanda-capacidad | `scripts/demanda_capacidad.py` |
 | Resultados G | `resultados/01_casos_base/edificio_full_results.json` |
 | Resultados Q | `resultados/01_casos_base/edificio_full_results_Q.json` |
 | Resultados EX | `resultados/01_casos_base/edificio_full_results_EX.json` |
 | Resultados EY | `resultados/01_casos_base/edificio_full_results_EY.json` |
 | Resultados COMBO | `resultados/01_casos_base/edificio_full_results_COMBO.json` |
+| Sismo por piso (CSV) | `resultados/05_sismo/sismo_por_piso.csv` |
+| Verificación superposición (CSV) | `resultados/06_superposicion/verificacion.csv` |
 | Curva M-φ columna | `resultados/07_capacidad/mom_curv/mom_curv_columna_70x70.json/.png` |
 | P-M columna | `resultados/07_capacidad/pm_columnas/pm_columna_70x70.json/.png` |
 | P-M muro 30×356 | `resultados/07_capacidad/pm_muros/pm_muro_30x356.json/.png` |
 | P-M muros adicionales | `resultados/07_capacidad/pm_muros/pm_<seccion>.json/.png` (14 archivos) |
+| Sensibilidad (JSON) | `resultados/07_capacidad/sensibilidad/sensibilidad_secciones.json` |
+| Verificación RC (JSON) | `resultados/08_verificacion/verificacion_rc.json` |
+| Demanda-capacidad (JSON/PNG) | `resultados/09_demanda_capacidad/` |
 | Validación PM | `docs/validacion_pm/` |
 | Tests superposición | `tests/test_superposicion.py` |
 
@@ -379,14 +385,14 @@ El agente inicialmente propuso usar el **momento último** de la curva M-φ como
 
 - La masa sísmica `W = G + 0.5Q` excluye la fundación (Subterráneo) porque no hay diafragma rígido en z=0.
 - La fuerza sísmica se aplica en el CM real (no en el master), con momento correctivo `Mz` para equivalentar la traslación.
-- La superposición lineal es exacta en modelos elásticos lineales: la verificación directa vs explícita da error < 1e-6.
-- Muros rígidos del sótano (30×1000) absorben momentos muy grandes a igualdad de desplazamiento, lo que produce demandas por encima de la capacidad nominal.
-- La verificación independiente (bloque rectangular ACI/NCh) muestra concordancia razonable (~2–12%) con el modelo de fibras, validando ambos enfoques.
+- La superposición lineal es exacta en modelos elásticos lineales: la verificación directa vs explícita da error ≤ 7e-09 (tol 1e-6).
+- El barrido automático de demanda-capacidad encuentra que las columnas 70×70 más solicitadas superan la capacidad nominal (máx. radio 1.854 en la columna id=70), consistente con la malla del sótano.
+- La verificación independiente (bloque rectangular ACI/NCh) muestra concordancia ≤ 2.3% en flexión pura y hasta 10% en el balanceado del muro con el modelo de fibras.
 
 ## Próximos pasos (Semana 4)
 
-- Revisar conectividad de muros en sótano (columna 113 y muro 446 sobrecargados).
+- Revisar la distribución de rigidez en el sótano (columna id=70 con radio 1.854).
 - Considerar redistribución plástica o ajuste de idealización para elementos con utilización > 100%.
 - Completar verificación con factores phi de diseño (ACI 318 / NCh430).
-- Documentar sensibilidad de la discretización de fibras.
+- Documentar sensibilidad de la discretización de fibras (ya auditada en `sensibilidad_secciones.json`).
 - Preparar visualización interactiva de curvas P-M en el visor 3D.
