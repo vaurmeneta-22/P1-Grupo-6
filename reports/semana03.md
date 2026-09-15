@@ -397,16 +397,16 @@ El agente inicialmente propuso usar el **momento último** de la curva M-φ como
 
 Los esfuerzos del modelo completo se exponen como **diagramas clásicos 2D** para elementos representativos (caso COMBO), además de los tubos coloreados N/V/M del visor 3D:
 
-- **Viga interior** (selección automática entre las vigas con tributaria de vano completo que cierran **corte y momento** de extremo con residuo < 3 %; actualmente la id=234, 60×80): diagrama parabólico `M(x) = M_i + V_i·x − q·x²/2`, `V(x) = V_i − q·x` y `N(x)` (≈ 0), con `q = 1.2·p_G + 1.0·p_Q` (solo la losa tributaria, que es la carga aplicada por el FE como `beamUniform`; el peso propio se aplica como cargas nodales y por tanto **no** curva el diagrama).
-- **Convención de extremo j verificada**: se reconstruyó un modelo mínimo en OpenSeesPy (axial puro → `N_i=+10, N_j=−10`; flexión pura → `Mz_i=−50, Mz_j=+50`) y se auditó la totalidad de vigas tributarias: `eleForce` reporta el extremo **j** en "cara opuesta" (acción sobre el elemento), por lo que la parábola debe cerrar contra `−M_j` y `−V_j`. Con `q` de losa, 48/108 vigas de vano completo cierran M y V a < 3 % (0/108 con la carga que incluía `1.2·peso propio`); la viga 234 cierra a 0.0 % en ambas magnitudes y las integrales desde i y desde j coinciden en el centro (+86.2 kN·m).
-- **Columna crítica id=1** (70×70, flexión casi pura): `N` constante (+13.2 kN, tracción neta), `V` transversal constante y `M` transversal al eje lineal entre extremos (1104 → 688 kN·m).
-- **Muro crítico id=473** (30×310, radio 0.679): `N` constante (−2134 kN, compresión), `V` transversal constante (2354 kN) y `M` transversal al eje lineal (11070 → 541 kN·m). El momento y el axial usan las mismas definiciones del chequeo P-M (proyección sobre el eje y momento transversal al eje).
+- **Viga interior** (fija del grupo: **id=147**, 60×80, elegida por cerrar **corte y momento** al 0.00 % en los 5 casos): diagrama parabólico `M(x) = M_i + V_i·x − q·x²/2`, `V(x) = V_i − q·x` y `N(x)` (≈ 0), con `q = 1.2·p_G + 1.0·p_Q` (solo la losa tributaria, que es la carga aplicada por el FE como `beamUniform`; el peso propio se aplica como cargas nodales y por tanto **no** curva el diagrama).
+- **Convención de extremo j verificada**: se reconstruyó un modelo mínimo en OpenSeesPy (axial puro → `N_i=+10, N_j=−10`; flexión pura → `Mz_i=−50, Mz_j=+50`) y se auditó la totalidad de vigas tributarias: `eleForce` reporta el extremo **j** en "cara opuesta" (acción sobre el elemento), por lo que la parábola debe cerrar contra `−M_j` y `−V_j`. Con `q` de losa, 48/108 vigas de vano completo cierran M y V a < 3 % (0/108 con la carga que incluía `1.2·peso propio`); la viga 147 cierra a 0.0 % en ambas magnitudes en los 5 casos.
+- **Columna id=261** (70×70, elegida por el grupo): `N` constante (−5745.8 kN, compresión), `V` transversal constante y `M` transversal al eje lineal entre extremos (989.9 → 917.2 kN·m) bajo COMBO.
+- **Muro id=446** (30×1000, elegido por el grupo): `N` constante (−1279.8 kN, compresión), `V` transversal constante (151.5 kN) y `M` transversal al eje lineal (698.7 → 909.9 kN·m). El momento y el axial usan las mismas definiciones del chequeo P-M (proyección sobre el eje y momento transversal al eje).
 
 | Figura | Valores principales (COMBO) |
 |---|---|
-| `resultados/10_figuras/Diagrama 2D Momento-Corte-Axial Viga 234 (60x80).png` | M: −218.6 → +170.3 (interior, x=7.0 m) → +168.4 kN·m; V: 111.2 → −7.8 kN; N ≈ 0; q=15.89 kN/m; cierre corte 0.0 %, momento j 0.0 % |
-| `resultados/10_figuras/Diagrama 2D Axial-Corte-Momento Columna 1 (70x70).png` | N = +13.2 kN; V = 503.2 kN; M = 1104 → 688 kN·m |
-| `resultados/10_figuras/Diagrama 2D Axial-Corte-Momento Muro 473 (30x310).png` | N = −2134 kN; V = 2353.7 kN; M = 11070 → 541 kN·m |
+| `resultados/10_figuras/Diagrama 2D Momento-Corte-Axial Viga 147 (60x80) (COMBO).png` | M: +776.6 → −1092.7 kN·m (monótono, V no cambia de signo); V: −124.9 → −295.1 kN; N ≈ 0; q=19.124 kN/m; cierre corte 0.0 %, momento j 0.0 % |
+| `resultados/10_figuras/Diagrama 2D Axial-Corte-Momento Columna 261 (70x70) (COMBO).png` | N = −5745.8 kN; V = 535.6 kN; M = 989.9 → 917.2 kN·m |
+| `resultados/10_figuras/Diagrama 2D Axial-Corte-Momento Muro 446 (30x1000) (COMBO).png` | N = −1279.8 kN; V = 151.5 kN; M = 698.7 → 909.9 kN·m |
 
 Generador: `scripts/diagramas_2d.py`.
 
@@ -439,7 +439,7 @@ Generador: `scripts/diagramas_2d.py`.
 | Sensibilidad (JSON) | `resultados/07_capacidad/sensibilidad/sensibilidad_secciones.json` |
 | Verificación RC (JSON) | `resultados/08_verificacion/verificacion_rc.json` |
 | Demanda-capacidad (JSON/PNG) | `resultados/09_demanda_capacidad/` (128 columnas + 79 muros) |
-| Diagramas de esfuerzos 2D | `scripts/diagramas_2d.py` + `resultados/10_figuras/Diagrama 2D *.png` (viga 234, columna 1, muro 473) + pestaña **Diagramas** del visor (DATOS del análisis, via `analysis_map.js` → `diagramas`) |
+| Diagramas de esfuerzos 2D | `scripts/diagramas_2d.py` + `resultados/10_figuras/Diagrama 2D *.png` (viga 147, columna 261, muro 446) + pestaña **Diagramas** del visor (DATOS del análisis, via `analysis_map.js` → `diagramas`) |
 | Validación PM | `docs/validacion_pm/` |
 | Tests superposición | `tests/test_superposicion.py` |
 

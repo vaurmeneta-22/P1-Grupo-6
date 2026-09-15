@@ -180,7 +180,7 @@ Nota: respuesta lineal del modelo global. Doble clic en columna/muro -> P-M. Dob
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="resultados/11_mapa_visor/tributary_map.js"></script>
-<script src="resultados/11_mapa_visor/analysis_map.js?v=69859a1437"></script>
+<script src="resultados/11_mapa_visor/analysis_map.js?v=02db6ad7f9"></script>
 <script>
   const elements = [{"type":"column","section":"70x70","xi":0.0,"yi":0.0,"zi":0.0,"xj":0.0,"yj":3.56,"zj":0.0,"b":0.7,"h":0.7},
   {"type":"column","section":"70x70","xi":-10.0,"yi":0.0,"zi":0.0,"xj":-10.0,"yj":3.56,"zj":0.0,"b":0.7,"h":0.7},
@@ -3204,8 +3204,8 @@ const F = ANALYSIS.forces[S.caso] || {};
         for (let i = 0; i < P.length; i++) {
           const x = sx(M[i]), y = sy(P[i]);
           if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-        }
-        ctx.stroke();
+}
+ctx.stroke();
       }
       if (d.M_fiber && d.M_fiber.length) line(d.P_fiber, d.M_fiber, '#0ff');
       if (d.M_HA && d.M_HA.length) line(d.P_HA, d.M_HA, '#2ecc71');
@@ -3335,6 +3335,20 @@ const F = ANALYSIS.forces[S.caso] || {};
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
       ctx.stroke();
+      // relleno del area entre la curva y el eje de cero (estilo matplotlib)
+      ctx.globalAlpha = 0.4;
+      ctx.fillStyle = series[s].color;
+      ctx.beginPath();
+      for (let i = 0; i < vals.length; i++) {
+        const x = PXL + NW * (d.x[i] / d.L);
+        const y = mid - (vals[i] / maxA) * (NH / 2);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.lineTo(PXL + NW, mid);
+      ctx.lineTo(PXL, mid);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
       const iMax = vals.reduce((a, v, i) => Math.abs(v) > Math.abs(vals[a]) ? i : a, 0);
       const xm = PXL + NW * (d.x[iMax] / d.L), ym = mid - (vals[iMax] / maxA) * (NH / 2);
       ctx.beginPath(); ctx.arc(xm, ym, 3.5, 0, 6.2832); ctx.fill();

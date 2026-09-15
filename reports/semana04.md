@@ -28,37 +28,37 @@
 | Datos incrustados | `resultados/11_mapa_visor/analysis_map.js` → `ANALYSIS.diagramas = {COMBO, G, Q, EX, EY}` → `{viga, columna, muro}` |
 | Pestaña del visor | `edificio_3d.html`: botón `data-tab="dt-diag"` (l.148), `<div id="dt-diag">` (l.155), despacho `renderDiag()` (l.3060), dibujo `drawDiagramPanels()` (l.3303); sub-fichas de caso COMBO/G/Q/EX/EY |
 
-El visor muestra tres paneles apilados (N azul-verde, V ámbar, M cian) sobre un lienzo de 420×480, con eje de cero punteado, valores extremos anotados y una línea de resumen. Dentro de la pestaña se eligió con **sub-fichas de caso: COMBO | G | Q | EX | EY** (se mantiene el selector de elemento Viga/Columna/Muro). Los **mismos elementos** se usan en los 5 casos (viga 234, columna 1, muro 473, elegidos una sola vez con COMBO):
+El visor muestra tres paneles apilados (N azul-verde, V ámbar, M cian) sobre un lienzo de 420×480, con eje de cero punteado, valores extremos anotados y una línea de resumen. Dentro de la pestaña se eligió con **sub-fichas de caso: COMBO | G | Q | EX | EY** (se mantiene el selector de elemento Viga/Columna/Muro). Los **mismos elementos** se usan en los 5 casos (fijos por el grupo: **viga 147, columna 261, muro 446**):
 
 ```
-Viga 234 · 60x80 · L 7.49 m · q=15.89 kN/m (losa, beamUniform)
-· corte 0.0% · momentoj 0.0% | M -218.6 → 168.4 · V 111.2 → -7.8 · N 0.0 kN
+Viga 147 · 60x80 · L 8.90 m · q=19.124 kN/m (losa, beamUniform, COMBO)
+· corte 0.0% · momentoj 0.0% | M +776.6 → -1092.7 · V -124.9 → -295.1 · N 0.0 kN
 ```
 
-### Cierre de la viga 234 en los 5 casos (verificado al 0.00 %)
+### Cierre de la viga 147 en los 5 casos (verificado al 0.00 %)
 
 Cada caso usa su carga repartida real del FE: G → `p_G`, Q → `p_Q`, EX/EY → `0` (sin beamUniform), COMBO → `1.2·p_G + 1.0·p_Q`. La parábola cierra contra `−M_j`/`−V_j` en todos.
 
 | Caso | q (kN/m) | M_i (kN·m) | M(L) = −M_j (kN·m) | V_i (kN) | V(L) = −V_j (kN) | cerr. corte/mom |
 |---|---|---|---|---|---|---|
-| COMBO | 15.887 | −218.62 | +168.36 | +111.16 | −7.83 | 0.0 % / 0.0 % |
-| G | 8.261 | −59.46 | +80.51 | +49.62 | −12.25 | 0.0 % / 0.0 % |
-| Q | 5.974 | −29.39 | +16.93 | +28.56 | −16.19 | 0.0 % / 0.0 % |
-| EX | 0.0 | −87.82 | +49.10 | +18.28 | (constante) | 0.0 % / 0.0 % |
-| EY | 0.0 | +3.62 | −9.95 | −1.81 | (constante) | 0.0 % / 0.0 % |
+| COMBO | 19.124 | +776.6 | −1092.7 | −124.9 | −295.1 | 0.0 % / 0.0 % |
+| G | 9.944 | −81.8 | −36.2 | +49.4 | −39.1 | 0.0 % / 0.0 % |
+| Q | 7.191 | −49.8 | −37.4 | +33.4 | −30.6 | 0.0 % / 0.0 % |
+| EX | 0.0 | +0.1 | +0.0 | ≈ 0 | (constante) | 0.0 % / 0.0 % |
+| EY | 0.0 | +660.3 | −722.9 | −155.4 | (constante) | 0.0 % / 0.0 % |
 
 Además se generan las figuras PNG en `resultados/10_figuras/` (un trío por caso: **15 PNG** con sufijo `(COMBO|G|Q|EX|EY)`):
 
-| Figura (por caso) | Valores de la viga 234 (M_i → M(L)) |
+| Figura (por caso) | Valores de la viga 147 (M_i → M(L)) |
 |---|---|
-| `Diagrama 2D Momento-Corte-Axial Viga 234 (60x80) (COMBO).png` | −218.6 → +170.3 (interior, x=7.0 m) → +168.4 kN·m; q = 15.89 kN/m |
-| `... (G).png` | −59.5 → +80.5 kN·m; q = 8.26 kN/m |
-| `... (Q).png` | −29.4 → +16.9 kN·m; q = 5.97 kN/m |
-| `... (EX).png` | −87.8 → +49.1 kN·m; q = 0 (lineal) |
-| `... (EY).png` | +3.6 → −9.9 kN·m; q = 0 (lineal) |
-| Columna 1 / Muro 473 | `Diagrama 2D Axial-Corte-Momento Columna 1 (70x70) (CASO).png`, `... Muro 473 (30x310) (CASO).png` |
+| `Diagrama 2D Momento-Corte-Axial Viga 147 (60x80) (COMBO).png` | +776.6 → −1092.7 kN·m; q = 19.124 kN/m |
+| `... (G).png` | −81.8 → −36.2 kN·m; q = 9.944 kN/m |
+| `... (Q).png` | −49.8 → −37.4 kN·m; q = 7.191 kN/m |
+| `... (EX).png` | +0.1 → +0.0 kN·m; q = 0 (lineal) |
+| `... (EY).png` | +660.3 → −722.9 kN·m; q = 0 (lineal) |
+| Columna 261 / Muro 446 | `Diagrama 2D Axial-Corte-Momento Columna 261 (70x70) (CASO).png`, `... Muro 446 (30x1000) (CASO).png` |
 
-> Nota de caché: los datos se cargan con `analysis_map.js?v=<hash>`. Se actualizó el sufijo a `?v=2aa256e282`; si el visor ya estaba abierto, hay que forzar **Ctrl+F5**.
+> Nota de caché: los datos se cargan con `analysis_map.js?v=<hash>`. Se actualizó el sufijo a `?v=02db6ad7f9`; si el visor ya estaba abierto, hay que forzar **Ctrl+F5**.
 
 ---
 
@@ -91,21 +91,20 @@ Se auditó cada viga con tributaria de tramo completo (`scripts/verificar_diagra
 | **Regla B (cara opuesta en j) + `q` de losa** | **48 / 108** |
 | Regla B + `q` con peso propio | 39 / 108 |
 
-### 3.4 Caso verificado en detalle: viga 234
+### 3.4 Caso verificado en detalle: viga 147
 
-`60×80`, `L = 7.49 m`, `q_losa = 15.887 kN/m`, COMBO:
+`60×80`, `L = 8.90 m`, `q_losa = 19.124 kN/m`, COMBO:
 
 ```
-M(x) = −218.62 + 111.16·x − 15.887·x²/2
-V(x) = 111.16 − 15.887·x
+M(x) = +776.6 − 124.9·x − 19.124·x²/2
+V(x) = −124.9 − 19.124·x
 ```
 
-- Extremo i (sección): `M_i = −218.62 kN·m`, `V_i = +111.16 kN`.
-- Extremo j (sección = −reportado): `M(L) = +168.23` vs `−M_j = +168.36` → **0.08 %**; `V(L) = −7.83` vs `−V_j = +7.83` → **0.0 %**.
-- Comprobación cruzada: integrar la parábola desde i y desde j da **el mismo momento en el centro** (+86.2 kN·m), lo que confirma que la curva es la sección interna consistente.
-- Resultado del script: cierre de corte **0.0 %** y de momento j **0.0 %**.
+- Extremo i (sección): `M_i = +776.6 kN·m`, `V_i = −124.9 kN`.
+- Extremo j (sección = −reportado): `M(L) = −1092.74` vs `−M_j = −1092.74` → **0.00 %**; `V(L) = −295.14` vs `−V_j = −295.14` → **0.0 %**.
+- El caso EX queda despreciable (q=0, M_i≈+0.1); en cambio EY domina la componente sísmica del COMBO (M 660 → −723) y es quien más contribuye a la asimetría.
 
-La selección automática de la viga representativa ahora exige cerrar **corte y momento** simultáneamente (residuos < 3 %).
+Los elementos representativos ahora son **fijos del grupo** (constantes `VIGA_TAG=147`, `COL_TAG=261`, `MURO_TAG=446` en `diagramas_2d.py`), eliminando la selección automática; se mantiene el requisito de que la viga elegida cierre **corte y momento** a < 3 % (la 147 cierra al 0.00 %).
 
 ---
 
@@ -113,7 +112,7 @@ La selección automática de la viga representativa ahora exige cerrar **corte y
 
 | Archivo | Cambio |
 |---|---|
-| `scripts/diagramas_2d.py` | `q` por caso (`_q_caso`: G→pG, Q→pQ, EX/EY→0, COMBO→1.2pG+pQ); cierre contra `−M_j`/`−V_j`; `resMJ`; selección de elementos hecha **una sola vez con COMBO** y reusada en los 5 casos; `exportar_datos()` → 5 casos × 3 elementos |
+| `scripts/diagramas_2d.py` | `q` por caso (`_q_caso`: G→pG, Q→pQ, EX/EY→0, COMBO→1.2pG+pQ); cierre contra `−M_j`/`−V_j`; `resMJ`; **elementos fijos del grupo** `VIGA_TAG=147, COL_TAG=261, MURO_TAG=446` reusados en los 5 casos (se eliminó `_seleccion`); `exportar_datos()` → 5 casos × 3 elementos |
 | `scripts/verificar_diagramas_viga.py` | **Nuevo.** Auditoría de las 108 vigas (hipótesis A vs B, `wlosa` vs `weq`, cierre de corte y momento) |
 | `opensees/exportar_analysis_map.py` | Embebe `diagramas` y lo reporta en el resumen |
 | `resultados/11_mapa_visor/analysis_map.js` | Regenerado con `diagramas` de los 5 casos (1.62 MB) |
@@ -127,7 +126,7 @@ También se corrigió un error de parseo de JavaScript (un paréntesis sin cerra
 ## 5. Pendientes (bloqueantes para el cierre)
 
 > **P1 — Verificar los diagramas.** Ya con la convención y la carga corregidas (cierre al 0.00 % en los 5 casos) y con las sub-fichas G/Q/EX/EY + G+Q disponibles en el visor, **el usuario sigue viendo los diagramas "mal" en el navegador**. Hay que verificar en detalle:
-> 1. Que la forma esperada sea la correcta: la viga 234 presenta **hogging en i y sagging en j** bajo COMBO (y bajo G: −59.5 → +80.5); confirmar si el equipo espera otro patrón (p. ej. doble empotramiento con hogging en ambos apoyos) o si corresponde a la componente sísmica del COMBO.
+> 1. Que la forma esperada sea la correcta: la viga 147 presenta **hogging en i (+776.6) y hogging mayor en j (−1092.7)** bajo COMBO; bajo G ambas mitades son hogging moderado (−81.8 → −36.2) y bajo EY el diagrama es lineal asimétrico (+660.3 → −722.9). Confirmar si el equipo espera ese patrón (o doble empotramiento simétrico con sagging interior), o si corresponde a la componente sísmica del COMBO.
 > 2. Revisar si el problema es de **representación** (escalas, eje de cero, paneles demasiado pequeños, orden N/V/M, colores) y no de cálculo.
 > 3. El aislamiento gravitacional/sísmico ya es posible directamente en el visor (sub-fichas); comparar G/Q/EX/EY vs COMBO para decidir qué patrón debe verse.
 > 4. Confirmar el **signo físico del momento en el apoyo j** (si se dibuja con la convención de sección o con la acción nodal).

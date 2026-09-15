@@ -39,6 +39,11 @@ RESULTADOS_COMBO = os.path.join(RESULTADOS_DIR, "edificio_full_results_COMBO.jso
 EDIFICIO_JSON = os.path.join(REPO, "Edificio.json")
 OUT_DIR = os.path.join(REPO, "resultados", "10_figuras")
 
+# Elementos representativos elegidos por el grupo (mismos en los 5 casos)
+VIGA_TAG = 147
+COL_TAG = 261
+MURO_TAG = 446
+
 PISO_Z = {"Subterraneo": 0.0, "Piso 1": 3.56, "Piso 2": 7.12, "Piso 3": 10.68,
           "Piso 4": 14.24, "Techo": 17.80}
 
@@ -61,14 +66,6 @@ def fe_coords(e, nodes):
     a = [nodes[na][k] / 100.0 for k in range(3)]
     b = [nodes[nb][k] / 100.0 for k in range(3)]
     return a, b
-
-
-def peso_propio(e):
-    try:
-        bw, hh = [float(x) for x in e["section"].split("x")]
-        return bw * hh / 1e6 * 25.0  # kN/m (peso especifico 25 kN/m3)
-    except Exception:
-        return 0.0
 
 
 def _q_caso(caso, t):
@@ -233,42 +230,6 @@ def plot_vertical(d, nombre, caso):
                    d["coords_i"][2], d["piso"], caso), fontsize=10)
 
 
-def _seleccion(forces, tribu, eis, nodes):
-    """Elige la viga representativa (mejor equilibrio + max momento interior)."""
-    best = None
-    for tag_str, t in tribu.items():
-        tag = int(tag_str)
-        e = eis.get(tag)
-        if not e or e["type"] not in ("beam_x", "beam_y"):
-            continue
-        ap = t.get("aportes", [])
-        span = sum(abs(a["tramo_m"][1] - a["tramo_m"][0]) for a in ap) if ap else 0.0
-        pa, pb = fe_coords(e, nodes)
-        L = math.sqrt(sum((pb[k] - pa[k]) ** 2 for k in range(3)))
-        if L < 1e-6 or abs(span - L) / L > 0.25:
-            continue
-        d = datos_viga(tag, e, nodes, forces, _q_caso("COMBO", t))
-        # la viga representativa debe cerrar en corte Y en momento (extremo j,
-        # convencion de cara opuesta) -> diagrama coherente en ambos apoyos
-        if d["resid"] > 0.03 or d["resMJ"] > 0.03:
-            continue
-        q = d["q"]
-        V_i = d["extremos"]["V_i"]
-        xs = V_i / q if abs(q) > 1e-9 else -1.0
-        interior = 0.0 < xs < d["L"]
-        score = (abs(d["extremos"]["M_i"] + V_i * xs - 0.5 * q * xs * xs)
-                 if interior else -1.0)
-        if best is None or (score > 0 and (best["score"] <= 0 or score > best["score"])):
-            best = d
-            best["score"] = score
-    if best is None or best["score"] <= 0:
-        best = datos_viga(35, eis[35], nodes, forces,
-                          _q_caso("COMBO", tribu.get("35", {})))
-        best["score"] = 0.0
-    best.pop("score", None)
-    return best
-
-
 def exportar_datos():
     """Devuelve el dict `diagramas` para analysis_map.js: 5 casos x 3 elementos."""
     with open(EDIFICIO_JSON, encoding="utf-8") as f:
@@ -280,11 +241,8 @@ def exportar_datos():
         with open(os.path.join(RESULTADOS_DIR, fname), encoding="utf-8") as f:
             return json.load(f)
 
-    # Seleccionar viga una sola vez con COMBO (elementos fijos para todos los casos)
-    combo = _load("edificio_full_results_COMBO.json")
-    viga_tag = _seleccion(combo["element_forces_global"],
-                          combo.get("tributary_by_viga", {}), eis, nodes)["tag"]
-    col_tag, mur_tag = 1, 473
+    # Elementos fijos elegidos por el grupo; se reusan en los 5 casos
+    viga_tag, col_tag, mur_tag = VIGA_TAG, COL_TAG, MURO_TAG
 
     def limp(d):
         o = {}
@@ -328,9 +286,7 @@ def main():
 
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    best = _seleccion(forces, tribu, eis, nodes)
-    viga_tag = best["tag"]
-    col_tag, mur_tag = 1, 473
+    viga_tag, col_tag, mur_tag = VIGA_TAG, COL_TAG, MURO_TAG
 
     # ---------- Figuras: un trio por caso (mismos elementos siempre) ----------
     figuras = []
@@ -377,6 +333,8 @@ def main():
             print("  *", os.path.basename(p),
                   "(%.0f KB)" % (os.path.getsize(p) / 1024))
     print()
+    best = datos_viga(viga_tag, eis[viga_tag], nodes, forces,
+                      _q_caso("COMBO", tribu.get(str(viga_tag), {})))
     ex = best["extremos"]
     print("VIGA id=%d %s L=%.2fm  q(COMBO)=%.2f kN/m  (corte %.1f%%  momentoj %.1f%%)"
           % (best["tag"], best["seccion"], best["L"], best["q"],
