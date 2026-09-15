@@ -85,22 +85,27 @@ def curva_mom_curv_columna():
                 f"Momento-curvatura columna {sections.COLUMNA['nombre']}")
 
 
-def interaccion(section, cfg_col, grid, nombre, titulo, figura=True):
+def interaccion(section, cfg_col, nombre, titulo, figura=True):
     print(f"== Interaccion P-M {section['nombre']} ==")
-    P, M = analysis.pm_interaction(section, grid, verbose=True)
-    Ph, Mh = vh.interaccion(cfg_col)
-    a1, b1 = vh._constantes()
+    P, M = analysis.pm_completa(section, verbose=True)   # punta traccion (-Pt,0)
+    # y compresion pura (0,Pcap), base de la grilla en la capacidad de fibras
+    if cfg_col is not None:
+        Ph, Mh = vh.interaccion(cfg_col)
+        a1, b1 = vh._constantes()
+    else:
+        Ph, Mh, a1, b1 = [], [], None, None
     if figura:
         plt.figure(figsize=(7, 5))
         # diamante completo: reflejar rama simetrica (M negativo)
         M_full = list(M) + list(reversed([-m for m in M]))
         P_full = list(P) + list(reversed(P))
-        Mh_full = list(Mh) + list(reversed([-m for m in Mh]))
-        Ph_full = list(Ph) + list(reversed(Ph))
         plt.plot(M_full, P_full, "b-o", ms=3, lw=1.5,
                  label="OpenSees fiber (capacidad M-phi)")
-        plt.plot(Mh_full, Ph_full, "r-s", ms=2.5, lw=1.2,
-                 label="H.A. bloque rectangular $\\alpha_1,\\beta_1$")
+        if Ph:
+            Mh_full = list(Mh) + list(reversed([-m for m in Mh]))
+            Ph_full = list(Ph) + list(reversed(Ph))
+            plt.plot(Mh_full, Ph_full, "r-s", ms=2.5, lw=1.2,
+                     label="H.A. bloque rectangular $\\alpha_1,\\beta_1$")
         plt.xlabel("momento M  [kN* m]")
         plt.ylabel("carga axial P  [kN]  (compresion +)")
         plt.legend()
@@ -108,9 +113,11 @@ def interaccion(section, cfg_col, grid, nombre, titulo, figura=True):
         "tipo": "interaccion_PM",
         "seccion": section["nombre"],
         "P_kN_fiber": P, "M_kNm_fiber": M,
+        "P_trac_kN": P[0], "P_comp_kN": P[-1],
         "P_kN_HA": Ph, "M_kNm_HA": Mh,
         "alpha1": a1, "beta1": b1,
-        "modelo": "OpenSees fiber vs bloque rectangular ACI/NCh"})
+        "modelo": "OpenSees fiber (puntas cerradas) vs bloque rectangular "
+                  "ACI/NCh"})
     if figura:
         guardar_png(nombre, section, titulo)
     return P, M
@@ -119,23 +126,12 @@ def interaccion(section, cfg_col, grid, nombre, titulo, figura=True):
 def main():
     curva_mom_curv_columna()
     interaccion(sections.COLUMNA, True,
-                [0, 500, 1500, 2500, 3500, 4500, 5000, 5500, 6000,
-                 7000, 8000, 9000, 10000, 11000, 12000, 13000,
-                 14000, 15000, 16000, 17000, 18000, 19000],
                 "pm", "Interaccion P-M - columna 70x70")
     interaccion(sections.COLUMNA_BORDE, "columna_borde",
-                [0, 500, 1500, 2500, 3500, 4500, 5000, 5500, 6000,
-                 7000, 8000, 9000, 10000, 12000, 14000, 16000,
-                 18000, 20000, 22000, 23500],
                 "pm", "Interaccion P-M - columna 70x70 portico extremo")
     interaccion(sections.MURO, False,
-                [0, 2000, 5000, 8000, 11000, 14000, 17000, 20000,
-                 23000, 26000, 29000, 32000, 35000],
                 "pm", "Interaccion P-M - muro 30x356")
     interaccion(sections.COLUMNA_ID70, "columna_id70",
-                [0, 500, 1500, 2500, 3500, 4500, 5000, 5500, 6000,
-                 7000, 8000, 9000, 10000, 12000, 14000, 16000,
-                 18000, 20000, 22000, 23500, 24000],
                 "pm", "Interaccion P-M - columna id=70", figura=False)
     print("OK")
 

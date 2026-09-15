@@ -21,6 +21,7 @@ import os
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(REPO, "scripts"))
 RESULTS = os.path.join(REPO, "resultados", "01_casos_base")
 CAPACIDAD = os.path.join(REPO, "resultados", "07_capacidad")
 MOM_CURV_DIR = os.path.join(CAPACIDAD, "mom_curv")
@@ -65,12 +66,17 @@ def exportar_sismo_csv(sismo):
 
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
+    from diagramas_2d import exportar_datos
     with open(os.path.join(REPO, "Edificio.json"), encoding="utf-8") as f:
         data = json.load(f)
 
     nodes_json = data["nodes"]
     elements_json = data["elements"]
     json_nodes_by_id = {n["id"]: n for n in nodes_json}
+
+    # Todos los nodos de apoyo del contrato (restricciones por extremo en el
+    # inspector del visor), independiente de si su reaccion es no nula.
+    support_node_tags = set(s["node"] for s in data["supports"])
 
     # ------------------------------------------------------------------
     # Tags de los extremos de cada elemento en el MISMO orden que el array
@@ -119,8 +125,12 @@ def main():
             ni, nj = wall_ends[e["id"]]
         else:
             ni, nj = e["node_i"], e["node_j"]
+        material = ("A240ES" if t in ("steel_column", "steel_beam") else "HA35")
         ep = {"id": e["id"], "type": t, "section": e["section"],
-              "ni": ni, "nj": nj}
+              "material": material,
+              "ni": ni, "nj": nj,
+              "sup_i": ni in support_node_tags,
+              "sup_j": nj in support_node_tags}
         if t == "column" and e["section"] == "70x70":
             ci = conx["tag_coord"].get(ni)
             cj = conx["tag_coord"].get(nj)
@@ -131,6 +141,15 @@ def main():
         elements_out.append(ep)
         node_uses.setdefault(ni, 0)
         node_uses.setdefault(nj, 0)
+
+    # Ejes locales por id de elemento (mismos en todos los casos: puros
+    # vectores directores del FE). Las vigas subdivididas conservan el tag
+    # del contrato en su 1a fraccion, por lo que el id queda incluido.
+    rg_first = load_result("G")
+    local_axes_by_tag = rg_first.get("element_local_axes", {})
+    element_axes = {str(eo["id"]): local_axes_by_tag.get(str(eo["id"]))
+                    for eo in elements_out
+                    if eo["type"] != "loza" and str(eo["id"]) in local_axes_by_tag}
 
     # ------------------------------------------------------------------
     # Cargar resultados por caso (fuerzas globales por tag y disp por nodo)
@@ -164,7 +183,8 @@ def main():
             "descripcion": r["summary"],
             "superposicion": r.get("superposition", None),
         }
-        forces[c] = {int(tag): {"i": el.get("global_i"), "j": el.get("global_j")}
+        forces[c] = {int(tag): {"i": el.get("global_i"), "j": el.get("global_j"),
+                                "li": el.get("local_i"), "lj": el.get("local_j")}
                      for tag, el in r["element_forces_global"].items()}
         disp[c] = {int(tag): d
                    for tag, d in r.get("displacements_m", {}).items()}
@@ -315,11 +335,13 @@ def main():
         "tributarias": tribu,
         "momcurv": momcurv,
         "pm_ha": pm_ha,
+        "diagramas": exportar_datos(),
         "beam_fractions": beam_fractions,
         "node_coords": node_coords,
         "capacidad": capacidad,
-        "nota": "Fuerzas globales en extremos i y j (kN, kN*m); disp en m. "
-                "Orden de `elements` == edificio_3d.html.",
+        "local_axes": element_axes,
+        "nota": "Fuerzas globales (i/j) y locales (li/lj = [N,Vy,Vz,T,My,Mz]) "
+                "en kN y kN*m; disp en m. Orden de `elements` == edificio_3d.html.",
     }
 
     def js(py, indent="  "):
@@ -336,7 +358,8 @@ def main():
           f"| vigas con fracciones: {len(beam_fractions)}")
     print(f"  reacciones: {len(reacciones.get('COMBO', {}))} | "
           f"sismo pisos: {len(sismo.get('EX', []))} | "
-          f"tributarias: {len(tribu)} | periodico?: pm_ha={list(pm_ha)}")
+          f"tributarias: {len(tribu)} | pm_ha={list(pm_ha)} | "
+          f"diagramas: {list(out['diagramas'])}")
     # sanity: desalineaciones con el viewer
     if len(elements_out) != len(data["elements"]):
         print("  [WARN] tamano no coincide con Edificio.json")

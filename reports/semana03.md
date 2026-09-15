@@ -351,7 +351,7 @@ Las diferencias son esperables: el modelo de fibras captura la distribución de 
 
 ### 9.1 Barrido automático
 
-El script `scripts/demanda_capacidad.py` barre las **128 columnas de hormigón** y los **79 muros** del modelo con el caso COMBO (λ_G=1.2, λ_Q=1.0, λ_EX=1.4, λ_EY=1.4). Para cada elemento toma el P axial (proyección de la fuerza sobre el eje del elemento) y el momento resultante del extremo con mayor demanda, y los contrasta contra la curva P-M de **su** sección (cada elemento se evalúa con la curva correspondiente a su enfierradura; criterio `Pcap`/`Mcap` de `demanda_capacidad_critica.json`).
+El script `scripts/demanda_capacidad.py` barre las **128 columnas de hormigón** y los **79 muros** del modelo con el caso COMBO (λ_G=1.2, λ_Q=1.0, λ_EX=1.4, λ_EY=1.4). Para cada elemento toma el P axial (proyección de la fuerza sobre el eje del elemento; en este modelo el eje vertical es **z**, componente `Fz` del JSON) y el momento de **flexión transversal al eje** (perpendicular al elemento), del extremo con mayor demanda, y los contrasta contra la curva P-M de **su** sección (cada elemento se evalúa con la curva correspondiente a su enfierradura; criterio `Pcap`/`Mcap` de `demanda_capacidad_critica.json`).
 
 ### 9.2 Columnas — resultado global: todas dentro
 
@@ -359,9 +359,9 @@ El script `scripts/demanda_capacidad.py` barre las **128 columnas de hormigón**
 |---|---|
 | Columnas analizadas | 128 |
 | Fuera de la curva | **0** |
-| Crítica (máx. radio) | id=66 (70×70) — P=930.5 kN, M=2169.2 kN·m — **radio 0.952** |
+| Crítica (máx. radio) | id=1 (70×70) — P=13.2 kN, M=1104.3 kN·m — **radio 0.894** |
 
-El radio máximo de utilización del pórtico (0.952, dentro del criterio nominal sin factores φ) queda por debajo de la unidad en las 128 columnas; las más solicitadas corresponden a las columnas 70×70 del pórtico extremo con su enfierradura del plano. El resto del pórtico se mantiene holgado: el radio máximo fuera del pórtico extremo es **0.933** (id=285).
+El radio máximo de utilización (0.894, dentro del criterio nominal sin factores φ) queda por debajo de la unidad en las 128 columnas. La columna crítica id=1 está en **flexión casi pura**: su axial neto en COMBO es mínimo (≈13 kN) porque la tracción sísmica de EY cancela casi por completo la gravedad; la demanda está gobernada por el momento. La más solicitada del pórtico extremo (curva `columna_borde`) es la id=66 con P=3018.3 kN, M=2169.1 kN·m y **radio 0.856**. El resto del pórtico se mantiene holgado: el radio máximo fuera del pórtico extremo es **0.894** (id=1) y el del pórtico interior intermedio id=285 baja a **0.637**.
 
 ### 9.3 Muros — con la nueva enfierradura φ40, todos dentro
 
@@ -369,13 +369,13 @@ El radio máximo de utilización del pórtico (0.952, dentro del criterio nomina
 |---|---|
 | Muros analizados | 79 |
 | Fuera de la curva | **0** |
-| Crítico (máx. radio) | id=301 (30×356 retro) — P=3 983.9 kN, M=17 730.5 kN·m — **radio 0.716** |
+| Crítico (máx. radio) | id=473 (30×310) — P=2134.0 kN, M=11070.4 kN·m — **radio 0.679** |
 
-Con la enfierradura original (4 φ16 por borde) fallaban **24 de 79 muros** (radio máximo 3.21 en el 25×795). Tras aplicar la configuración única de φ40 (sección 7.2), el radio máximo baja a **0.716** y **ningún muro queda fuera** de su curva en el caso COMBO. Esta fue la motivación principal del rediseño de muros.
+Con la enfierradura original (4 φ16 por borde) fallaban **24 de 79 muros** (radio máximo 3.21 en el 25×795). Tras aplicar la configuración única de φ40 (sección 7.2), el radio máximo baja a **0.679** y **ningún muro queda fuera** de su curva en el caso COMBO. Esta fue la motivación principal del rediseño de muros.
 
 ### 9.4 Figura de la crítica
 
-`resultados/09_demanda_capacidad/demanda_capacidad_66.png` muestra la curva P-M de la columna crítica (diamante completo) con el punto de demanda (P, M) marcado. `demanda_capacidad_critica.json` guarda los valores numéricos del caso COMBO.
+`resultados/09_demanda_capacidad/demanda_capacidad_1.png` muestra la curva P-M de la columna crítica (diamante completo) con el punto de demanda (P, M) marcado. `demanda_capacidad_critica.json` guarda los valores numéricos del caso COMBO.
 
 ---
 
@@ -392,6 +392,23 @@ Durante la Semana 2, el agente propuso exportar las fuerzas internas directament
 ### 10.2 Criterio de capacidad: momento pico vs momento de falla
 
 El agente inicialmente propuso usar el **momento último** de la curva M-φ como capacidad nominal, definido como el último punto convergido antes de la pérdida de convergencia. Tras revisión con el grupo, se acordó usar el **pico de la curva** (máximo absoluto del momento), que es más conservador y consistente con la interpretación del curso de H.A.: la capacidad es el momento máximo que la sección puede resistir antes de perder resistencia.
+
+### 10.3 Diagramas de esfuerzos 2D (momento, axial y corte)
+
+Los esfuerzos del modelo completo se exponen como **diagramas clásicos 2D** para elementos representativos (caso COMBO), además de los tubos coloreados N/V/M del visor 3D:
+
+- **Viga interior** (selección automática entre las vigas con tributaria de vano completo que cierran **corte y momento** de extremo con residuo < 3 %; actualmente la id=234, 60×80): diagrama parabólico `M(x) = M_i + V_i·x − q·x²/2`, `V(x) = V_i − q·x` y `N(x)` (≈ 0), con `q = 1.2·p_G + 1.0·p_Q` (solo la losa tributaria, que es la carga aplicada por el FE como `beamUniform`; el peso propio se aplica como cargas nodales y por tanto **no** curva el diagrama).
+- **Convención de extremo j verificada**: se reconstruyó un modelo mínimo en OpenSeesPy (axial puro → `N_i=+10, N_j=−10`; flexión pura → `Mz_i=−50, Mz_j=+50`) y se auditó la totalidad de vigas tributarias: `eleForce` reporta el extremo **j** en "cara opuesta" (acción sobre el elemento), por lo que la parábola debe cerrar contra `−M_j` y `−V_j`. Con `q` de losa, 48/108 vigas de vano completo cierran M y V a < 3 % (0/108 con la carga que incluía `1.2·peso propio`); la viga 234 cierra a 0.0 % en ambas magnitudes y las integrales desde i y desde j coinciden en el centro (+86.2 kN·m).
+- **Columna crítica id=1** (70×70, flexión casi pura): `N` constante (+13.2 kN, tracción neta), `V` transversal constante y `M` transversal al eje lineal entre extremos (1104 → 688 kN·m).
+- **Muro crítico id=473** (30×310, radio 0.679): `N` constante (−2134 kN, compresión), `V` transversal constante (2354 kN) y `M` transversal al eje lineal (11070 → 541 kN·m). El momento y el axial usan las mismas definiciones del chequeo P-M (proyección sobre el eje y momento transversal al eje).
+
+| Figura | Valores principales (COMBO) |
+|---|---|
+| `resultados/10_figuras/Diagrama 2D Momento-Corte-Axial Viga 234 (60x80).png` | M: −218.6 → +170.3 (interior, x=7.0 m) → +168.4 kN·m; V: 111.2 → −7.8 kN; N ≈ 0; q=15.89 kN/m; cierre corte 0.0 %, momento j 0.0 % |
+| `resultados/10_figuras/Diagrama 2D Axial-Corte-Momento Columna 1 (70x70).png` | N = +13.2 kN; V = 503.2 kN; M = 1104 → 688 kN·m |
+| `resultados/10_figuras/Diagrama 2D Axial-Corte-Momento Muro 473 (30x310).png` | N = −2134 kN; V = 2353.7 kN; M = 11070 → 541 kN·m |
+
+Generador: `scripts/diagramas_2d.py`.
 
 ---
 
@@ -422,6 +439,7 @@ El agente inicialmente propuso usar el **momento último** de la curva M-φ como
 | Sensibilidad (JSON) | `resultados/07_capacidad/sensibilidad/sensibilidad_secciones.json` |
 | Verificación RC (JSON) | `resultados/08_verificacion/verificacion_rc.json` |
 | Demanda-capacidad (JSON/PNG) | `resultados/09_demanda_capacidad/` (128 columnas + 79 muros) |
+| Diagramas de esfuerzos 2D | `scripts/diagramas_2d.py` + `resultados/10_figuras/Diagrama 2D *.png` (viga 234, columna 1, muro 473) + pestaña **Diagramas** del visor (DATOS del análisis, via `analysis_map.js` → `diagramas`) |
 | Validación PM | `docs/validacion_pm/` |
 | Tests superposición | `tests/test_superposicion.py` |
 
@@ -430,14 +448,14 @@ El agente inicialmente propuso usar el **momento último** de la curva M-φ como
 - La masa sísmica `W = G + 0.5Q` excluye la fundación (Subterráneo) porque no hay diafragma rígido en z=0.
 - La fuerza sísmica se aplica en el CM real (no en el master), con momento correctivo `Mz` para equivalentar la traslación.
 - La superposición lineal es exacta en modelos elásticos lineales: la verificación directa vs explícita da error ≤ 7e-09 (tol 1e-6).
-- El barrido automático de demanda-capacidad (`scripts/demanda_capacidad.py`) evalúa las **128 columnas y los 79 muros** cada uno contra la curva P-M de **su** sección (el plano usa dos configuraciones para las columnas 70×70: la perimetral 16 φ28 en el interior y la del pórtico extremo 4 φ28 + 16 φ36, asignadas por el flag `borde`). Todas quedan **dentro** de su curva con el caso COMBO: radio máximo **0.952** (columna) y **0.716** (muro, tras el rediseño φ40).
-- La enfierradura proporcional original de los muros (4 φ16 por borde) dejaba **24 de 79 muros fuera** de su capacidad con el COMBO (radio hasta 3.21). Se diseñó una **configuración única φ40** para todos los muros (filas repartidas entre 2.25 % y 6.74 % del largo con separación mínima 40 mm, malla φ10@200): tras aplicarla, los **79 muros quedan dentro** con radio máximo 0.716.
+- El barrido automático de demanda-capacidad (`scripts/demanda_capacidad.py`) evalúa las **128 columnas y los 79 muros** cada uno contra la curva P-M de **su** sección (el plano usa dos configuraciones para las columnas 70×70: la perimetral 16 φ28 en el interior y la del pórtico extremo 4 φ28 + 16 φ36, asignadas por el flag `borde`). Todas quedan **dentro** de su curva con el caso COMBO: radio máximo **0.894** (columna) y **0.679** (muro, tras el rediseño φ40).
+- La enfierradura proporcional original de los muros (4 φ16 por borde) dejaba **24 de 79 muros fuera** de su capacidad con el COMBO (radio hasta 3.21). Se diseñó una **configuración única φ40** para todos los muros (filas repartidas entre 2.25 % y 6.74 % del largo con separación mínima 40 mm, malla φ10@200): tras aplicarla, los **79 muros quedan dentro** con radio máximo 0.679.
 - La verificación independiente (bloque rectangular ACI/NCh) muestra concordancia ≤ 1.6% en las columnas y, en el muro con la nueva enfierradura φ40, 7.1% en flexión pura y 2.4% en el balanceado con el modelo de fibras.
-- Los diagramas P-M se grafican como **diamante completo simétrico** (rama ±M, espejo válido por simetría de sección): las figuras y el visor 3D muestran la curva completa, aunque los JSON conservan una sola rama.
+- Los diagramas P-M se grafican como **diamante completo simétrico** (rama ±M, espejo válido por simetría de sección) con las **puntas cerradas**: tracción pura (−fy·As, M=0) y compresión pura (Pcap de fibras, M=0), calculadas por `analysis.axial_pura` y `analysis.pm_completa` para columnas (base, borde, id=70) y los muros tipificados.
 
 ## Próximos pasos (Semana 4)
 
-- Extender la verificación con factores φ de diseño (ACI 318 / NCh430): con los radios nominales actuales (0.952 columna, 0.716 muro) hay margen para evaluar la curva de diseño φ-P-M.
-- Completar la verificación M-φ ya auditada (EI fiber vs EI teórico ≈ 1.02, y M_pico de M-φ = punto P=0 de la envolvente P-M con error ~0 %).
-- Poblar el visor 3D con las curvas P-M de los 14 muros tipificados (diamante completo) para inspección interactiva por elemento.
+- Extender la verificación con factores φ de diseño (ACI 318 / NCh430): con los radios nominales actuales (0.894 columna, 0.679 muro) hay margen para evaluar la curva de diseño φ-P-M.
+- Completar la verificación M-φ con los factores φ de diseño (ACI 318 / NCh430): la auditoría numérica realizada confirmó la rigidez inicial (EI ≈ 1.156·E₀·I_g columna y ≈ 1.34·E₀·I_g muro, incluyendo el aporte del acero), el pico M-φ = punto P=0 de la envolvente P-M (columna +1.5 %, muro +7.1 % vs HA) y la curvatura última definida en ε_cu = −0.0035.
+- Validar en navegador el visor 3D con las curvas P-M completas (puntas cerradas) de columnas y muros para inspección interactiva por elemento.
 - Consolidar la documentación de las configuraciones de enfierradura (columnas del pórtico extremo y muros φ40) junto a los planos de referencia.

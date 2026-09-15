@@ -7,8 +7,8 @@
   "balanceado": {
    "P_analitico_kN": 6541.837876580296,
    "M_analitico_kNm": 2018.8012496384154,
-   "M_fiber_en_Pb_kNm": 2050.3339646919408,
-   "dif_rel_pct": 1.561952423953234
+   "M_fiber_en_Pb_kNm": 2049.8976650411814,
+   "dif_rel_pct": 1.5403406060074365
   },
   "flexion_pura": {
    "M_analitico_kNm": 1214.4170238185823,
@@ -28,8 +28,8 @@
   "balanceado": {
    "P_analitico_kN": 6842.979131595695,
    "M_analitico_kNm": 2674.8643898877885,
-   "M_fiber_en_Pb_kNm": 2632.7319695057,
-   "dif_rel_pct": -1.5751236040738539
+   "M_fiber_en_Pb_kNm": 2608.040573462317,
+   "dif_rel_pct": -2.498213243187068
   },
   "flexion_pura": {
    "M_analitico_kNm": 2137.226652007237,
@@ -49,8 +49,8 @@
   "balanceado": {
    "P_analitico_kN": 15421.846020480678,
    "M_analitico_kNm": 30042.79984348332,
-   "M_fiber_en_Pb_kNm": 30762.96799901281,
-   "dif_rel_pct": 2.39714061033397
+   "M_fiber_en_Pb_kNm": 30771.92623453848,
+   "dif_rel_pct": 2.4269588548795586
   },
   "flexion_pura": {
    "M_analitico_kNm": 18640.09618622923,

@@ -1400,6 +1400,41 @@ def run_case(case_name="G"):
     # ------------------------------------------------------------------
     # RESULTADOS -> JSON
     # ------------------------------------------------------------------
+    def _local_axes_rot(ni, nj, vecxz):
+        """Ejes locales (x y z) del elemento FE en coordenadas globales,
+        misma convencion que benchmark_3d: local_x = i->j normalizado,
+        local_z = componente de vecxz perpendicular, local_y = z x x.
+        Devuelve (lx, ly, lz) listas de 3 floats."""
+        import math
+        xi, yi, zi = ops.nodeCoord(ni)
+        xj, yj, zj = ops.nodeCoord(nj)
+        dx, dy, dz = xj - xi, yj - yi, zj - zi
+        L = math.sqrt(dx * dx + dy * dy + dz * dz) or 1.0
+        lx = (dx / L, dy / L, dz / L)
+        vx, vy, vz = vecxz
+        dot = vx * lx[0] + vy * lx[1] + vz * lx[2]
+        lz = (vx - dot * lx[0], vy - dot * lx[1], vz - dot * lx[2])
+        lz_mag = math.sqrt(lz[0] ** 2 + lz[1] ** 2 + lz[2] ** 2) or 1.0
+        lz = (lz[0] / lz_mag, lz[1] / lz_mag, lz[2] / lz_mag)
+        ly = (lz[1] * lx[2] - lz[2] * lx[1],
+              lz[2] * lx[0] - lz[0] * lx[2],
+              lz[0] * lx[1] - lz[1] * lx[0])
+        return lx, ly, lz
+
+    def _to_local(f6, rot):
+        """Rota 6 componentes globales [Fx,Fy,Fz,Mx,My,Mz] a locales
+        [P,V2,V3,T,M2,M3] con la matriz R = [lx,ly,lz] (filas = ejes locales).
+        Formulas:  [P,V2,V3] = R·F ;  [T,M2,M3] = R·M."""
+        lx, ly, lz = rot
+        F = f6[:3]
+        M = f6[3:]
+        out = []
+        for axis in (lx, ly, lz):
+            out.append(sum(axis[k] * F[k] for k in range(3)))
+        for axis in (lx, ly, lz):
+            out.append(sum(axis[k] * M[k] for k in range(3)))
+        return out
+
     disp = {}
     for tag in pos_key.values():
         d = ops.nodeDisp(tag)
@@ -1409,12 +1444,28 @@ def run_case(case_name="G"):
         r = ops.nodeReaction(tag)
         reactions[str(tag)] = [round(v, 10) for v in r]
     forces = {}
+    local_axes = {}
+    material_by_tag = {}
     for tag, meta in elem_meta.items():
         fg = list(ops.eleForce(tag))[:12]
+        # vecxz segun la transformacion del elemento (v2: T1 col/muro/acero
+        # con vecxz (1,0,0); T2 vigas con vecxz (0,0,1)).
+        t = meta["type"]
+        vecxz = (1, 0, 0) if t in ("column", "wall", "steel_column", "steel_beam") else (0, 0, 1)
+        ni_t, nj_t = meta["nodes"]
+        rot = _local_axes_rot(ni_t, nj_t, vecxz)
+        local_axes[tag] = rot
+        f_glob = (list(fg[:6]), list(fg[6:12]))
+        local_i = _to_local(fg[:6], rot)
+        local_j = _to_local(fg[6:12], rot)
+        material = "A240ES" if t in ("steel_column", "steel_beam") else "HA35"
+        material_by_tag[tag] = material
         forces[str(tag)] = {
             "type": meta["type"],
             "global_i": [round(v, 8) for v in fg[:6]],
             "global_j": [round(v, 8) for v in fg[6:12]],
+            "local_i": [round(v, 8) for v in local_i],
+            "local_j": [round(v, 8) for v in local_j],
             "section": meta["section"],
         }
 
@@ -1514,6 +1565,9 @@ def run_case(case_name="G"):
         "displacements_m": disp,
         "reactions_kN": reactions,
         "element_forces_global": forces,
+        "element_local_axes": {str(t): [list(a) for a in rot]
+                                for t, rot in local_axes.items()},
+        "element_material": {str(t): m for t, m in material_by_tag.items()},
         # (Semana 3) masa sismica por piso, G/Q por piso y corte basal
         "seismic_mass": {
             "g": g,

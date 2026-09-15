@@ -92,7 +92,7 @@ En `edificio_3d.html` las capas se alternan con los checkboxes del panel izquier
 │   ├── 09_demanda_capacidad/      # demanda_capacidad_*.png + critica.json
 │   ├── 10_figuras/                # Diagramas 2D/3D y marco_3d interactivo
 │   ├── 11_mapa_visor/             # analysis_map.js, tributary_map.js, deformada_elements.js
-├── reports/              # Entregables semana01/02/03 y plan de empalmes
+├── reports/              # Entregables semana01/02/03/04 y plan de empalmes
 ├── Unity/                # Proyecto Unity
 │   └── Assets/
 │       ├── Scripts/      # EdificioLoader.cs, CameraController.cs,
@@ -210,3 +210,4 @@ Issue → Plan → Build → Test → Review → Merge
 - [Enunciado del proyecto](Enunciado_Proyecto1/)
 - [Agentes IA](AGENTS.md)
 - [Avance Semana 3 (entregable)](reports/semana03.md) — casos base, curvas M-φ/P-M, verificación RC y demanda-capacidad
+- [Avance Semana 4 (entregable)](reports/semana04.md) — diagramas 2D M/V/N en el visor, auditoría de la convención de esfuerzos de extremo y traspaso del visor a Unity (pendiente)

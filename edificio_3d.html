@@ -145,12 +145,14 @@
     <button data-tab="dt-pm">P-M</button>
     <button data-tab="dt-reac">Reacciones</button>
     <button data-tab="dt-tribu">Tributarias</button>
+    <button data-tab="dt-diag">Diagramas</button>
   </div>
   <div class="dt-tab active" id="dt-sismo"></div>
   <div class="dt-tab" id="dt-momcurv"></div>
   <div class="dt-tab" id="dt-pm"></div>
   <div class="dt-tab" id="dt-reac"></div>
   <div class="dt-tab" id="dt-tribu"></div>
+  <div class="dt-tab" id="dt-diag"></div>
 </div>
 <div id="analysisPanel">
   <div class="row">
@@ -178,7 +180,7 @@ Nota: respuesta lineal del modelo global. Doble clic en columna/muro -> P-M. Dob
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="resultados/11_mapa_visor/tributary_map.js"></script>
-<script src="resultados/11_mapa_visor/analysis_map.js?v=08e006daac"></script>
+<script src="resultados/11_mapa_visor/analysis_map.js?v=2aa256e282"></script>
 <script>
   const elements = [{"type":"column","section":"70x70","xi":0.0,"yi":0.0,"zi":0.0,"xj":0.0,"yj":3.56,"zj":0.0,"b":0.7,"h":0.7},
   {"type":"column","section":"70x70","xi":-10.0,"yi":0.0,"zi":0.0,"xj":-10.0,"yj":3.56,"zj":0.0,"b":0.7,"h":0.7},
@@ -1921,9 +1923,19 @@ spherical.theta -= dx * 0.01;
   const inspectorEl = document.getElementById('inspector');
   const inspectorBody = document.getElementById('inspectorBody');
   const inspectorClose = document.getElementById('inspectorClose');
+  // Cualquier apertura/cierre del inspector sincroniza la escala de colores
+  // (la oculta mientras la ventana P-M esta abierta y la restaura al cerrar).
+  if (inspectorEl) {
+    const inspObserver = new MutationObserver(() => {
+      if (typeof syncScaleConInspector === 'function') syncScaleConInspector();
+    });
+    inspObserver.observe(inspectorEl, { attributes: true, attributeFilter: ['style'] });
+  }
   if (inspectorClose) {
     inspectorClose.addEventListener('click', () => {
       inspectorEl.style.display = 'none';
+      if (axesVis) { scene.remove(axesVis); axesVis = null; }
+      if (typeof syncScaleConInspector === 'function') syncScaleConInspector();
     });
   }
   const raycaster = new THREE.Raycaster();
@@ -1969,7 +1981,7 @@ spherical.theta -= dx * 0.01;
   const GAMMA_CONC = 23.544;
   // Mismas convenciones que opensees_edificio_v2.py (solo presentacion):
   const TERMINACIONES_KNM2 = 2.0;   // terminaciones uniformes sobre losa (G)
-  const SOBRECARGA_KNM2 = 2.0;      // sobrecarga de uso sobre losa (Q)
+  const SOBRECARGA_KNM2 = 4.0;      // sobrecarga de uso sobre losa (Q)
 
   function nombrePiso(yi) {
     if (yi < 3.56) return 'Subterraneo';
@@ -1984,6 +1996,94 @@ spherical.theta -= dx * 0.01;
   function clearHighlight() {
     if (highlightMesh) { scene.remove(highlightMesh); highlightMesh = null; }
     if (tribVis) { scene.remove(tribVis); tribVis = null; }
+    if (axesVis) { scene.remove(axesVis); axesVis = null; }
+  }
+
+  let axesVis = null;   // triada de ejes locales del elemento seleccionado
+
+  function tipoNombre(t) {
+    return t === 'column' ? 'Columna' :
+           t === 'wall' ? 'Muro' :
+           t === 'steel_column' ? 'Columna MET' :
+           t === 'steel_beam' ? 'Viga MET' :
+           t === 'beam_x' || t === 'beam_y' ? 'Viga' : t;
+  }
+
+  function materialNombre(m) {
+    return m === 'A240ES' ? 'A240ES (acero estructural)' : 'HA35 (hormigón armado)';
+  }
+
+  // Nombre del piso por altura (niveles de diafragma del contrato: h=0, 3.56,
+  // 7.12, 10.68, 14.24, 17.80 m).
+  function pisoNombre(h) {
+    const n = Math.round(h / 3.56);
+    if (n <= 0) return 'Subterráneo';
+    if (n >= 5) return 'Techo';
+    return 'Piso ' + n;
+  }
+
+  // Cabecera comun del inspector: ID, nodos (tag + coords), seccion, material,
+  // ejes locales y restricciones. meta = ANALYSIS.elements[ix]; ud = elemento 3D.
+  function elemHeader(meta, ud) {
+    const nc = (ANALYSIS && ANALYSIS.node_coords) || {};
+    const pt = (tag) => nc[tag]
+      ? ('(' + nc[tag][0].toFixed(2) + ', ' + nc[tag][1].toFixed(2) + ', h=' +
+         nc[tag][2].toFixed(2) + ' m)')
+      : '(?)';
+    const mat = meta.material || (ud.type && ud.type.indexOf('steel') === 0 ? 'A240ES' : 'HA35');
+    const restr = [];
+    if (meta.sup_i) restr.push('extremo i (nodo ' + meta.ni + ') empotrado/apoyado');
+    if (meta.sup_j) restr.push('extremo j (nodo ' + meta.nj + ') empotrado/apoyado');
+    if (meta.type === 'wall' && nc[meta.ni] && nc[meta.nj]) {
+      const hi = nc[meta.ni][2], hj = nc[meta.nj][2];
+      const hBase = Math.min(hi, hj);
+      const tagBase = hi <= hj ? meta.ni : meta.nj;
+      if (meta.id === 452 || meta.id === 453 || hBase < 0.01) {
+        restr.push('empotrado en fundación (base del muro)');
+      } else {
+        const abajo = (ANALYSIS.elements || []).find(
+          e => e.type === 'wall' && e.id !== meta.id &&
+               (e.ni === tagBase || e.nj === tagBase) &&
+               (nc[e.ni] && nc[e.nj] && Math.min(nc[e.ni][2], nc[e.nj][2]) < hBase));
+        if (abajo) restr.push('continua (extiende muro id ' + abajo.id + ')');
+        else restr.push('arranca en ' + pisoNombre(hBase) + ' (h=' + hBase.toFixed(2) +
+                        ' m), apoyado en estructura del piso inferior');
+      }
+    }
+    if (!restr.length) restr.push('continua (extremos sin apoyo directo)');
+    let h = tipoNombre(meta.type) + '  <b style="color:#fff">id ' + meta.id + '</b>' +
+      '<br>Material: ' + materialNombre(mat) +
+      '<br>Seccion: ' + meta.section +
+      '<br>Nodo i: ' + meta.ni + ' ' + pt(meta.ni) +
+      '<br>Nodo j: ' + meta.nj + ' ' + pt(meta.nj) +
+      '<br><span style="color:#8cf">Restricciones: ' + restr.join(' · ') + '</span>';
+    return h;
+  }
+
+  // Triada de ejes locales en 3D (x' rojo, y' verde, z' azul) centrada en el
+  // elemento. Los ejes vienen en coordenadas OpenSees (x, y, z-altura) y se
+  // convierten a viewer: (v[0], v[2], v[1]).
+  function showLocalAxes(ud, meta) {
+    if (axesVis) { scene.remove(axesVis); axesVis = null; }
+    const rot = ANALYSIS && ANALYSIS.local_axes[meta.id];
+    if (!rot) return;
+    const p0 = new THREE.Vector3(ud.xi, ud.yi, ud.zi);
+    const p1 = new THREE.Vector3(ud.xj, ud.yj, ud.zj);
+    const mid = p0.clone().add(p1).multiplyScalar(0.5);
+    const len = Math.max(p0.distanceTo(p1) * 0.3, 0.5);
+    const g = new THREE.Group();
+    ['x', 'y', 'z'].forEach((nm, k) => {
+      const v = rot[k];
+      const dir = new THREE.Vector3(v[0], v[2], v[1]);
+      if (dir.length() < 1e-6) return;
+      dir.normalize();
+      const col = [0xff5050, 0x50ff50, 0x5090ff][k];
+      const a = new THREE.ArrowHelper(dir, mid, len, col, len * 0.16, len * 0.09);
+      a.name = 'axis_' + nm;
+      g.add(a);
+    });
+    axesVis = g;
+    scene.add(g);
   }
 
   // Dibuja: viga resaltada + rectangulo del area tributaria (banda de ancho
@@ -2070,73 +2170,78 @@ spherical.theta -= dx * 0.01;
     scene.add(tribVis);
   }
 
-  function buildBeamRows(ud, t) {
+  function buildBeamRows(ud, t, meta) {
     const L = new THREE.Vector3(ud.xj, ud.yj, ud.zj)
       .distanceTo(new THREE.Vector3(ud.xi, ud.yi, ud.zi));
     const direction = (ud.type === 'beam_x') ? 'X (plano) y fija' : 'Y (plano) x fija';
     const b = ud.b, h = ud.h;
 
-    // --- PRINCIPIO: W_G = q_G_superficial * At  y  p_G = W_G / L, son la
-    // MISMACARGA expresada de dos formas. NUNCA se suman W y p*L.
-    // W_G  proviene de cargas_para_vigas(): W_G = w_m2 * At,  p_G = w_m2*At/L.
-    const W_G = t.Wg;          // carga tributaria TOTAL de losa (kN)  = q_G*At
-    const W_Q = t.Wq;          // carga tributaria de sobrecarga (kN)  = q_Q*At
-    const p_G = t.pG;          // equivalente lineal G (kN/m)  = W_G / L
+    // W_G de losa/terminaciones = q_G*At; el peso propio de la viga se aplica
+    // NODALMENTE en OpenSees (W/2 por extremo, una sola vez, caso G).
+    const W_G = t.Wg;
+    const W_Q = t.Wq;
     const p_Q = t.pQ;          // equivalente lineal Q (kN/m)  = W_Q / L
-
-    // q_G superficial total (kN/m2) = W_G / At. Lo descomponemos en peso
-    // estructural de losa + terminaciones (mismas convenciones de v2).
     const At = t.A;
-    const qG_total_m2 = At > 0 ? (W_G / At) : 0;
-    const losa_estructural_m2 = Math.max(0, qG_total_m2 - TERMINACIONES_KNM2);
-    const term_m2 = TERMINACIONES_KNM2;
-
-    // Peso propio de la viga (gamma * b*h * L), aplicado NODALMENTE en OpenSees
-    // (W/2 en cada extremo), UNA sola vez, solo en el caso G.
-    const W_PP = GAMMA_CONC * b * h * L;
-    const p_PP = L > 0 ? (W_PP / L) : 0;
-
-    // Totales REALES aplicados:
-    const W_G_total = W_G + W_PP;          // losa + terminaciones + peso propio viga
-    const p_G_total = (W_G_total / L);     // equivalente lineal
-    // Q NO incluye peso propio (sobrecarga sola):
-    const W_Q_total = W_Q;
+    const W_PP = GAMMA_CONC * b * h * L;   // peso propio de la viga (kN)
+    const W_G_total = W_G + W_PP;          // losa + terminaciones + peso propio
+    const p_G_total = (W_G_total / L);     // equivalente lineal total G (kN/m)
 
     const esc = (v) => v.toFixed(2);
+    const mir = meta && (ud.type === 'wall' || ud.type === 'steel_column' || ud.type === 'steel_beam')
+      ? ud : null;
+    const idMostrar = (meta && meta.id !== undefined) ? meta.id : t.id;
+    const matMostrar = (meta && meta.material)
+      ? materialNombre(meta.material)
+      : materialNombre(ud.type && ud.type.indexOf('steel') === 0 ? 'A240ES' : 'HA35');
+    const ndI = meta && meta.ni, ndJ = meta && meta.nj;
+    const nstr = (ndI !== undefined && ndJ !== undefined)
+      ? 'Nodos (tags): ' + ndI + ' -> ' + ndJ
+      : 'Nodos: (' + ud.xi.toFixed(2) + ',' + ud.zi.toFixed(2) + ') -> (' + ud.xj.toFixed(2) + ',' + ud.zj.toFixed(2) + ')';
     return [
-      'Viga ' + ud.type + '  (id ' + t.id + ')',
+      tipoNombre(ud.type) + '  <b style="color:#fff">id ' + idMostrar + '</b>',
+      'Material: ' + matMostrar,
+      'Seccion: ' + (t.sec || meta.section || '?'),
       'Piso: ' + nombrePiso(ud.yi) + '   [z=' + ud.yi.toFixed(2) + ' m]',
-      'Nodos: (' + ud.xi.toFixed(2) + ',' + ud.zi.toFixed(2) + ') -> (' + ud.xj.toFixed(2) + ',' + ud.zj.toFixed(2) + ')',
+      nstr,
       'Direccion: ' + direction,
       'Longitud: ' + esc(L) + ' m',
-      'Seccion: ' + t.sec + ' (' + (b*100).toFixed(0) + 'x' + (h*100).toFixed(0) + ' cm)',
-      'Area tributaria At: ' + esc(At) + ' m2',
-      'Ancho tributario (At/L): ' + esc(L > 0 ? At/L : 0) + ' m',
       '',
-      'CARGA PERMANENTE G (sobre losa):',
-      '  Losa estructural (' + Math.round(losa_estructural_m2/ (GAMMA_CONC/1000.0)) + ' cm): ' + esc(losa_estructural_m2) + ' kN/m2',
-      '  Terminaciones: ' + esc(term_m2) + ' kN/m2',
-      '  q_G superficial total: ' + esc(qG_total_m2) + ' kN/m2',
-      '  W_G tributario (q_G * At): ' + esc(W_G) + ' kN',
-      '  p_G equivalente (W_G / L): ' + esc(p_G) + ' kN/m   (= ' + esc(W_G) + ' kN  sobre la viga)',
+      'CARGA PERMANENTE G:',
+      '  Tributario: At = ' + esc(At) + ' m2  (ancho = ' + esc(L > 0 ? At/L : 0) + ' m)',
+      '  Losa + terminaciones = ' + esc(W_G) + ' kN',
+      '  Peso propio viga = ' + esc(W_PP) + ' kN',
+      '  G total (W_G + W_PP) = ' + esc(W_G_total) + ' kN',
+      '  p_G total = ' + esc(p_G_total) + ' kN/m',
       '',
-      'PESO PROPIO DE LA VIGA:',
-      '  W_PP (gamma x b x h x L): ' + esc(W_PP) + ' kN',
-      '  p_PP equivalente (W_PP / L): ' + esc(p_PP) + ' kN/m',
-      '',
-      'TOTAL G (aplicado a la viga):',
-      '  W_G,total = W_G + W_PP = ' + esc(W_G_total) + ' kN',
-      '  p_G,total (W_G,total / L) = ' + esc(p_G_total) + ' kN/m',
-      '',
-      'CARGA VARIABLE Q (sobre losa):',
-      '  q_Q: ' + esc(SOBRECARGA_KNM2) + ' kN/m2',
-      '  W_Q tributario (q_Q * At): ' + esc(W_Q) + ' kN',
-      '  p_Q equivalente (W_Q / L): ' + esc(p_Q) + ' kN/m',
-      '  TOTAL Q = W_Q = ' + esc(W_Q_total) + ' kN',
-      '',
-      'NOTA: p_G y p_Q son representaciones EQUIVALENTES de W (misma carga, ' +
-      'no se suman). El peso propio de la viga se aplica NODALMENTE en OpenSees (una sola vez).'
+      'CARGA VARIABLE Q:',
+      '  q_Q = ' + esc(SOBRECARGA_KNM2) + ' kN/m2',
+      '  W_Q tributario = ' + esc(W_Q) + ' kN',
+      '  p_Q = ' + esc(p_Q) + ' kN/m'
     ];
+  }
+
+  // Tabla de fuerzas locales de VIGA (N, Vy, Vz, T, My, Mz) en extremos i y j
+  // para el caso activo. Misma fuente que columnas/muros: ANALYSIS.forces[caso].
+  function fuerzasViga(meta) {
+    if (!ANALYSIS || !ANALYSIS.forces) return '';
+    const frec = (ANALYSIS.forces[S.caso] || {})[meta.id] || {};
+    if (!frec.li && !frec.lj) return '<div style="color:#888">(sin datos de fuerzas para este caso)</div>';
+    const tbl = (end, r) =>
+      '<tr><td style="border:1px solid #0aa;padding:2px 8px;color:#9ff">' + end + '</td>' +
+      (!r ? '<td colspan="6" style="border:1px solid #0aa;padding:2px 8px;color:#888">sin dato</td></tr>'
+       : ['N', 'Vy', 'Vz', 'T', 'My', 'Mz'].map((nm, k) =>
+          '<td style="border:1px solid #0aa;padding:2px 8px;color:#cfc">' + nm + ' = ' +
+          Math.abs(r[k]).toFixed(1) + ' <span style="color:#aaa">' +
+          (k >= 3 ? 'kN·m' : 'kN') + '</span></td>').join('') + '</tr>');
+    return '<table style="border-collapse:collapse;margin-top:6px;font-family:monospace;font-size:12px">' +
+      '<tr style="color:#0ff"><th style="border:1px solid #0aa;padding:2px 8px">Extr</th>' +
+      '<th style="border:1px solid #0aa;padding:2px 8px">N [kN]</th>' +
+      '<th style="border:1px solid #0aa;padding:2px 8px">Vy [kN]</th>' +
+      '<th style="border:1px solid #0aa;padding:2px 8px">Vz [kN]</th>' +
+      '<th style="border:1px solid #0aa;padding:2px 8px">T [kN·m]</th>' +
+      '<th style="border:1px solid #0aa;padding:2px 8px">My [kN·m]</th>' +
+      '<th style="border:1px solid #0aa;padding:2px 8px">Mz [kN·m]</th></tr>' +
+      tbl('i', frec.li) + tbl('j', frec.lj) + '</table>';
   }
 
   // picking por CLUSTER de rayos alrededor del cursor: gana el elemento que
@@ -2203,12 +2308,15 @@ spherical.theta -= dx * 0.01;
     const o = pickAt(ev);
     if (o) {
       const ud = o.userData.elem;
+      const ix = elemIdx.get(ud);
+      const meta = (ANALYSIS && ANALYSIS.elements[ix]) || null;
       const isBeam = (ud.type === 'beam_x' || ud.type === 'beam_y');
-      if (isBeam) {
+if (isBeam) {
         const t = resolveTributary(ud);
         inspectorEl.style.display = 'block';
+        if (typeof syncScaleConInspector === 'function') syncScaleConInspector();
         if (t) {
-          inspectorBody.innerHTML = buildBeamRows(ud, t).join('<br>');
+          inspectorBody.innerHTML = buildBeamRows(ud, t, meta).join('<br>');
           // resaltar la viga (caja transparente)
           const b = new THREE.Box3().setFromObject(o);
           const size = b.getSize(new THREE.Vector3());
@@ -2219,6 +2327,8 @@ spherical.theta -= dx * 0.01;
           highlightMesh = hl;
           // visualizacion grafica del area tributaria + flechas de carga
           showTribGraphics(ud, t);
+          // triada de ejes locales (si el mapa los tiene)
+          if (meta) showLocalAxes(ud, meta);
         } else {
           inspectorBody.innerHTML =
             'Viga ' + ud.type + '  (id no indexado, sin area tributaria de losa).' +
@@ -2230,16 +2340,25 @@ spherical.theta -= dx * 0.01;
       const L = new THREE.Vector3(ud.xj, ud.yj, ud.zj)
         .distanceTo(new THREE.Vector3(ud.xi, ud.yi, ud.zi));
       inspectorEl.style.display = 'block';
-      inspectorBody.innerHTML = (ud.type === 'column' ? 'Columna' :
-                             ud.type === 'steel_column' ? 'Columna MET' :
-                             ud.type === 'steel_beam' ? 'Viga MET' : 'Muro') + '  (id ' + (ud.type) + ')' +
-        '<br>Nodos: (' + ud.xi.toFixed(2) + ',' + ud.zi.toFixed(2) + ') -> (' + ud.xj.toFixed(2) + ',' + ud.zj.toFixed(2) + ')' +
-        '<br>Altura: ' + L.toFixed(2) + ' m' +
-        '<br>' + (ud.type === 'column'
-          ? 'Seccion: ' + (ud.b*100).toFixed(0) + 'x' + (ud.b*100).toFixed(0) + ' cm (cuadrada)'
-          : ud.type === 'steel_column' || ud.type === 'steel_beam'
-            ? 'Seccion: ' + (ud.b*100).toFixed(0) + 'x' + (ud.b*100).toFixed(0) + ' cm, tubo e=' + (String(ud.section||'').split('x')[2] || '?') + ' mm (acero)'
-            : 'Seccion: espesor ' + ud.b + ' m x largo ' + ud.h + ' m (muro)');
+      const metaH = meta || { type: ud.type, id: ud.id, section: ud.section,
+                              material: (ud.type.indexOf('steel') === 0 ? 'A240ES' : 'HA35'),
+                              ni: undefined, nj: undefined, sup_i: false, sup_j: false };
+      const h = (ANALYSIS && meta) ? elemHeader(metaH, ud)
+        : tipoNombre(ud.type) + '  id ' + (metaH.id !== undefined ? metaH.id : ud.type);
+      const informe = (ud.type === 'column' || ud.type === 'steel_column' || ud.type === 'steel_beam')
+        ? ('<br>Altura: ' + L.toFixed(2) + ' m' +
+           '<br><span style="color:#aaa">Material/sujeción: ' + materialNombre(metaH.material) + '</span>')
+        : ('<br>Largo: ' + L.toFixed(2) + ' m' +
+           '<br><span style="color:#aaa">Muro equivalente (elementos ' + ud.section + '): material ' +
+           materialNombre(metaH.material) + '</span>');
+      const mc = (ANALYSIS && ANALYSIS.meta && ANALYSIS.meta['COMBO'] && ANALYSIS.meta['COMBO'].descripcion) || null;
+      const cargas = mc
+        ? ('<br><span style="color:#9cf">Cargas del sistema (COMBO):</span> G+Q gravitacional ' +
+           '· EX/EY sismo · W total = ' + (mc.Carga_COMBO_total_kN || 0).toFixed(0) + ' kN ' +
+           '(peso propio + losa residual por vigas)')
+        : '';
+      inspectorBody.innerHTML = h + informe + cargas;
+      if (ANALYSIS && meta) showLocalAxes(ud, meta);
       return;
     }
 
@@ -2266,6 +2385,7 @@ spherical.theta -= dx * 0.01;
 
     // 4) nada → ocultar inspector
     inspectorEl.style.display = 'none';
+    if (axesVis) { scene.remove(axesVis); axesVis = null; }
   });
 </script>
 <script>
@@ -2462,6 +2582,7 @@ const F = ANALYSIS.forces[S.caso] || {};
       return;
     }
     S.mode = (S.mode === 'view') ? 'analysis' : 'view';
+    if (axesVis) { scene.remove(axesVis); axesVis = null; }
     if (S.mode === 'analysis') {
       groupWall.visible = false;   // oculta la muralla solida -> se ven los palitos/ejes de los muros
       analysisPanel.style.display = 'block';
@@ -2484,6 +2605,11 @@ const F = ANALYSIS.forces[S.caso] || {};
   function updateScale() {
     const ls = document.getElementById('legendScale');
     if (!ls || S.mode !== 'analysis') return;
+    // nunca tapar el inspector P-M abierto: la escala se restaura al cerrarlo
+    if (inspectorEl && inspectorEl.style.display === 'block') {
+      ls.style.display = 'none';
+      return;
+    }
     const isDef = (S.vista === 'deformada');
     const unid = isDef ? ' mm' : (S.vista === 'M' ? ' kN·m' : ' kN');
     const mx = isDef ? scaleDmax : scaleVmax;
@@ -2514,6 +2640,13 @@ const F = ANALYSIS.forces[S.caso] || {};
   function hideScale() {
     const ls = document.getElementById('legendScale');
     if (ls) ls.style.display = 'none';
+  }
+
+  // Mantiene la escala de colores sincronizada con el inspector: se oculta
+  // siempre que la ventana P-M esta abierta y se restaura al cerrarla.
+  function syncScaleConInspector() {
+    if (inspectorEl && inspectorEl.style.display === 'block') hideScale();
+    else updateScale();
   }
 
   function updateHUD() {
@@ -2570,9 +2703,6 @@ const F = ANALYSIS.forces[S.caso] || {};
   // Doble clic en modo analisis: viga -> tabla M/V/N/DEF; columna o
   // muro -> curva P-M de capacidad + punto de demanda.
   // ------------------------------------------------------------------
-  function beamNN(m) { return m >= 1000 ? m.toFixed(0) : (m >= 100 ? m.toFixed(1) : m.toFixed(2)); }
-  function beamXX(n) { return n >= 1000 ? n.toFixed(0) : (n >= 100 ? n.toFixed(1) : n.toFixed(2)); }
-
   // Fuerzas de resultado: soporta {i,j} (nuevo) y vector plano (legacy).
   function extremoMayor(f) {
     if (Array.isArray(f)) return f;
@@ -2582,56 +2712,74 @@ const F = ANALYSIS.forces[S.caso] || {};
     return mi >= mj ? gi : gj;
   }
 
-  // Fuerzas globales -> N (axial), V (corte), M (momento resultante) y
-  // desplazamiento nodal |D| en mm, para un extremo del elemento.
-  function beamForces(elemObj, f) {
+  // P-M de columna/muro: usa el extremo de mayor |M| (MISMO criterio que la
+  // vista de colores), P = axial proyectado sobre el eje del elemento y
+  // M = momento de flexión TRANSVERSAL al eje (perpendicular), que es el que
+  // se compara contra la curva P-M. Las vistas usan (x, y=altura, z) =
+  // OpenSees (X, Z, Y); los momentos se mapean igual: (Mx, Mz, My).
+  function demandaColumnaMuro(frec, elemObj) {
+    const f = extremoMayor(frec);
+    if (!f) return { P: 0, M: 0 };
     const L = Math.hypot(elemObj.xj - elemObj.xi, elemObj.yj - elemObj.yi, elemObj.zj - elemObj.zi) || 1;
     const ux = (elemObj.xj - elemObj.xi) / L, uy = (elemObj.yj - elemObj.yi) / L, uz = (elemObj.zj - elemObj.zi) / L;
-    if (!f) return { N: NaN, V: NaN, M: NaN };
-    const vx = f[0], vy = f[2], vz = f[1];
-    const axial = vx * ux + vy * uy + vz * uz;
-    return {
-      N: Math.abs(axial),
-      V: Math.hypot(vx - axial * ux, vy - axial * uy, vz - axial * uz),
-      M: Math.hypot(f[3], f[4], f[5])
-    };
+    const fvx = f[0], fvy = f[2], fvz = f[1];
+    const P = Math.abs(fvx * ux + fvy * uy + fvz * uz);
+    const Mvx = f[3], Mvy = f[5], Mvz = f[4];
+    const mt = Mvx * ux + Mvy * uy + Mvz * uz;
+    const tx = Mvx - mt * ux, ty = Mvy - mt * uy, tz = Mvz - mt * uz;
+    const M = Math.hypot(tx, ty, tz);
+    return { P, M };
   }
 
   function showBeamReport(meta, elemObj, caso) {
     const caseF = (ANALYSIS.forces[caso] || {})[meta.id] || {};
     const fi = caseF.i, fj = caseF.j;
+    const li = caseF.li, lj = caseF.lj;
     const D = (ANALYSIS.disp[caso] || {});
     const di = meta.ni ? D[meta.ni] : null;
     const dj = meta.nj ? D[meta.nj] : null;
-    const a = beamForces(elemObj, fi);
-    const b = beamForces(elemObj, fj);
     const defi = di ? Math.hypot(di[0], di[2], di[1]) * 1000 : NaN;   // mm
     const defj = dj ? Math.hypot(dj[0], dj[2], dj[1]) * 1000 : NaN;
-    const maxN = Math.max(a.N, b.N), maxV = Math.max(a.V, b.V), maxM = Math.max(a.M, b.M);
-    const rows = [['Extremo', 'N [kN]', 'V [kN]', 'M [kN·m]', 'DEF [mm]']];
-    rows.push(['i', beamXX(a.N), beamXX(a.V), beamNN(a.M), defi.toFixed(1)]);
-    rows.push(['j', beamXX(b.N), beamXX(b.V), beamNN(b.M), defj.toFixed(1)]);
-    let html = (meta.type === 'beam_x' ? 'Viga X' :
-                meta.type === 'beam_y' ? 'Viga Y' :
-                meta.type === 'steel_column' ? 'Columna MET' :
-                meta.type === 'steel_beam' ? 'Viga MET' : 'Elemento') +
-      ' sec. ' + meta.section + ' - caso ' + caso +
-      '<table style="border-collapse:collapse;margin-top:6px;font-family:monospace;font-size:12px">';
-    for (let r = 0; r < rows.length; r++) {
-      html += '<tr>';
-      const bold = (r === 0);
-      for (let c = 0; c < rows[r].length; c++) {
-        html += '<td style="border:1px solid #0aa;padding:2px 8px;' +
-          ((!bold && c === 0) ? 'color:#9ff;' : '') +
-          ((!bold && c >= 1 && c <= 3) ? 'color:' + highColor([a, b][r - 1][({1: 'N', 2: 'V', 3: 'M'})[c]]) + ';' : '') +
-          '">' + rows[r][c] + '</td>';
-      }
-      html += '</tr>';
+    // fuerzas locales [N, Vy, Vz, T, My, Mz] (ya rotadas al eje del elemento);
+    // si no hay datos locales (mapa viejo) se derivan de las globales.
+    function L(f, g) {
+      if (f) return f;
+      if (!g) return null;
+      const e = elemObj;
+      const Lg = Math.hypot(e.xj - e.xi, e.yj - e.yi, e.zj - e.zi) || 1;
+      const ux = (e.xj - e.xi) / Lg, uy = (e.yj - e.yi) / Lg, uz = (e.zj - e.zi) / Lg;
+      const vx = g[0], vy = g[2], vz = g[1];
+      const ax = vx * ux + vy * uy + vz * uz;
+      return [ax, Math.hypot(vx - ax * ux, vy - ax * uy, vz - ax * uz), 0,
+              g[3], g[4], g[5]];
     }
-    html += '</table><br>Valores X/Y' +
-      ': N=axial, V=corte, M=momento resultante en cada extremo, DEF=modulo del desplazamiento nodal.';
-    // marca el extremo con la mayor demanda de momento
-    const worst = maxM > 0 ? ((a.M >= b.M) ? 'i' : 'j') : '-';
+    const a = L(li, fi), b = L(lj, fj);
+    const celdas = (r) => r
+      ? [0, 1, 2, 3, 4, 5].map(k => Math.abs(r[k])).map((v, k) => {
+          const s = v.toFixed(1);
+          const alta = (k === 0) ? (v > 500) : (k >= 3 ? v > 300 : v > 120);
+          return '<td style="border:1px solid #0aa;padding:2px 8px;color:' +
+            (alta ? '#f66' : '#cfc') + '">' + s + '</td>';
+        }).join('')
+      : '<td colspan="6" style="border:1px solid #0aa;padding:2px 8px;color:#888">sin dato</td>';
+    let html = elemHeader(meta, elemObj) +
+      '<br><b>' + tipoNombre(meta.type) + ' - caso ' + caso +
+      '</b> <span style="color:#aaa">(fuerzas LOCALES: axial, cortes y momentos propios)</span>' +
+      '<table style="border-collapse:collapse;margin-top:6px;font-family:monospace;font-size:12px">' +
+      '<tr style="color:#0ff"><th style="border:1px solid #0aa;padding:2px 8px">Extr</th>' +
+      '<th style="border:1px solid #0aa;padding:2px 8px">N [kN]</th>' +
+      '<th style="border:1px solid #0aa;padding:2px 8px">Vy [kN]</th>' +
+      '<th style="border:1px solid #0aa;padding:2px 8px">Vz [kN]</th>' +
+      '<th style="border:1px solid #0aa;padding:2px 8px">T [kN·m]</th>' +
+      '<th style="border:1px solid #0aa;padding:2px 8px">My [kN·m]</th>' +
+      '<th style="border:1px solid #0aa;padding:2px 8px">Mz [kN·m]</th>' +
+      '<th style="border:1px solid #0aa;padding:2px 8px">DEF [mm]</th></tr>' +
+      '<tr><td style="border:1px solid #0aa;padding:2px 8px;color:#9ff">i</td>' + celdas(a) +
+      '<td style="border:1px solid #0aa;padding:2px 8px;color:#aaa">' + defi.toFixed(1) + '</td></tr>' +
+      '<tr><td style="border:1px solid #0aa;padding:2px 8px;color:#9ff">j</td>' + celdas(b) +
+      '<td style="border:1px solid #0aa;padding:2px 8px;color:#aaa">' + defj.toFixed(1) + '</td></tr></table>' +
+      '<div class="dt-note">Valores en modulo. N=axial, Vy/Vz=cortes, T=torsión, ' +
+      'My/Mz=momentos de flexión · DEF=módulo del desplazamiento nodal.</div>';
     // tramos tributarios reales de esta viga (aporte de losas)
     let tribHtml = '';
     const tr = (ANALYSIS.tributarias || {})[meta.id];
@@ -2655,8 +2803,8 @@ const F = ANALYSIS.forces[S.caso] || {};
         (tr.W_G_kN || 0).toFixed(1) + ' kN · W_Q = ' + (tr.W_Q_kN || 0).toFixed(1) + ' kN</div>';
     }
     inspectorEl.style.display = 'block';
-    inspectorBody.innerHTML = html +
-      '<br>Max M = <b>' + maxM.toFixed(1) + '</b> kN·m en extremo ' + worst + tribHtml;
+    if (elemObj) showLocalAxes(elemObj, meta);
+    inspectorBody.innerHTML = html + tribHtml;
   }
 
   function highColor(row) {
@@ -2711,16 +2859,8 @@ const F = ANALYSIS.forces[S.caso] || {};
           }
           // columna / muro / acero -> P-M
           const frec = (ANALYSIS.forces[S.caso] || {})[meta.id] || {};
-          const f = frec.i || frec.j;
-          let P = 0, M = 0;
-          if (f) {
-            const L = Math.hypot(elemObj.xj - elemObj.xi, elemObj.yj - elemObj.yi, elemObj.zj - elemObj.zi) || 1;
-            const ux = (elemObj.xj - elemObj.xi) / L, uy = (elemObj.yj - elemObj.yi) / L, uz = (elemObj.zj - elemObj.zi) / L;
-            const fvx = f[0], fvy = f[2], fvz = f[1];
-            P = Math.abs(fvx * ux + fvy * uy + fvz * uz);
-            M = Math.hypot(f[3], f[4], f[5]);
-          }
-          drawPM(meta, P, M, S.caso);
+          const pmm = demandaColumnaMuro(frec, elemObj);
+          drawPM(meta, pmm.P, pmm.M, S.caso, elemObj);
           return;
         }
       }
@@ -2738,24 +2878,15 @@ const F = ANALYSIS.forces[S.caso] || {};
         showBeamReport(meta, elemObj, S.caso);
         return;
       }
-      // punto de demanda (caso activo) sobre ese elemento
-      const frec = (ANALYSIS.forces[S.caso] || {})[meta.id] || {};
-      const f = frec.i || frec.j;
-      // conversion P (axial) y M (momento resultante)
-      let P = 0, M = 0;
-      if (f) {
-        const L = Math.hypot(elemObj.xj - elemObj.xi, elemObj.yj - elemObj.yi, elemObj.zj - elemObj.zi) || 1;
-        const ux = (elemObj.xj - elemObj.xi) / L, uy = (elemObj.yj - elemObj.yi) / L, uz = (elemObj.zj - elemObj.zi) / L;
-        const fvx = f[0], fvy = f[2], fvz = f[1];
-        P = Math.abs(fvx * ux + fvy * uy + fvz * uz);
-        M = Math.hypot(f[3], f[4], f[5]);
+// punto de demanda (caso activo) sobre ese elemento
+        const frec = (ANALYSIS.forces[S.caso] || {})[meta.id] || {};
+        const pmm = demandaColumnaMuro(frec, elemObj);
+        drawPM(meta, pmm.P, pmm.M, S.caso, elemObj);
       }
-      drawPM(meta, P, M, S.caso);
-    }
   });
 
   // Dibuja la curva P-M de capacidad (columna o muro) + punto de demanda
-  function drawPM(meta, Pd, Md, caso) {
+  function drawPM(meta, Pd, Md, caso, elemObj) {
     const sec = meta.section;
     // Columna del portico extremo (borde re-forzado 4x36+4x28): usa su propia
     // curva P-M en vez de la columna base.
@@ -2777,10 +2908,16 @@ const F = ANALYSIS.forces[S.caso] || {};
       return;
     }
     const P = cur.P, Mc = cur.M;
-    // diamante completo: escalas simetricas en M (ramas + y -)
-    let Pmax = 0, Mabs = 0;
-    P.forEach(p => Pmax = Math.max(Pmax, p));
+    // diamante completo: escalas simetricas en M (ramas + y -); el rango de P
+    // incluye la punta de traccion (P<0) cuando la curva la trae cerrada
+    let Pmax = 0, Pmin = 0, Mabs = 0;
+    P.forEach(p => { Pmax = Math.max(Pmax, p); Pmin = Math.min(Pmin, p); });
     Mc.forEach(m => Mabs = Math.max(Mabs, m));
+    // el punto de demanda puede superar la capacidad: incluir Pd/Md en la
+    // escala para que diamante + punto + rotulo quepan siempre completos
+    if (typeof Pd === 'number') { Pmax = Math.max(Pmax, Pd); Pmin = Math.min(Pmin, Pd); }
+    if (typeof Md === 'number') Mabs = Math.max(Mabs, Math.abs(Md));
+    if (Pmax <= Pmin) Pmax = Pmin + 1;   // rango degenerado (solo P=0)
 
     const W = 360, H = 240, px = 46, py = 16, pw = W - px - 14, ph = H - py - 30;
     const cv = document.createElement('canvas');
@@ -2803,9 +2940,12 @@ const F = ANALYSIS.forces[S.caso] || {};
     ctx.strokeStyle = '#3a3a5a'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(px + pw / 2, py); ctx.lineTo(px + pw / 2, py + ph);
     ctx.stroke();
+    // eje horizontal (P=0): separa traccion (abajo) de compresion (arriba)
+    const y0 = py + ph - ph * (0 - Pmin) / (Pmax - Pmin);
+    ctx.beginPath(); ctx.moveTo(px, y0); ctx.lineTo(px + pw, y0); ctx.stroke();
 
     function sx(m) { return px + pw / 2 + pw * m / (2 * Mabs); }
-    function sy(p) { return py + ph - ph * p / Pmax; }
+    function sy(p) { return py + ph - ph * (p - Pmin) / (Pmax - Pmin); }
 
     // rama positiva (M >= 0)
     ctx.beginPath(); ctx.moveTo(sx(Mc[0]), sy(P[0]));
@@ -2845,12 +2985,40 @@ const F = ANALYSIS.forces[S.caso] || {};
                     meta.type === 'steel_column' ? 'Columna MET' :
                     meta.type === 'steel_beam' ? 'Viga MET' :
                     meta.type === 'wall' ? 'Muro' : 'Elemento');
-    inspectorBody.innerHTML = tlabel + ' sec. ' + sec +
+    // cabecera con ID/nodos/material/restricciones + fuerzas locales del caso
+    let headHtml = (elemObj && ANALYSIS) ? elemHeader(meta, elemObj) : '';
+    if (elemObj) showLocalAxes(elemObj, meta);
+    const frec = (ANALYSIS && ANALYSIS.forces[caso] || {})[meta.id] || {};
+    let fuerzasHtml = '';
+    if (frec.li || frec.lj) {
+      const tbl = (end, r) =>
+        '<tr><td style="border:1px solid #0aa;padding:2px 8px;color:#9ff">' + end + '</td>' +
+        (!r ? '<td colspan="6" style="border:1px solid #0aa;padding:2px 8px;color:#888">sin dato</td></tr>'
+         : ['N', 'Vy', 'Vz', 'T', 'My', 'Mz'].map((nm, k) =>
+            '<td style="border:1px solid #0aa;padding:2px 8px;color:#cfc">' + nm + ' = ' +
+            Math.abs(r[k]).toFixed(1) + ' <span style="color:#aaa">' +
+            (k >= 3 ? 'kN·m' : 'kN') + '</span></td>').join('') + '</tr>');
+      fuerzasHtml =
+        '<br><div style="color:#9ff">Fuerzas LOCALES ' + tipoNombre(meta.type) +
+        ' - caso ' + caso + ' (N, Vy, Vz, T, My, Mz):</div>' +
+        '<table style="border-collapse:collapse;margin-top:6px;font-family:monospace;font-size:12px">' +
+        '<tr style="color:#0ff"><th style="border:1px solid #0aa;padding:2px 8px">Extr</th>' +
+        '<th style="border:1px solid #0aa;padding:2px 8px">N [kN]</th>' +
+        '<th style="border:1px solid #0aa;padding:2px 8px">Vy [kN]</th>' +
+        '<th style="border:1px solid #0aa;padding:2px 8px">Vz [kN]</th>' +
+        '<th style="border:1px solid #0aa;padding:2px 8px">T [kN·m]</th>' +
+        '<th style="border:1px solid #0aa;padding:2px 8px">My [kN·m]</th>' +
+        '<th style="border:1px solid #0aa;padding:2px 8px">Mz [kN·m]</th></tr>' +
+        tbl('i', frec.li) + tbl('j', frec.lj) + '</table>';
+    }
+    inspectorBody.innerHTML = headHtml +
+      '<br><b>' + tlabel + ' sec. ' + sec +
       (cur.fy_MPa ? ' (acero, fy = ' + cur.fy_MPa + ' MPa)' : '') +
-      '<br>Caso ' + caso + ' -> P = ' + Pd.toFixed(1) + ' kN,  M = ' + Md.toFixed(1) + ' kNm' +
+      '</b><br>Caso <b>' + caso + '</b> -> P = ' + Pd.toFixed(1) + ' kN,  M = ' + Md.toFixed(1) + ' kNm' +
       '<br>Capacidad a esa P (M cap. = ' + Mcap.toFixed(1) + ' kNm): <b>' +
       (Md / (Mcap || 1) * 100).toFixed(1) + '%</b> ' +
-      (Md <= Mcap ? '(dentro de la curva)' : '(FUERA de la curva / no cumple)');
+      (Md <= Mcap ? '(dentro de la curva)' : '(FUERA de la curva / no cumple)') +
+      fuerzasHtml;
     inspectorBody.appendChild(cv);
   }
 
@@ -2889,6 +3057,7 @@ const F = ANALYSIS.forces[S.caso] || {};
     else if (id === 'dt-pm') renderPM();
     else if (id === 'dt-reac') renderReac();
     else if (id === 'dt-tribu') renderTribu();
+    else if (id === 'dt-diag') renderDiag();
   }
 
   function th(rows, headers, cls) {
@@ -3005,10 +3174,14 @@ const F = ANALYSIS.forces[S.caso] || {};
       const ctx = cv.getContext('2d');
       const W = cv.width, H = cv.height, px = 52, py = 14, pw = W - px - 14, phh = H - py - 26;
       function maxAbs(a) { let m = 0; a.forEach(x => { if (Math.abs(x) > m) m = Math.abs(x); }); return m; }
+      function minOf(a, m0) { let m = m0; a.forEach(x => { if (x < m) m = x; }); return m; }
       const Mmax = Math.max(maxAbs(d.M_fiber), maxAbs(d.M_HA), 1);
       const Pmax = Math.max(maxAbs(d.P_fiber), maxAbs(d.P_HA), 1);
+      // rango de P con la punta de traccion de la fibra cerrada (P<0)
+      const Pmin = Math.min(0, minOf(d.P_fiber || [], 0), minOf(d.P_HA || [], 0), -1);
+      const Pspan = Math.max(Pmax - Pmin, 1);
       function sx(m) { return px + pw * Math.abs(m) / Mmax; }
-      function sy(p) { return py + phh - phh * p / Pmax; }
+      function sy(p) { return py + phh - phh * (p - Pmin) / Pspan; }
       ctx.fillStyle = '#0a0a14'; ctx.fillRect(0, 0, W, H);
       ctx.strokeStyle = '#2a2a44'; ctx.lineWidth = 1;
       [0, 0.25, 0.5, 0.75, 1].forEach(f => {
@@ -3017,11 +3190,15 @@ const F = ANALYSIS.forces[S.caso] || {};
         ctx.fillText((Mmax * f).toFixed(0), x, py + phh + 12);
       });
       for (let i = 0; i <= 4; i++) {
+        const v = Pmin + Pspan * i / 4;
         const y = py + phh - phh * i / 4;
         ctx.beginPath(); ctx.moveTo(px, y); ctx.lineTo(px + pw, y); ctx.stroke();
         ctx.fillStyle = '#666'; ctx.textAlign = 'right';
-        ctx.fillText((Pmax * i / 4).toFixed(0), px - 4, y + 3);
+        ctx.fillText(v.toFixed(0), px - 4, y + 3);
       }
+      // linea de P = 0 (traccion abajo, compresion arriba)
+      ctx.strokeStyle = '#3a3a5a';
+      ctx.beginPath(); ctx.moveTo(px, sy(0)); ctx.lineTo(px + pw, sy(0)); ctx.stroke();
       function line(P, M, color) {
         ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath();
         for (let i = 0; i < P.length; i++) {
@@ -3042,7 +3219,8 @@ const F = ANALYSIS.forces[S.caso] || {};
       const note = document.getElementById('pmMol');
       if (note) note.innerHTML =
         ((d.alpha1 !== undefined) ? 'α1 = ' + d.alpha1 + ', β1 = ' + d.beta1 + '  |  ' : '') +
-        'Capacidad axial pura fibra ≈ ' + (d.P_fiber && d.P_fiber.length ? d.P_fiber[d.P_fiber.length - 1].toFixed(0) : '-') + ' kN';
+        'Puntas cerradas fibra: tracción ≈ ' + (d.P_fiber && d.P_fiber.length ? d.P_fiber[0].toFixed(0) : '-') +
+        ', compresión ≈ ' + (d.P_fiber && d.P_fiber.length ? d.P_fiber[d.P_fiber.length - 1].toFixed(0) : '-') + ' kN';
       // linea y-axis (muros simetricos -> doble lado)
       ctx.strokeStyle = '#2a2a44'; ctx.beginPath(); ctx.moveTo(px + pw / 2, py); ctx.lineTo(px + pw / 2, py + phh); ctx.stroke();
     };
@@ -3117,6 +3295,104 @@ const F = ANALYSIS.forces[S.caso] || {};
     };
     el.addEventListener('input', (ev) => { if (ev.target && ev.target.id === 'inpTribu') paint(ev.target.value.trim()); });
     paint('');
+  }
+
+  // ------------------------------------------------------------------
+  // T A B  N  —  DIAGRAMAS 2D (M/V/N) del caso COMBO
+  // ------------------------------------------------------------------
+  function drawDiagramPanels(canvas, d) {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const PXL = 48, PXR = 14, PT = 26, PB = 24;
+    const NW = W - PXL - PXR, NH = (H - PT - PB - 6) / 3;
+    ctx.fillStyle = '#0a0a14'; ctx.fillRect(0, 0, W, H);
+    const series = [
+      { key: 'N', color: '#2ecc71', label: 'N [kN]' },
+      { key: 'V', color: '#ffb347', label: 'V [kN]' },
+      { key: 'M', color: '#0ff', label: 'M [kN·m]' },
+    ];
+    for (let s = 0; s < 3; s++) {
+      const py = PT + s * (NH + 3);
+      const vals = d[series[s].key];
+      const maxA = Math.max(1e-9, Math.max(...vals.map(Math.abs)) * 1.15);
+      const mid = py + NH / 2;
+      ctx.strokeStyle = '#222a3a'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(PXL, py); ctx.lineTo(PXL + NW, py);
+      ctx.moveTo(PXL, py + NH); ctx.lineTo(PXL + NW, py + NH); ctx.stroke();
+      ctx.strokeStyle = '#3a3a5a'; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(PXL, mid); ctx.lineTo(PXL + NW, mid); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#778'; ctx.font = '10px monospace'; ctx.textAlign = 'right';
+      ctx.fillText('+' + maxA.toFixed(0), PXL - 5, py + 10);
+      ctx.fillText('−' + maxA.toFixed(0), PXL - 5, py + NH - 2);
+      ctx.fillText('0', PXL - 5, mid + 3);
+      ctx.fillStyle = series[s].color; ctx.strokeStyle = series[s].color; ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < vals.length; i++) {
+        const x = PXL + NW * (d.x[i] / d.L);
+        const y = mid - (vals[i] / maxA) * (NH / 2);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      const iMax = vals.reduce((a, v, i) => Math.abs(v) > Math.abs(vals[a]) ? i : a, 0);
+      const xm = PXL + NW * (d.x[iMax] / d.L), ym = mid - (vals[iMax] / maxA) * (NH / 2);
+      ctx.beginPath(); ctx.arc(xm, ym, 3.5, 0, 6.2832); ctx.fill();
+      ctx.font = 'bold 11px monospace'; ctx.textAlign = 'left';
+      ctx.fillText(vals[iMax].toFixed(0), xm + 6, ym + 10);
+      if (s === 2) {
+        const iMn = vals.reduce((a, v, i) => v < vals[a] ? i : a, 0);
+        if (iMn !== iMax) {
+          const xn = PXL + NW * (d.x[iMn] / d.L), yn = mid - (vals[iMn] / maxA) * (NH / 2);
+          ctx.strokeStyle = '#0ff'; ctx.beginPath(); ctx.arc(xn, yn, 3.5, 0, 6.2832); ctx.stroke();
+        }
+      }
+      ctx.fillStyle = '#9ff'; ctx.font = '9px monospace'; ctx.textAlign = 'left';
+      ctx.fillText(series[s].label, PXL + 3, py + 9);
+    }
+    ctx.strokeStyle = '#444'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PXL, H - PB + 3); ctx.lineTo(PXL + NW, H - PB + 3); ctx.stroke();
+    ctx.fillStyle = '#778'; ctx.font = '10px monospace';
+    ctx.textAlign = 'left'; ctx.fillText('0', PXL, H - 5);
+    ctx.textAlign = 'right'; ctx.fillText(d.L.toFixed(2) + ' m', PXL + NW, H - 5);
+  }
+
+  function renderDiag() {
+    const el = document.getElementById('dt-diag');
+    if (!el) return;
+    const D = ANALYSIS.diagramas;
+    if (!D || !D.viga) {
+      el.innerHTML = '<div class="dt-note">Sin diagramas: regenera analysis_map.js con ' +
+        'opensees/exportar_analysis_map.py.</div>';
+      return;
+    }
+    const keys = ['viga', 'columna', 'muro'];
+    const etiqueta = { viga: 'Viga', columna: 'Columna', muro: 'Muro' };
+    el.innerHTML =
+      '<div style="display:flex;align-items:center;gap:6px;margin:2px 0 4px;flex-wrap:wrap">' +
+      '<span style="color:#9ff">Gráfica:</span>' +
+      '<select id="selDiag">' +
+      keys.map(k => `<option value="${k}">${etiqueta[k]} ${D[k].tag} · ${D[k].seccion}</option>`).join('') +
+      '</select><span id="diagCaso" style="color:#0aa;font-size:11px">COMBO</span></div>' +
+      '<canvas id="diagCanvas" width="420" height="480"></canvas>' +
+      '<div id="diagInfo" class="dt-note" style="margin-top:3px"></div>';
+    const paint = () => {
+      const k = document.getElementById('selDiag').value;
+      const d = D[k] || D.viga;
+      drawDiagramPanels(document.getElementById('diagCanvas'), d);
+      let txt = etiqueta[k] + ' ' + d.tag + ' · ' + d.seccion + ' · L ' + d.L.toFixed(2) + ' m';
+      if (d.q_losa !== undefined) {
+        txt += ' · q=' + d.q_losa.toFixed(2) + ' kN/m (losa tributaria, FE beamUniform)';
+        if (d.resid !== undefined) txt += ' · corte ' + (d.resid * 100).toFixed(1) + '%';
+        if (d.resMJ !== undefined) txt += ' · momentoj ' + (d.resMJ * 100).toFixed(1) + '%';
+      }
+      txt += ' | M ' + d.M[0].toFixed(1) + ' → ' + d.M[d.M.length - 1].toFixed(1) +
+        ' · V ' + d.V[0].toFixed(1) + ' → ' + d.V[d.V.length - 1].toFixed(1) +
+        ' · N ' + d.N[0].toFixed(1) + ' kN';
+      document.getElementById('diagInfo').innerHTML = txt;
+    };
+    el.addEventListener('input', (ev) => { if (ev.target && ev.target.id === 'selDiag') paint(); });
+    paint();
   }
 
   // Pintar reacciones en 3D (se llama al final de buildAnalysis)

@@ -51,13 +51,26 @@ def axial(p, i, j):
     ux = (j[0] - i[0]) / L
     uy = (j[1] - i[1]) / L
     uz = (j[2] - i[2]) / L
-    # p en [Fx, Fy, Fz] segun fila del JSON (Fy es vertical)
-    return p[0] * ux + p[1] * uz + p[2] * uy
+    # p en [Fx, Fy, Fz] segun fila del JSON (z es vertical)
+    return p[0] * ux + p[1] * uy + p[2] * uz
 
 
-def momento(p):
-    """Modulo del momento resultante [Mx, My, Mz]."""
-    return math.sqrt(p[3] ** 2 + p[4] ** 2 + p[5] ** 2)
+def momento(p, ci=None, cj=None):
+    """Modulo del momento de flexión: componentes transversales al eje del
+    elemento (ci->cj). Sin extremos usa el resultante de [Mx, My, Mz].
+    Para elementos verticales (z) == sqrt(Mx^2 + My^2)."""
+    if ci is None or cj is None:
+        return math.sqrt(p[3] ** 2 + p[4] ** 2 + p[5] ** 2)
+    L = math.sqrt((cj[0] - ci[0]) ** 2 + (cj[1] - ci[1]) ** 2 + (cj[2] - ci[2]) ** 2) or 1.0
+    ux = (cj[0] - ci[0]) / L
+    uy = (cj[1] - ci[1]) / L
+    uz = (cj[2] - ci[2]) / L
+    mx, my, mz = p[3], p[4], p[5]
+    mt = mx * ux + my * uy + mz * uz
+    tx = mx - mt * ux
+    ty = my - mt * uy
+    tz = mz - mt * uz
+    return math.sqrt(tx * tx + ty * ty + tz * tz)
 
 
 def radio_demanda(P_d, M_d, Pcap, Mcap):
@@ -108,7 +121,7 @@ def main():
         P_i = axial(i, c_i, c_j)
         P_j = axial(j, c_i, c_j)
         P_d = max(abs(P_i), abs(P_j))            # axial demanda (compresion +)
-        M_d = max(momento(i), momento(j))        # momento resultante demandado
+        M_d = max(momento(i, c_i, c_j), momento(j, c_i, c_j))  # flexión demandada
         sec = el["section"]
         Pcap = Mcap = None
         if el["type"] == "column":
@@ -154,7 +167,7 @@ def main():
         P_i = axial(i, c_i, c_j)
         P_j = axial(j, c_i, c_j)
         P_d = max(abs(P_i), abs(P_j))
-        M_d = max(momento(i), momento(j))
+        M_d = max(momento(i, c_i, c_j), momento(j, c_i, c_j))
         sec = el["section"]
         cur = cap.get("muros", {}).get(sec) or {}
         Pcap, Mcap = cur.get("P"), cur.get("M")
@@ -187,7 +200,7 @@ def main():
     print(f"\nCRITICA: id={crit['id']}  tipo={crit['type']}  "
           f"seccion={crit['section']}")
     print(f"   P_d = {crit['P_d_kN']:.1f} kN  (axial compresion)")
-    print(f"   M_d = {crit['M_d_kNm']:.1f} kN*m  (momento resultante)")
+    print(f"   M_d = {crit['M_d_kNm']:.1f} kN*m  (flexión transversal al eje)")
     print(f"   radio = {crit['radio']:.3f}  "
           f"({'DENTRO' if crit['radio'] < 1 else 'FUERA DE'} capacidad)")
 
@@ -241,8 +254,8 @@ def main():
             "P_d_kN": crit["P_d_kN"], "M_d_kNm": crit["M_d_kNm"],
             "radio": crit["radio"],
             "Pcap_kN": Pcap, "Mcap_kNm": Mcap,
-            "criterio": "P por proyeccion axial, M momento resultante "
-                        "del extremo con mayor demanda",
+            "criterio": "P por proyeccion axial (z vertical), M flexión "
+                        "transversal al eje, del extremo con mayor demanda",
         }
         jp = os.path.join(FIG, "demanda_capacidad_critica.json")
         with open(jp, "w", encoding="utf-8") as f:
