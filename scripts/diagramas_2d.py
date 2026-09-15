@@ -27,8 +27,15 @@ import sys
 sys.stdout.reconfigure(encoding="utf-8")
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RESULTADOS_COMBO = os.path.join(REPO, "resultados", "01_casos_base",
-                                "edificio_full_results_COMBO.json")
+RESULTADOS_DIR = os.path.join(REPO, "resultados", "01_casos_base")
+CASOS = [
+    ("COMBO", "edificio_full_results_COMBO.json"),
+    ("G", "edificio_full_results.json"),
+    ("Q", "edificio_full_results_Q.json"),
+    ("EX", "edificio_full_results_EX.json"),
+    ("EY", "edificio_full_results_EY.json"),
+]
+RESULTADOS_COMBO = os.path.join(RESULTADOS_DIR, "edificio_full_results_COMBO.json")
 EDIFICIO_JSON = os.path.join(REPO, "Edificio.json")
 OUT_DIR = os.path.join(REPO, "resultados", "10_figuras")
 
@@ -64,7 +71,22 @@ def peso_propio(e):
         return 0.0
 
 
-def datos_viga(tag, e, nodes, forces, tribu):
+def _q_caso(caso, t):
+    """Carga repartida (beamUniform) que el FE aplica en cada caso, en kN/m."""
+    pG = t.get("p_G_kN_m", 0.0)
+    pQ = t.get("p_Q_kN_m", 0.0)
+    if caso == "G":
+        return pG
+    if caso == "Q":
+        return pQ
+    if caso in ("EX", "EY"):
+        return 0.0
+    if caso == "COMBO":
+        return 1.2 * pG + 1.0 * pQ
+    return 0.0
+
+
+def datos_viga(tag, e, nodes, forces, q):
     pa, pb = fe_coords(e, nodes)
     v = [pb[k] - pa[k] for k in range(3)]
     L = math.sqrt(sum(x * x for x in v))
@@ -80,19 +102,12 @@ def datos_viga(tag, e, nodes, forces, tribu):
     Vz_i, Vz_j = gi[2], gj[2]
     N_i = sum(gi[k] * u[k] for k in range(3))
 
-    t = tribu.get(str(tag), {})
-    # Carga REALMENTE aplicada por el FE como beamUniform: solo la losa
-    # tributaria (el peso propio se aplica como cargas nodales y NO curva el
-    # diagrama). El extremo j del FE se reporta en "cara opuesta" (accion
-    # sobre el elemento), asi que la parabola debe cerrar contra -M_j y -V_j.
-    q_losa = 1.2 * t.get("p_G_kN_m", 0.0) + 1.0 * t.get("p_Q_kN_m", 0.0)
-    bw, hh = [float(x) for x in e["section"].split("x")]
-    sw = bw * hh / 1e6 * 25.0
-    q_equiv = q_losa + 1.2 * sw
-    q = q_losa
+    # q es la carga repartida REAL del caso (solo la losa tributaria, que es lo
+    # unico aplicado como beamUniform; el peso propio es nodal y no curva el
+    # diagrama). El extremo j del FE se reporta en "cara opuesta" (accion sobre
+    # el elemento), por lo que la parabola debe cerrar contra -M_j y -V_j.
     W = q * L
     residual = abs((Vz_i + Vz_j) - W) / max(W, 1e-6)
-    # cierre de momento en el extremo j (convencion de seccion, cara opuesta)
     resMJ = abs(Mb_i + Vz_i * L - 0.5 * q * L * L + Mb_j) / max(abs(Mb_j), 1e-6)
 
     nx = 201
@@ -101,9 +116,8 @@ def datos_viga(tag, e, nodes, forces, tribu):
     V = [Vz_i - q * xx for xx in x]
     N = [N_i] * nx
     return {
-        "tag": tag, "tipo": e["type"], "series": "60x80",
-        "seccion": e["section"], "L": L,
-        "q_losa": q, "q_equiv": q_equiv, "resid": residual, "resMJ": resMJ,
+        "tag": tag, "tipo": e["type"], "seccion": e["section"], "L": L,
+        "q": q, "resid": residual, "resMJ": resMJ,
         "x": x, "M": M, "V": V, "N": N,
         "piso": piso_de_z(pa[2]), "coords_i": pa, "coords_j": pb,
         "extremos": {"M_i": Mb_i, "M_j": Mb_j, "V_i": Vz_i, "V_j": Vz_j, "N": N_i},
@@ -146,7 +160,7 @@ def estilo(ax, titulo, ylabel, unit):
     ax.axhline(0, color="k", lw=0.8)
 
 
-def plot_viga(d):
+def plot_viga(d, caso):
     """Diagrama clásico M(x), V(x) y N(x) de una viga."""
     import matplotlib
     matplotlib.use("Agg")
@@ -162,7 +176,7 @@ def plot_viga(d):
     a1.annotate("M_max = %+.1f kN·m" % M[im], (x[im], M[im]),
                 textcoords="offset points", xytext=(8, 6), fontsize=8)
     estilo(a1, "Diagrama de momento flector  M(x) — losa tributaria aplicada q=%.2f kN/m"
-               % d["q_losa"], "Momento", "kN·m")
+               % d["q"], "Momento", "kN·m")
 
     a2.fill_between(x, V, color="#d62728", alpha=0.35)
     a2.plot(x, V, color="#8f1010", lw=1.8)
@@ -176,13 +190,14 @@ def plot_viga(d):
     estilo(a3, "Diagrama de esfuerzo axial  N(x) (+ = traccion)", "Axial", "kN")
 
     a3.set_xlabel("Posicion a lo largo de la viga  [cm]", fontsize=9)
-    fig.suptitle(("Viga id=%d  %s  %s  |  L=%.2f m  |  %s\n"
-                   "Caso COMBO (λG=1.2, λQ=1.0, λEX=λEY=1.4) — elementos FE, "
-                   "fuerzas de extremo i") % (d["tag"], d["tipo"], d["seccion"],
-                                              d["L"], d["piso"]), fontsize=10)
+    fig.suptitle(("Viga id=%d  %s  %s  |  L=%.2f m  |  %s  |  Caso %s\n"
+                   "Fuerzas de extremo i del FE — el extremo j se reporta en "
+                   "cara opuesta (cierre contra -M_j/-V_j, verificado %.0f%%/%.0f%%)") %
+                  (d["tag"], d["tipo"], d["seccion"], d["L"], d["piso"], caso,
+                   d["resid"] * 100, d["resMJ"] * 100), fontsize=10)
 
 
-def plot_vertical(d, nombre):
+def plot_vertical(d, nombre, caso):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -212,11 +227,10 @@ def plot_vertical(d, nombre):
     estilo(a3, "Diagrama de momento transversal al eje  M(x)", "Momento", "kN·m")
 
     a3.set_xlabel("Posicion a lo largo del eje Z (altura)  [cm]", fontsize=9)
-    fig.suptitle(("%s id=%d  %s  %s  |  L=%.2f m  |  base z=%.2f m  (%s)\n"
-                   "Caso COMBO (λG=1.2, λQ=1.0, λEX=λEY=1.4) — esfuerzos de "
-                   "extremo del elemento FE (i = base)") %
+    fig.suptitle(("%s id=%d  %s  %s  |  L=%.2f m  |  base z=%.2f m  (%s)  |  Caso %s\n"
+                   "Esfuerzos de extremo del elemento FE (i = base)") %
                   (nombre, d["tag"], d["tipo"], d["seccion"], d["L"],
-                   d["coords_i"][2], d["piso"]), fontsize=10)
+                   d["coords_i"][2], d["piso"], caso), fontsize=10)
 
 
 def _seleccion(forces, tribu, eis, nodes):
@@ -233,12 +247,12 @@ def _seleccion(forces, tribu, eis, nodes):
         L = math.sqrt(sum((pb[k] - pa[k]) ** 2 for k in range(3)))
         if L < 1e-6 or abs(span - L) / L > 0.25:
             continue
-        d = datos_viga(tag, e, nodes, forces, tribu)
+        d = datos_viga(tag, e, nodes, forces, _q_caso("COMBO", t))
         # la viga representativa debe cerrar en corte Y en momento (extremo j,
         # convencion de cara opuesta) -> diagrama coherente en ambos apoyos
         if d["resid"] > 0.03 or d["resMJ"] > 0.03:
             continue
-        q = d["q_losa"]
+        q = d["q"]
         V_i = d["extremos"]["V_i"]
         xs = V_i / q if abs(q) > 1e-9 else -1.0
         interior = 0.0 < xs < d["L"]
@@ -248,42 +262,54 @@ def _seleccion(forces, tribu, eis, nodes):
             best = d
             best["score"] = score
     if best is None or best["score"] <= 0:
-        best = datos_viga(35, eis[35], nodes, forces, tribu)
+        best = datos_viga(35, eis[35], nodes, forces,
+                          _q_caso("COMBO", tribu.get("35", {})))
         best["score"] = 0.0
     best.pop("score", None)
     return best
 
 
 def exportar_datos():
-    """Devuelve el dict `diagramas` para analysis_map.js (arrays en m/kN/kN·m)."""
-    with open(RESULTADOS_COMBO, encoding="utf-8") as f:
-        datos = json.load(f)
+    """Devuelve el dict `diagramas` para analysis_map.js: 5 casos x 3 elementos."""
     with open(EDIFICIO_JSON, encoding="utf-8") as f:
         contrato = json.load(f)
-    forces = datos["element_forces_global"]
-    tribu = datos.get("tributary_by_viga", {})
     eis = {e["id"]: e for e in contrato["elements"]}
     nodes = {n["id"]: [n["x"], n["y"], n["z"]] for n in contrato["nodes"]}
 
-    best = _seleccion(forces, tribu, eis, nodes)
-    col = datos_vertical(1, eis[1], nodes, forces)
-    mur = datos_vertical(473, eis[473], nodes, forces)
+    def _load(fname):
+        with open(os.path.join(RESULTADOS_DIR, fname), encoding="utf-8") as f:
+            return json.load(f)
+
+    # Seleccionar viga una sola vez con COMBO (elementos fijos para todos los casos)
+    combo = _load("edificio_full_results_COMBO.json")
+    viga_tag = _seleccion(combo["element_forces_global"],
+                          combo.get("tributary_by_viga", {}), eis, nodes)["tag"]
+    col_tag, mur_tag = 1, 473
 
     def limp(d):
-        out = {}
+        o = {}
         for k in ("tag", "tipo", "seccion", "L", "piso"):
             if k in d:
-                out[k] = d[k]
+                o[k] = d[k]
         for k in ("x", "M", "V", "N"):
-            out[k] = [round(v, 4) for v in d[k]]
-        if "q_losa" in d:
-            out["q_losa"] = round(d["q_losa"], 4)
-            out["q_equiv"] = round(d["q_equiv"], 4)
-            out["resid"] = round(d["resid"], 4)
-            out["resMJ"] = round(d["resMJ"], 4)
-        return out
+            o[k] = [round(v, 4) for v in d[k]]
+        if "q" in d:
+            o["q"] = round(d["q"], 4)
+            o["resid"] = round(d["resid"], 4)
+            o["resMJ"] = round(d["resMJ"], 4)
+        return o
 
-    return {"viga": limp(best), "columna": limp(col), "muro": limp(mur)}
+    out = {}
+    for caso, fname in CASOS:
+        data = _load(fname)
+        forces = data["element_forces_global"]
+        tribu = data.get("tributary_by_viga", {})
+        q = _q_caso(caso, tribu.get(str(viga_tag), {}))
+        v = datos_viga(viga_tag, eis[viga_tag], nodes, forces, q)
+        c = datos_vertical(col_tag, eis[col_tag], nodes, forces)
+        m = datos_vertical(mur_tag, eis[mur_tag], nodes, forces)
+        out[caso] = {"viga": limp(v), "columna": limp(c), "muro": limp(m)}
+    return out
 
 
 def main():
@@ -303,46 +329,62 @@ def main():
     os.makedirs(OUT_DIR, exist_ok=True)
 
     best = _seleccion(forces, tribu, eis, nodes)
-    col = datos_vertical(1, eis[1], nodes, forces)
-    mur = datos_vertical(473, eis[473], nodes, forces)
+    viga_tag = best["tag"]
+    col_tag, mur_tag = 1, 473
 
-    plot_viga(best)
-    f1 = os.path.join(OUT_DIR, "Diagrama 2D Momento-Corte-Axial Viga %d (%s).png" %
-                      (best["tag"], best["seccion"]))
-    plt.savefig(f1, dpi=150)
-    plt.close()
+    # ---------- Figuras: un trio por caso (mismos elementos siempre) ----------
+    figuras = []
+    for caso, fname in CASOS:
+        with open(os.path.join(RESULTADOS_DIR, fname), encoding="utf-8") as f:
+            data = json.load(f)
+        fcs = data["element_forces_global"]
+        trb = data.get("tributary_by_viga", {})
+        v = datos_viga(viga_tag, eis[viga_tag], nodes, fcs,
+                       _q_caso(caso, trb.get(str(viga_tag), {})))
+        c = datos_vertical(col_tag, eis[col_tag], nodes, fcs)
+        m = datos_vertical(mur_tag, eis[mur_tag], nodes, fcs)
 
-    plot_vertical(col, "Columna")
-    f2 = os.path.join(OUT_DIR, "Diagrama 2D Axial-Corte-Momento Columna %d (%s).png" %
-                      (col["tag"], col["seccion"]))
-    plt.savefig(f2, dpi=150)
-    plt.close()
+        plot_viga(v, caso)
+        f1 = os.path.join(OUT_DIR,
+            "Diagrama 2D Momento-Corte-Axial Viga %d (%s) (%s).png" %
+            (v["tag"], v["seccion"], caso))
+        plt.savefig(f1, dpi=150)
+        plt.close()
 
-    plot_vertical(mur, "Muro")
-    f3 = os.path.join(OUT_DIR, "Diagrama 2D Axial-Corte-Momento Muro %d (%s).png" %
-                      (mur["tag"], mur["seccion"]))
-    plt.savefig(f3, dpi=150)
-    plt.close()
+        plot_vertical(c, "Columna", caso)
+        f2 = os.path.join(OUT_DIR,
+            "Diagrama 2D Axial-Corte-Momento Columna %d (%s) (%s).png" %
+            (c["tag"], c["seccion"], caso))
+        plt.savefig(f2, dpi=150)
+        plt.close()
+
+        plot_vertical(m, "Muro", caso)
+        f3 = os.path.join(OUT_DIR,
+            "Diagrama 2D Axial-Corte-Momento Muro %d (%s) (%s).png" %
+            (m["tag"], m["seccion"], caso))
+        plt.savefig(f3, dpi=150)
+        plt.close()
+
+        figuras.append((f1, f2, f3))
+        print("Caso %-5s | Viga %d M %+.1f -> %+.1f | Col N %+.1f | Muro M %+.0f -> %+.0f"
+              % (caso, v["tag"], v["M"][0], v["M"][-1],
+                 -c["extremos"]["N_i"], m["extremos"]["M_t_i"], m["extremos"]["M_t_j"]))
 
     # ---------- Resumen ----------
-    print("Figuras generadas en %s:" % OUT_DIR)
-    for p in (f1, f2, f3):
-        print("  *", os.path.basename(p), "(%.0f KB)" % (os.path.getsize(p) / 1024))
+    print("\nFiguras generadas en %s:" % OUT_DIR)
+    for f1, f2, f3 in figuras:
+        for p in (f1, f2, f3):
+            print("  *", os.path.basename(p),
+                  "(%.0f KB)" % (os.path.getsize(p) / 1024))
     print()
-    print("VIGA id=%d %s L=%.2fm  q_losa=%.2f kN/m  (corte %.1f%%  momentoj %.1f%%)"
-          % (best["tag"], best["seccion"], best["L"], best["q_losa"],
-             best["resid"] * 100, best["resMJ"] * 100))
     ex = best["extremos"]
+    print("VIGA id=%d %s L=%.2fm  q(COMBO)=%.2f kN/m  (corte %.1f%%  momentoj %.1f%%)"
+          % (best["tag"], best["seccion"], best["L"], best["q"],
+             best["resid"] * 100, best["resMJ"] * 100))
     print("   M_i=%+.1f M_j=%+.1f kN·m | V_i=%+.1f V_j=%+.1f kN | N=%.1f kN"
           % (ex["M_i"], ex["M_j"], ex["V_i"], ex["V_j"], ex["N"]))
     print("   M_max(sagging) = %.1f kN·m @ x=%.2f m"
           % (max(best["M"]), best["x"][best["M"].index(max(best["M"]))]))
-    for label, d in (("COLUMNA id=%d" % col["tag"], col),
-                     ("MURO id=%d" % mur["tag"], mur)):
-        ex = d["extremos"]
-        print("%s %s L=%.2fm  N=%+.1f kN  V=%.1f kN  Mt(i)=%.1f -> Mt(j)=%.1f kN·m"
-              % (label, d["seccion"], d["L"], -ex["N_i"], ex["V_i"],
-                 ex["M_t_i"], ex["M_t_j"]))
 
 
 if __name__ == "__main__":

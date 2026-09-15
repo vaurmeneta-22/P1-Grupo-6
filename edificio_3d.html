@@ -180,7 +180,7 @@ Nota: respuesta lineal del modelo global. Doble clic en columna/muro -> P-M. Dob
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="resultados/11_mapa_visor/tributary_map.js"></script>
-<script src="resultados/11_mapa_visor/analysis_map.js?v=2aa256e282"></script>
+<script src="resultados/11_mapa_visor/analysis_map.js?v=69859a1437"></script>
 <script>
   const elements = [{"type":"column","section":"70x70","xi":0.0,"yi":0.0,"zi":0.0,"xj":0.0,"yj":3.56,"zj":0.0,"b":0.7,"h":0.7},
   {"type":"column","section":"70x70","xi":-10.0,"yi":0.0,"zi":0.0,"xj":-10.0,"yj":3.56,"zj":0.0,"b":0.7,"h":0.7},
@@ -3361,28 +3361,48 @@ const F = ANALYSIS.forces[S.caso] || {};
     const el = document.getElementById('dt-diag');
     if (!el) return;
     const D = ANALYSIS.diagramas;
-    if (!D || !D.viga) {
+    if (!D || !D.COMBO) {
       el.innerHTML = '<div class="dt-note">Sin diagramas: regenera analysis_map.js con ' +
         'opensees/exportar_analysis_map.py.</div>';
       return;
     }
+    const ETQ_CASO = {
+      COMBO: 'COMBO (1.2G+1.0Q+1.4EX+1.4EY)', G: 'G', Q: 'Q', EX: 'EX', EY: 'EY',
+    };
+    const casAct = D.COMBO ? ['COMBO', 'G', 'Q', 'EX', 'EY'].filter(c => D[c]) : [];
+    let casi = casAct[0];
     const keys = ['viga', 'columna', 'muro'];
     const etiqueta = { viga: 'Viga', columna: 'Columna', muro: 'Muro' };
     el.innerHTML =
+      '<div id="diagCasos" style="display:flex;gap:4px;margin:2px 0 4px;flex-wrap:wrap">' +
+      casAct.map(c =>
+        '<button data-caso="' + c + '" style="font:11px monospace;padding:2px 8px;cursor:pointer;' +
+        'border:1px solid #0aa;border-radius:4px;background:#0a1a28;color:#9ff">' +
+        c + '</button>').join('') +
+      '</div>' +
       '<div style="display:flex;align-items:center;gap:6px;margin:2px 0 4px;flex-wrap:wrap">' +
-      '<span style="color:#9ff">Gráfica:</span>' +
+      '<span style="color:#9ff">Elemento:</span>' +
       '<select id="selDiag">' +
-      keys.map(k => `<option value="${k}">${etiqueta[k]} ${D[k].tag} · ${D[k].seccion}</option>`).join('') +
-      '</select><span id="diagCaso" style="color:#0aa;font-size:11px">COMBO</span></div>' +
+      keys.map(k => `<option value="${k}">${etiqueta[k]} ${D[casi][k].tag} · ${D[casi][k].seccion}</option>`).join('') +
+      '</select><span id="diagCaso" style="color:#0aa;font-size:11px"></span></div>' +
       '<canvas id="diagCanvas" width="420" height="480"></canvas>' +
       '<div id="diagInfo" class="dt-note" style="margin-top:3px"></div>';
+    const syncBtn = () => {
+      document.querySelectorAll('#diagCasos button').forEach(b => {
+        const on = b.dataset.caso === casi;
+        b.style.background = on ? '#0aa' : '#0a1a28';
+        b.style.color = on ? '#002' : '#9ff';
+        b.style.fontWeight = on ? 'bold' : 'normal';
+      });
+    };
     const paint = () => {
       const k = document.getElementById('selDiag').value;
-      const d = D[k] || D.viga;
+      const d = D[casi][k] || D[casi].viga;
       drawDiagramPanels(document.getElementById('diagCanvas'), d);
+      document.getElementById('diagCaso').textContent = ETQ_CASO[casi] || casi;
       let txt = etiqueta[k] + ' ' + d.tag + ' · ' + d.seccion + ' · L ' + d.L.toFixed(2) + ' m';
-      if (d.q_losa !== undefined) {
-        txt += ' · q=' + d.q_losa.toFixed(2) + ' kN/m (losa tributaria, FE beamUniform)';
+      if (d.q !== undefined) {
+        txt += ' · q=' + d.q.toFixed(2) + ' kN/m (losa, beamUniform)';
         if (d.resid !== undefined) txt += ' · corte ' + (d.resid * 100).toFixed(1) + '%';
         if (d.resMJ !== undefined) txt += ' · momentoj ' + (d.resMJ * 100).toFixed(1) + '%';
       }
@@ -3391,7 +3411,19 @@ const F = ANALYSIS.forces[S.caso] || {};
         ' · N ' + d.N[0].toFixed(1) + ' kN';
       document.getElementById('diagInfo').innerHTML = txt;
     };
+    document.querySelectorAll('#diagCasos button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        casi = btn.dataset.caso;
+        const sel = document.getElementById('selDiag');
+        const d = D[casi][sel.value] || D[casi].viga;
+        sel.innerHTML = keys.map(k =>
+          `<option value="${k}">${etiqueta[k]} ${D[casi][k].tag} · ${D[casi][k].seccion}</option>`).join('');
+        syncBtn();
+        paint();
+      });
+    });
     el.addEventListener('input', (ev) => { if (ev.target && ev.target.id === 'selDiag') paint(); });
+    syncBtn();
     paint();
   }
 

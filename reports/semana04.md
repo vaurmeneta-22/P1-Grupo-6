@@ -25,23 +25,38 @@
 |---|---|
 | Generador de datos y figuras | `scripts/diagramas_2d.py` → `exportar_datos()`, `plot_viga()`, `plot_vertical()` |
 | Empaquetado en el mapa del análisis | `opensees/exportar_analysis_map.py` (agrega la clave `diagramas`) |
-| Datos incrustados | `resultados/11_mapa_visor/analysis_map.js` → `ANALYSIS.diagramas = {viga, columna, muro}` |
-| Pestaña del visor | `edificio_3d.html`: botón `data-tab="dt-diag"` (l.148), `<div id="dt-diag">` (l.155), despacho `renderDiag()` (l.3060) y dibujo `drawDiagramPanels()` (l.3303) |
+| Datos incrustados | `resultados/11_mapa_visor/analysis_map.js` → `ANALYSIS.diagramas = {COMBO, G, Q, EX, EY}` → `{viga, columna, muro}` |
+| Pestaña del visor | `edificio_3d.html`: botón `data-tab="dt-diag"` (l.148), `<div id="dt-diag">` (l.155), despacho `renderDiag()` (l.3060), dibujo `drawDiagramPanels()` (l.3303); sub-fichas de caso COMBO/G/Q/EX/EY |
 
-El visor muestra tres paneles apilados (N azul-verde, V ámbar, M cian) sobre un lienzo de 420×480, con eje de cero punteado, valores extremos anotados y una línea de resumen:
+El visor muestra tres paneles apilados (N azul-verde, V ámbar, M cian) sobre un lienzo de 420×480, con eje de cero punteado, valores extremos anotados y una línea de resumen. Dentro de la pestaña se eligió con **sub-fichas de caso: COMBO | G | Q | EX | EY** (se mantiene el selector de elemento Viga/Columna/Muro). Los **mismos elementos** se usan en los 5 casos (viga 234, columna 1, muro 473, elegidos una sola vez con COMBO):
 
 ```
-Viga 234 · 60x80 · L 7.49 m · q=15.89 kN/m (losa tributaria, FE beamUniform)
+Viga 234 · 60x80 · L 7.49 m · q=15.89 kN/m (losa, beamUniform)
 · corte 0.0% · momentoj 0.0% | M -218.6 → 168.4 · V 111.2 → -7.8 · N 0.0 kN
 ```
 
-Además se generan las figuras PNG en `resultados/10_figuras/`:
+### Cierre de la viga 234 en los 5 casos (verificado al 0.00 %)
 
-| Figura | Valores principales (COMBO) |
+Cada caso usa su carga repartida real del FE: G → `p_G`, Q → `p_Q`, EX/EY → `0` (sin beamUniform), COMBO → `1.2·p_G + 1.0·p_Q`. La parábola cierra contra `−M_j`/`−V_j` en todos.
+
+| Caso | q (kN/m) | M_i (kN·m) | M(L) = −M_j (kN·m) | V_i (kN) | V(L) = −V_j (kN) | cerr. corte/mom |
+|---|---|---|---|---|---|---|
+| COMBO | 15.887 | −218.62 | +168.36 | +111.16 | −7.83 | 0.0 % / 0.0 % |
+| G | 8.261 | −59.46 | +80.51 | +49.62 | −12.25 | 0.0 % / 0.0 % |
+| Q | 5.974 | −29.39 | +16.93 | +28.56 | −16.19 | 0.0 % / 0.0 % |
+| EX | 0.0 | −87.82 | +49.10 | +18.28 | (constante) | 0.0 % / 0.0 % |
+| EY | 0.0 | +3.62 | −9.95 | −1.81 | (constante) | 0.0 % / 0.0 % |
+
+Además se generan las figuras PNG en `resultados/10_figuras/` (un trío por caso: **15 PNG** con sufijo `(COMBO|G|Q|EX|EY)`):
+
+| Figura (por caso) | Valores de la viga 234 (M_i → M(L)) |
 |---|---|
-| `Diagrama 2D Momento-Corte-Axial Viga 234 (60x80).png` | M: −218.6 → +170.3 (interior, x = 7.0 m) → +168.4 kN·m; V: 111.2 → −7.8 kN; N ≈ 0; q = 15.89 kN/m |
-| `Diagrama 2D Axial-Corte-Momento Columna 1 (70x70).png` | N = +13.2 kN; V = 503.2 kN; M = 1104 → 688 kN·m |
-| `Diagrama 2D Axial-Corte-Momento Muro 473 (30x310).png` | N = −2134 kN; V = 2353.7 kN; M = 11070 → 541 kN·m |
+| `Diagrama 2D Momento-Corte-Axial Viga 234 (60x80) (COMBO).png` | −218.6 → +170.3 (interior, x=7.0 m) → +168.4 kN·m; q = 15.89 kN/m |
+| `... (G).png` | −59.5 → +80.5 kN·m; q = 8.26 kN/m |
+| `... (Q).png` | −29.4 → +16.9 kN·m; q = 5.97 kN/m |
+| `... (EX).png` | −87.8 → +49.1 kN·m; q = 0 (lineal) |
+| `... (EY).png` | +3.6 → −9.9 kN·m; q = 0 (lineal) |
+| Columna 1 / Muro 473 | `Diagrama 2D Axial-Corte-Momento Columna 1 (70x70) (CASO).png`, `... Muro 473 (30x310) (CASO).png` |
 
 > Nota de caché: los datos se cargan con `analysis_map.js?v=<hash>`. Se actualizó el sufijo a `?v=2aa256e282`; si el visor ya estaba abierto, hay que forzar **Ctrl+F5**.
 
@@ -98,11 +113,11 @@ La selección automática de la viga representativa ahora exige cerrar **corte y
 
 | Archivo | Cambio |
 |---|---|
-| `scripts/diagramas_2d.py` | `q = 1.2·p_G + 1.0·p_Q` (sin peso propio); cierre contra `−M_j`/`−V_j`; `resMJ`; selección que exige ambos cierres; nueva `exportar_datos()` con `q_losa`, `resid`, `resMJ` |
+| `scripts/diagramas_2d.py` | `q` por caso (`_q_caso`: G→pG, Q→pQ, EX/EY→0, COMBO→1.2pG+pQ); cierre contra `−M_j`/`−V_j`; `resMJ`; selección de elementos hecha **una sola vez con COMBO** y reusada en los 5 casos; `exportar_datos()` → 5 casos × 3 elementos |
 | `scripts/verificar_diagramas_viga.py` | **Nuevo.** Auditoría de las 108 vigas (hipótesis A vs B, `wlosa` vs `weq`, cierre de corte y momento) |
 | `opensees/exportar_analysis_map.py` | Embebe `diagramas` y lo reporta en el resumen |
-| `resultados/11_mapa_visor/analysis_map.js` | Regenerado con `diagramas` corregidos (1.6 MB) |
-| `edificio_3d.html` | Pestaña Diagramas; `renderDiag`/`drawDiagramPanels`; línea de info con `q_losa` y residuos; cache-buster actualizado |
+| `resultados/11_mapa_visor/analysis_map.js` | Regenerado con `diagramas` de los 5 casos (1.62 MB) |
+| `edificio_3d.html` | Pestaña Diagramas con **sub-fichas de caso (COMBO/G/Q/EX/EY)** y selector de elemento; `renderDiag`/`drawDiagramPanels`; línea de info con `q` y residuos; cache-buster actualizado |
 | `reports/semana03.md` | Sección 10.3 actualizada con la convención verificada y los valores corregidos |
 
 También se corrigió un error de parseo de JavaScript (un paréntesis sin cerrar en la construcción del HTML de `renderDiag`) que rompía **todo** el script de análisis y era la causa de que la tecla **Tab no cambiara al modo ANÁLISIS**. El balance de los scripts del HTML quedó verificado (2/2 OK).
@@ -111,10 +126,10 @@ También se corrigió un error de parseo de JavaScript (un paréntesis sin cerra
 
 ## 5. Pendientes (bloqueantes para el cierre)
 
-> **P1 — Verificar los diagramas.** Aun con la convención y la carga corregidas y el cierre numérico en 0 %, **el usuario sigue viendo los diagramas "mal" en el navegador**. Hay que verificar en detalle:
-> 1. Que la forma esperada sea la correcta: la viga 234 presenta **hogging en i (−218.6) y sagging en j (+168.4)** bajo COMBO; confirmar si el equipo espera otro patrón (p. ej. doble empotramiento con hogging en ambos apoyos) o si corresponde a la componente sísmica del COMBO.
+> **P1 — Verificar los diagramas.** Ya con la convención y la carga corregidas (cierre al 0.00 % en los 5 casos) y con las sub-fichas G/Q/EX/EY + G+Q disponibles en el visor, **el usuario sigue viendo los diagramas "mal" en el navegador**. Hay que verificar en detalle:
+> 1. Que la forma esperada sea la correcta: la viga 234 presenta **hogging en i y sagging en j** bajo COMBO (y bajo G: −59.5 → +80.5); confirmar si el equipo espera otro patrón (p. ej. doble empotramiento con hogging en ambos apoyos) o si corresponde a la componente sísmica del COMBO.
 > 2. Revisar si el problema es de **representación** (escalas, eje de cero, paneles demasiado pequeños, orden N/V/M, colores) y no de cálculo.
-> 3. Contrastar la viga 234 contra **otra viga representativa** (p. ej. la 238) y contra un caso sin sismo (solo G+Q) para aislar el efecto sísmico.
+> 3. El aislamiento gravitacional/sísmico ya es posible directamente en el visor (sub-fichas); comparar G/Q/EX/EY vs COMBO para decidir qué patrón debe verse.
 > 4. Confirmar el **signo físico del momento en el apoyo j** (si se dibuja con la convención de sección o con la acción nodal).
 >
 > **P2 — Implementar todo el visor HTML en Unity.** Migrar a Unity la totalidad de la funcionalidad del visor `edificio_3d.html` (geometría, casos de carga, tubos N/V/M, mapa de análisis, reacciones, tributarias, **pestaña de diagramas 2D**, curvas P-M, etc.). Hoy el visor HTML es la fuente de verdad manual y no está reproducido por el generador.
