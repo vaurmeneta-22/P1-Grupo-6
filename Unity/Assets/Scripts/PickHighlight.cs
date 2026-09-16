@@ -206,6 +206,7 @@ public class PickHighlight : MonoBehaviour
 
     void DetectDoubleClick()
     {
+        if (ElementInfoStyle.PointerOverPanel) return;
         if (!Input.GetMouseButtonDown(0)) return;
         float now = Time.time;
         float dist = Vector2.Distance(Input.mousePosition, lastClickPos);
@@ -225,6 +226,7 @@ public class PickHighlight : MonoBehaviour
         reportId = id;
         reportCaso = am.Caso;
         reportScroll = Vector2.zero;
+        ElementInfoStyle.AnalysisArea = ElementInfoStyle.PanelRect();
     }
 
     // ----------------------------- reporte -----------------------------
@@ -236,24 +238,40 @@ public class PickHighlight : MonoBehaviour
 
     void DrawReport()
     {
-        if (reportKind < 0) return;
-        float w = 500f;
-        float h = Mathf.Min(600f, Screen.height - 40f);
-        Rect area = new Rect(Screen.width - w - 12, 12, w, h);
-
-        GUILayout.BeginArea(area, GUI.skin.box);
-        GUILayout.BeginHorizontal();
-        GUILayout.Label(reportKind == 0 ? "=== REPORTE DE VIGA ===" : "=== P-M: CAPACIDAD + DEMANDA ===",
-                        new GUIStyle(GUI.skin.box) { fontSize = 12 });
-        GUILayout.FlexibleSpace();
-        if (GUILayout.Button("X", GUILayout.Width(30))) reportKind = -1;
-        GUILayout.EndHorizontal();
-
-        reportScroll = GUILayout.BeginScrollView(reportScroll, GUILayout.Width(w - 30), GUILayout.Height(h - 70));
+        ElementInfoStyle.AnalysisArea = new Rect();
+        if (reportKind < 0 || am == null || !am.Active || ElementInfoStyle.DataArea.width > 0) return;
+        Rect area = ElementInfoStyle.PanelRect();
+        ElementInfoStyle.AnalysisArea = area;
+        GUISkin previous = ElementInfoStyle.Begin(area);
+        AnalysisMap.ElementInfo meta = AnalysisMap.Element(reportId);
+        string name = meta != null ? TipoNombre(meta.type) : "Elemento";
+        bool close = ElementInfoStyle.Header(name + " · " + reportId,
+            "ANÁLISIS  /  " + (reportKind == 0 ? "REPORTE DE FUERZAS" : "CAPACIDAD Y DEMANDA P-M"));
+        ElementInfoStyle.Note("Caso del reporte: " + reportCaso);
+        reportScroll = GUILayout.BeginScrollView(reportScroll, false, false);
         if (reportKind == 0) BeamReportContent(reportId, reportCaso);
         else if (reportKind == 1) PMContent(reportId, reportCaso);
         GUILayout.EndScrollView();
-        GUILayout.EndArea();
+        ElementInfoStyle.End(previous);
+        if (close) { reportKind = -1; ElementInfoStyle.AnalysisArea = new Rect(); }
+    }
+
+    void ElementProperties(AnalysisMap.ElementInfo meta)
+    {
+        ElementInfoStyle.Section("PROPIEDADES Y GEOMETRÍA");
+        ElementInfoStyle.Pair("Material", MaterialNombre(meta.material));
+        ElementInfoStyle.Pair("Sección", meta.section);
+        ElementInfoStyle.Pair("Nodo i · " + meta.ni, PuntoEstructural(meta.ni));
+        ElementInfoStyle.Pair("Nodo j · " + meta.nj, PuntoEstructural(meta.nj));
+    }
+
+    void EndTable(string[] i, string[] j, bool displacement)
+    {
+        float[] widths = { 1.2f, 1, 1 };
+        ElementInfoStyle.Row(new[] { "Componente", "Extremo i", "Extremo j" }, widths, true);
+        string[] names = { "N [kN]", "Vy [kN]", "Vz [kN]", "T [kN-m]", "My [kN-m]", "Mz [kN-m]", "DEF [mm]" };
+        for (int k = 0; k < (displacement ? 7 : 6); k++)
+            ElementInfoStyle.Row(new[] { names[k], i[k + 1], j[k + 1] }, widths);
     }
 
     void BeamReportContent(int id, string caso)
@@ -262,11 +280,7 @@ public class PickHighlight : MonoBehaviour
         if (meta == null) { GUILayout.Label("Elemento id " + id + " no esta en el analisis."); return; }
         string tipo = TipoNombre(meta.type);
 
-        GUILayout.Label(tipo + "  id " + meta.id + "  |  caso " + caso +
-                        "   (fuerzas LOCALES: axial, cortes y momentos propios)");
-        GUILayout.Label("Material: " + MaterialNombre(meta.material) + "  ·  Seccion: " + meta.section);
-        GUILayout.Label("Nodo i: " + meta.ni + " " + PuntoEstructural(meta.ni) +
-                        "   Nodo j: " + meta.nj + " " + PuntoEstructural(meta.nj));
+        ElementProperties(meta);
 
         AnalysisMap.EndForces f = AnalysisMap.Fuerzas(caso, id);
         double[] li = (f != null) ? f.li : null;
@@ -278,17 +292,15 @@ public class PickHighlight : MonoBehaviour
         double defj = dj != null && dj.Length >= 3
             ? Math.Sqrt(dj[0] * dj[0] + dj[2] * dj[2] + dj[1] * dj[1]) * 1000 : double.NaN;
 
-        DrawRow(new[] { "Extr", "N [kN]", "Vy [kN]", "Vz [kN]", "T [kN-m]", "My [kN-m]", "Mz [kN-m]", "DEF [mm]" },
-                new float[] { 40, 56, 56, 56, 60, 60, 60, 60 });
-        DrawRow(MakeFila("i", li, defi), new float[] { 40, 56, 56, 56, 60, 60, 60, 60 }, true);
-        DrawRow(MakeFila("j", lj, defj), new float[] { 40, 56, 56, 56, 60, 60, 60, 60 }, true);
-        GUILayout.Label("Valores en modulo. N=axial, Vy/Vz=cortes, T=torsion, My/Mz=momentos de flexion · " +
+        ElementInfoStyle.Section("FUERZAS LOCALES Y DESPLAZAMIENTOS");
+        EndTable(MakeFila("i", li, defi), MakeFila("j", lj, defj), true);
+        ElementInfoStyle.Note("Valores en modulo. N=axial, Vy/Vz=cortes, T=torsion, My/Mz=momentos de flexion · " +
                         "DEF=modulo del desplazamiento nodal.");
 
         AnalysisMap.TribuInfo t = AnalysisMap.Tributaria(id);
         if (t != null && t.aportes != null && t.aportes.Count > 0)
         {
-            GUILayout.Label("Carga de losa (tributaria):");
+            ElementInfoStyle.Section("CARGA DE LOSA · APORTES TRIBUTARIOS");
             DrawRow(new[] { "Losa", "Borde", "Tramo [m]", "A [m2]", "G [kN]" },
                     new float[] { 90, 60, 80, 60, 60 });
             foreach (object ap in t.aportes)
@@ -333,10 +345,8 @@ public class PickHighlight : MonoBehaviour
         string tipo = TipoNombre(meta.type);
         string sec = meta.section;
 
-        GUILayout.Label(tipo + "  id " + meta.id + "  |  Material: " + MaterialNombre(meta.material));
-        GUILayout.Label("Seccion: " + sec);
-        GUILayout.Label("Nodo i: " + meta.ni + " " + PuntoEstructural(meta.ni) +
-                        "   Nodo j: " + meta.nj + " " + PuntoEstructural(meta.nj));
+        ElementProperties(meta);
+        ElementInfoStyle.Section("DIAGRAMA P-M");
 
         Dictionary<string, object> cur = CapacityCur(meta);
         if (cur == null)
@@ -360,17 +370,18 @@ public class PickHighlight : MonoBehaviour
         double pct = Mcap != 0 ? (Md / Mcap) * 100.0 : 0;
         string estado = Md <= Mcap ? "(dentro de la curva)" : "(FUERA de la curva / no cumple)";
         GUILayout.Space(6);
-        GUILayout.Label("Caso " + caso + "  ->  P = " + Pd.ToString("F1") + " kN,  M = " + Md.ToString("F1") + " kN-m");
-        GUILayout.Label("Capacidad a esa P  (M cap. = " + Mcap.ToString("F1") + " kN-m):  " + pct.ToString("F1") + "%  " + estado);
+        ElementInfoStyle.Section("DEMANDA Y CAPACIDAD · " + caso);
+        ElementInfoStyle.Pair("Demanda P", Pd.ToString("F1") + " kN");
+        ElementInfoStyle.Pair("Demanda M", Md.ToString("F1") + " kN-m");
+        ElementInfoStyle.Pair("M cap. a esa P", Mcap.ToString("F1") + " kN-m");
+        ElementInfoStyle.Pair("Demanda / capacidad", pct.ToString("F1") + "%  " + estado);
 
         if (f != null && f.li != null && f.lj != null)
         {
             GUILayout.Space(6);
-            GUILayout.Label("Fuerzas LOCALES " + tipo + " - caso " + caso + " (kN / kN-m):");
-            DrawRow(new[] { "Extr", "N", "Vy", "Vz", "T", "My", "Mz" },
-                    new float[] { 40, 70, 70, 70, 74, 74, 74 });
-            FilaFuerzas("i", f.li);
-            FilaFuerzas("j", f.lj);
+            ElementInfoStyle.Section("FUERZAS LOCALES · " + caso);
+            ElementInfoStyle.Note("Valores en módulo · N, Vy, Vz en kN; T, My, Mz en kN-m.");
+            EndTable(MakeFila("i", f.li, double.NaN), MakeFila("j", f.lj, double.NaN), false);
         }
     }
 
@@ -509,10 +520,7 @@ public class PickHighlight : MonoBehaviour
 
     void DrawRow(string[] cells, float[] widths, bool mono = false)
     {
-        GUILayout.BeginHorizontal();
-        for (int i = 0; i < cells.Length; i++)
-            GUILayout.Label(cells[i], GUILayout.Width(widths != null && i < widths.Length ? widths[i] : 60));
-        GUILayout.EndHorizontal();
+        ElementInfoStyle.Row(cells, widths, cells.Length > 0 && cells[0] == "Losa");
     }
 
     void OnDestroy()

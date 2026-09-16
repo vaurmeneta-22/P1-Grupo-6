@@ -32,34 +32,26 @@ public class DataPanel : MonoBehaviour
 
     void OnGUI()
     {
+        ElementInfoStyle.DataArea = new Rect();
         if (!activo) return;
-        if (!AnalysisMap.Loaded) { GUILayout.Label("Sin datos (pulsa F6)"); return; }
-
-        GUI.skin.label.fontSize = 12;
-        GUI.skin.button.fontSize = 11;
-        GUI.skin.toggle.fontSize = 12;
-
-        float w = 520f;
-        float h = Screen.height * 0.86f;
-        float x = Screen.width - w - 12;
-        GUILayout.BeginArea(new Rect(x, 12, w, h), GUI.skin.box);
-
-        GUILayout.BeginHorizontal();
-        GUILayout.Label("DATOS del analisis", new GUIStyle(GUI.skin.label) { fontSize = 13, fontStyle = FontStyle.Bold });
-        GUILayout.FlexibleSpace();
-        if (GUILayout.Button("X", GUILayout.Width(30))) Toggle();
-        GUILayout.EndHorizontal();
-
-        GUILayout.BeginHorizontal();
-        for (int i = 0; i < tabs.Length; i++)
+        int previousDepth = GUI.depth;
+        GUI.depth = -10;
+        Rect area = ElementInfoStyle.PanelRect();
+        ElementInfoStyle.DataArea = area;
+        GUISkin previous = ElementInfoStyle.Begin(area);
+        bool close = ElementInfoStyle.Header("Datos del análisis", "RESULTADOS  /  CONSULTA POR CATEGORÍA");
+        GUILayout.Space(10);
+        for (int row = 0; row < tabs.Length; row += 3)
         {
-            bool b = GUILayout.Toggle(tab == i, tabs[i], GUI.skin.button);
-            if (b) tab = i;
+            GUILayout.BeginHorizontal();
+            for (int i = row; i < Mathf.Min(row + 3, tabs.Length); i++)
+                if (ElementInfoStyle.Choice(tab == i, tabs[i]) && tab != i)
+                { tab = i; scroll = Vector2.zero; tableScroll = Vector2.zero; }
+            GUILayout.EndHorizontal();
         }
-        GUILayout.EndHorizontal();
-
-        scroll = GUILayout.BeginScrollView(scroll, GUILayout.Width(w - 28), GUILayout.Height(h - 78));
-
+        scroll = GUILayout.BeginScrollView(scroll, false, false);
+        if (!AnalysisMap.Loaded) ElementInfoStyle.Note("Sin datos (pulsa F6)");
+        else
         switch (tab)
         {
             case 0: TabSismo(); break;
@@ -71,7 +63,9 @@ public class DataPanel : MonoBehaviour
         }
 
         GUILayout.EndScrollView();
-        GUILayout.EndArea();
+        ElementInfoStyle.End(previous);
+        GUI.depth = previousDepth;
+        if (close) { Toggle(); ElementInfoStyle.DataArea = new Rect(); }
     }
 
     // ----------------------- TAB 1: SISMO -----------------------
@@ -84,11 +78,11 @@ public class DataPanel : MonoBehaviour
         List<string> keys = AnalysisMap.Sismo.Keys.ToList();
         if (!keys.Contains(sismoCaso)) sismoCaso = keys[0];
 
-        GUILayout.Label("=== SISMO POR PISO ===");
+        ElementInfoStyle.Section("SISMO POR PISO");
         GUILayout.BeginHorizontal();
         foreach (string k in keys)
         {
-            bool b = GUILayout.Toggle(sismoCaso == k, k, GUI.skin.button);
+            bool b = ElementInfoStyle.Choice(sismoCaso == k, k);
             if (b) sismoCaso = k;
         }
         GUILayout.EndHorizontal();
@@ -119,7 +113,7 @@ public class DataPanel : MonoBehaviour
     // ------------------- TAB 2: MOMENTO-CURVATURA -------------------
     void TabMomCurv()
     {
-        GUILayout.Label("=== MOM-CURV (columna 70x70, fiber, P = 0) ===");
+        ElementInfoStyle.Section("MOM-CURV (columna 70x70, fiber, P = 0)");
         AnalysisMap.PmInfo p = AnalysisMap.MomCurv;
         if (p == null || p.M_fiber == null || p.M_fiber.Length == 0 ||
             p.phi_1m == null || p.phi_1m.Length == 0)
@@ -147,11 +141,11 @@ public class DataPanel : MonoBehaviour
         List<string> secs = AnalysisMap.PmHa.Keys.ToList();
         if (!secs.Contains(pmSec)) pmSec = secs[0];
 
-        GUILayout.Label("=== P-M FIBRA vs H.A. (bloque ACI/NCh) ===");
+        ElementInfoStyle.Section("P-M FIBRA vs H.A. (bloque ACI/NCh)");
         GUILayout.BeginHorizontal();
         foreach (string s in secs)
         {
-            bool b = GUILayout.Toggle(pmSec == s, s, GUI.skin.button);
+            bool b = ElementInfoStyle.Choice(pmSec == s, s);
             if (b) pmSec = s;
         }
         GUILayout.EndHorizontal();
@@ -191,19 +185,19 @@ public class DataPanel : MonoBehaviour
         if (AnalysisMap.Reacciones == null || AnalysisMap.Reacciones.Count == 0)
         { GUILayout.Label("Sin reacciones en analysis_map."); return; }
 
-        GUILayout.Label("=== REACCIONES DE APOYO ===");
+        ElementInfoStyle.Section("REACCIONES DE APOYO");
         GUILayout.BeginHorizontal();
         foreach (string c in casos)
         {
             if (!AnalysisMap.Reacciones.ContainsKey(c)) continue;
-            bool b = GUILayout.Toggle(caso == c, c, GUI.skin.button);
+            bool b = ElementInfoStyle.Choice(caso == c, c);
             if (b) caso = c;
         }
         GUILayout.EndHorizontal();
 
         // Pintar en 3D: espejo del checkbox del visor (paintReactions/skin).
         bool pintar = AnalysisMode.Current != null && AnalysisMode.Current.PintarReac;
-        bool np = GUILayout.Toggle(pintar, " Pintar reacciones 3D (en modo analisis)");
+        bool np = ElementInfoStyle.Choice(pintar, "Reacciones 3D · " + (pintar ? "visibles" : "ocultas"));
         if (AnalysisMode.Current != null && np != pintar) AnalysisMode.Current.SetPintarReac(np);
 
         Dictionary<int, double[]> rmap;
@@ -236,7 +230,7 @@ public class DataPanel : MonoBehaviour
         if (AnalysisMap.Tribu == null || AnalysisMap.Tribu.Count == 0)
         { GUILayout.Label("Sin tributarias en analysis_map."); return; }
 
-        GUILayout.Label("=== TRIBUTARIAS POR VIGA (metodo 45°) ===");
+        ElementInfoStyle.Section("TRIBUTARIAS POR VIGA (metodo 45°)");
         GUILayout.BeginHorizontal();
         GUILayout.Label("Buscar viga id:");
         tribuQ = GUILayout.TextField(tribuQ, GUILayout.Width(120));
@@ -270,7 +264,7 @@ public class DataPanel : MonoBehaviour
         if (AnalysisMap.Diagramas == null || AnalysisMap.Diagramas.Count == 0)
         { GUILayout.Label("Sin diagramas en analysis_map."); return; }
 
-        GUILayout.Label("=== DIAGRAMAS 2D (N / V / M apilados) ===");
+        ElementInfoStyle.Section("DIAGRAMAS 2D (N / V / M apilados)");
 
         // selector de caso (los disponibles en el mapa)
         List<string> casosDisp = AnalysisMap.Diagramas.Keys.ToList();
@@ -279,7 +273,7 @@ public class DataPanel : MonoBehaviour
         GUILayout.Label("Caso:");
         foreach (string c in casosDisp)
         {
-            bool b = GUILayout.Toggle(caso == c, c, GUI.skin.button);
+            bool b = ElementInfoStyle.Choice(caso == c, c);
             if (b) caso = c;
         }
         GUILayout.EndHorizontal();
@@ -288,7 +282,7 @@ public class DataPanel : MonoBehaviour
         GUILayout.Label("Elem:");
         foreach (string e in new[] { "viga", "columna", "muro" })
         {
-            bool b = GUILayout.Toggle(diagElem == e, e, GUI.skin.button);
+            bool b = ElementInfoStyle.Choice(diagElem == e, e);
             if (b) diagElem = e;
         }
         GUILayout.EndHorizontal();
@@ -312,21 +306,13 @@ public class DataPanel : MonoBehaviour
     // Tabla con scroll horizontal y vertical (columnas anchas en panel angosto).
     void DrawTableH(string[] headers, List<string[]> cells, float[] widths)
     {
-        float total = 0;
-        foreach (float wd in widths) total += wd;
+        // Keep wide datasets scrollable; never squeeze or truncate numerical values.
+        float[] readableWidths = new float[widths.Length];
+        for (int i = 0; i < widths.Length; i++) readableWidths[i] = Mathf.Max(widths[i], 112);
         tableScroll = GUILayout.BeginScrollView(tableScroll, false, true,
-            GUILayout.Width(488), GUILayout.Height(260));
-        GUILayout.BeginHorizontal();
-        for (int i = 0; i < headers.Length; i++)
-            GUILayout.Label(headers[i], GUILayout.Width(widths[i]));
-        GUILayout.EndHorizontal();
-        foreach (string[] c in cells)
-        {
-            GUILayout.BeginHorizontal();
-            for (int i = 0; i < c.Length && i < widths.Length; i++)
-                GUILayout.Label(c[i], GUILayout.Width(widths[i]));
-            GUILayout.EndHorizontal();
-        }
+            GUILayout.Height(280), GUILayout.ExpandWidth(true));
+        ElementInfoStyle.FixedRow(headers, readableWidths, true);
+        foreach (string[] row in cells) ElementInfoStyle.FixedRow(row, readableWidths, false);
         GUILayout.EndScrollView();
     }
 

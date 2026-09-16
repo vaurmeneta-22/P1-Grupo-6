@@ -11,6 +11,7 @@ using UnityEngine;
 public class VerifPanel : MonoBehaviour
 {
     public bool activo;
+    Vector2 scroll;
     static readonly int[] traceTags = { 147, 261, 446 };
 
     void Update()
@@ -20,10 +21,16 @@ public class VerifPanel : MonoBehaviour
 
     void OnGUI()
     {
+        ElementInfoStyle.VerificationArea = new Rect();
         if (!activo) return;
-        float w = Screen.width * 0.84f, h = Screen.height * 0.72f;
-        float x0 = (Screen.width - w) / 2f, y0 = 24f;
-        GUILayout.BeginArea(new Rect(x0, y0, w, h), GUI.skin.box);
+        float w = Mathf.Min(1100, Screen.width - 24), h = Screen.height - 100;
+        float x0 = (Screen.width - w) / 2f, y0 = 88f;
+        int previousDepth = GUI.depth;
+        GUI.depth = -20;
+        ElementInfoStyle.VerificationArea = new Rect(x0, y0, w, h);
+        GUISkin previous = ElementInfoStyle.Begin(ElementInfoStyle.VerificationArea);
+        bool close = ElementInfoStyle.Header("Verificación", "TRAZABILIDAD  /  DEMANDA Y CAPACIDAD");
+        scroll = GUILayout.BeginScrollView(scroll, false, false);
         if (!AnalysisMap.Loaded) { GUILayout.Label("Sin datos."); }
         else
         {
@@ -89,10 +96,25 @@ public class VerifPanel : MonoBehaviour
                     "\\t" + Fmt(N) + "\\t" + Fmt(V) + "\\t" + Fmt(M) +
                     "\\t" + Fmt(M_ult) + "\\t" + (n_ok ? "SI" : "NO"));
             }
-            GUILayout.TextArea(sb.ToString(), GUILayout.ExpandHeight(true));
+            foreach (string line in sb.ToString().Replace("\r", "").Split('\n'))
+            {
+                if (string.IsNullOrWhiteSpace(line)) { GUILayout.Space(8); continue; }
+                if (line.Contains("\\t"))
+                {
+                    string[] cells = line.Split(new[] { "\\t" }, System.StringSplitOptions.None);
+                    float[] widths = new float[cells.Length];
+                    for (int i = 0; i < widths.Length; i++) widths[i] = 104;
+                    ElementInfoStyle.FixedRow(cells, widths, cells[0] == "tag");
+                }
+                else if (line.StartsWith("  [")) GUILayout.Label(line);
+                else ElementInfoStyle.Section(line);
+            }
         }
-        if (GUILayout.Button("Cerrar (V)", GUILayout.Width(110))) activo = false;
-        GUILayout.EndArea();
+        GUILayout.EndScrollView();
+        ElementInfoStyle.Note("N y V: kN · M y M_ult: kN·m · V: cerrar");
+        ElementInfoStyle.End(previous);
+        GUI.depth = previousDepth;
+        if (close) { activo = false; ElementInfoStyle.VerificationArea = new Rect(); }
     }
 
     static double[] ExtremoMayor(AnalysisMap.EndForces f)

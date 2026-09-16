@@ -434,11 +434,11 @@ public class AnalysisMode : MonoBehaviour
     }
 
     // ----------------------------- HUD (IMGUI) -----------------------------
+    Vector2 controlsScroll;
+
     void OnGUI()
     {
-        GUI.skin.button.fontSize = 13;
-        GUI.skin.label.fontSize = 13;
-        GUI.skin.toggle.fontSize = 13;
+        ElementInfoStyle.ControlsArea = new Rect();
 
         // El boton de modo (VISUALIZACION/ANALISIS + DATOS) lo dibuja ViewerHud
         // en la barra superior central, igual que el visor HTML (modebar).
@@ -446,29 +446,29 @@ public class AnalysisMode : MonoBehaviour
 
         // Panel de control (izquierda, bajo el HUD de info; la leyenda de capas
         // del ViewerHud ocupa abajo-izquierda).
-        GUILayout.Space(4);
-        GUILayout.BeginArea(new Rect(12, 88, 300, 348), GUI.skin.box);
-        GUILayout.Label("MODO DE ANALISIS", GUI.skin.box);
-        GUILayout.Label("Caso: " + caso);
+        Rect area = new Rect(12, 88, 360, Mathf.Min(348, Screen.height - 100));
+        ElementInfoStyle.ControlsArea = area;
+        GUISkin previous = ElementInfoStyle.Begin(area);
+        GUILayout.Label("Análisis estructural", new GUIStyle(GUI.skin.label) { fontSize = 22, fontStyle = FontStyle.Bold });
+        controlsScroll = GUILayout.BeginScrollView(controlsScroll, false, false);
+        ElementInfoStyle.Section("CASO DE CARGA · " + caso);
         GUILayout.BeginHorizontal();
         foreach (string cs in new[] { "G", "Q", "EX", "EY", "COMBO" })
         {
-            if (GUILayout.Button(cs, GUILayout.Width(40)))
+            if (ElementInfoStyle.Choice(caso == cs, cs) && caso != cs)
             {
                 SetCaso(cs);
             }
         }
         GUILayout.EndHorizontal();
 
-        GUILayout.Label("Vista:");
+        ElementInfoStyle.Section("VISTA DEL MODELO");
         GUILayout.BeginHorizontal();
         for (int i = 0; i < vistas.Length; i++)
         {
             bool sel = vistaIdx == i;
-            bool click = GUILayout.Toggle(
-                sel,
-                vistas[i] == "deformada" ? "DEF" : vistas[i].ToUpper(),
-                GUILayout.Width(46));
+            bool click = ElementInfoStyle.Choice(sel,
+                vistas[i] == "deformada" ? "DEF" : vistas[i].ToUpper());
             if (click != sel) SetVista(i);
         }
         GUILayout.EndHorizontal();
@@ -488,15 +488,16 @@ public class AnalysisMode : MonoBehaviour
             }
         }
         bool reacPrev = pintarReac;
-        pintarReac = GUILayout.Toggle(pintarReac, " Pintar reacciones 3D");
+        pintarReac = ElementInfoStyle.Choice(pintarReac, "Reacciones 3D · " + (pintarReac ? "visibles" : "ocultas"));
         if (pintarReac != reacPrev) Rebuild();
 
         GUILayout.Space(6);
-        GUILayout.Label("Usa 1-5 caso · M/N/V/DEF vista\nR reacciones · +/- escala · TAB modo");
-        GUILayout.Label("Doble clic en elemento:\nsolido color/M-N-V/DEF · viga reporte\ncolumna/muro curva P-M", GUI.skin.box);
-        GUILayout.EndArea();
+        ElementInfoStyle.Note("1–5: caso · M/N/V/DEF: vista\nR: reacciones · +/−: escala · TAB: modo");
+        ElementInfoStyle.Note("Doble clic: reporte de viga o curva P-M de columna / muro.");
+        GUILayout.EndScrollView();
+        ElementInfoStyle.End(previous);
 
-        // Barra de colores (abajo izquierda)
+        // Barra de colores (abajo derecha, fuera de la ficha abierta).
         DrawLegend();
     }
 
@@ -515,11 +516,25 @@ public class AnalysisMode : MonoBehaviour
         else title = "Desplazamiento max " + (scaleDmax * 1000f).ToString("F1") + " mm (x" + factor + ")";
         float lim = isDef ? mx * 1000f : mx;
         const int N = 6;
-        float boxW = 60f, boxH = 18f;
+        float boxW = 60f, boxH = 24f;
         // Abajo-derecha (la leyenda de capas del ViewerHud ocupa abajo-izquierda).
         float x0 = Screen.width - 8f - boxW - 8f - 200f, y0 = Screen.height - (N * boxH + 30f);
-        var ts = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleRight };
-        GUI.Label(new Rect(x0 - 360f, y0 - 22, 360, 20), title, ts);
+        Rect report = ElementInfoStyle.DataArea.width > 0 ? ElementInfoStyle.DataArea : ElementInfoStyle.AnalysisArea;
+        bool reportOpen = report.width > 0;
+        if (reportOpen)
+        {
+            // Reserve the report's full width, including a gap to the legend.
+            x0 = ElementInfoStyle.PanelRect().xMin - 16f - (boxW + 4f + 200f);
+            // In a narrow Game view, avoid covering either the report or layer list.
+            if (x0 < Mathf.Max(280f, ElementInfoStyle.LayerArea.xMax + 16f)) return;
+        }
+        Color previousColor = GUI.color;
+        GUI.color = new Color(0.075f, 0.10f, 0.14f, 1f);
+        GUI.DrawTexture(new Rect(x0 - 12, y0 - 56, boxW + 4 + 200 + 24, N * boxH + 68), WhiteTex());
+        GUI.color = previousColor;
+        var ts = new GUIStyle(GUI.skin.label) { fontSize = 16, wordWrap = true, alignment = TextAnchor.LowerLeft };
+        ts.normal.textColor = new Color(0.91f, 0.94f, 0.98f);
+        GUI.Label(new Rect(x0, y0 - 48, boxW + 4f + 200f, 40f), title, ts);
         for (int i = N - 1; i >= 0; i--)
         {
             float t0 = i / (float)N, t1 = (i + 1) / (float)N;
@@ -531,7 +546,7 @@ public class AnalysisMode : MonoBehaviour
             GUI.color = Color.white;
             string v0 = Fmt(lim * t0), v1 = Fmt(lim * t1);
             GUI.Label(new Rect(x0 + boxW + 4, y0 + (N - 1 - i) * boxH, 200, boxH),
-                      v0 + " - " + v1 + " " + unid);
+                      v0 + " - " + v1 + " " + unid, ts);
         }
         GUI.color = Color.white;
     }

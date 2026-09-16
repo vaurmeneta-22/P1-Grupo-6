@@ -85,6 +85,7 @@ public class CameraController : MonoBehaviour
 
     void Update()
     {
+        if (ElementInfoStyle.PointerOverPanel) return;
         if (Input.GetMouseButton(0))
         {
             rotY += Input.GetAxis("Mouse X") * rotationSpeed;

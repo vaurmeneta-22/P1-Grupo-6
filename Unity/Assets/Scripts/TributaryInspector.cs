@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.UI;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -27,8 +26,8 @@ public class TributaryInspector : MonoBehaviour
     const float SOBRECARGA_KNM2 = 2.0f;
 
     private Dictionary<int, TribEntry> tributaryById = new Dictionary<int, TribEntry>();
-    private Canvas canvas;
-    private Text text;
+    private string panelInfo = "";
+    private Vector2 panelScroll;
     private GameObject panel;
     private GameObject highlight;
     private Material highlightMat;
@@ -84,7 +83,13 @@ public class TributaryInspector : MonoBehaviour
     {
         // El visor HTML ignora el clic en modo analisis (ahi el clic lo usa el
         // doble-clic para reportes/P-M). Solo el modo visualizacion abre el panel.
-        if (AnalysisMode.Current != null && AnalysisMode.Current.Active) return;
+        if (AnalysisMode.Current != null && AnalysisMode.Current.Active)
+        {
+            ClearHighlight();
+            if (axesGroup != null && axesGroup.activeSelf) ClearAxes();
+            if (panel != null) panel.SetActive(false);
+            return;
+        }
         if (Input.GetMouseButtonDown(0))
         {
             DoPick();
@@ -132,30 +137,6 @@ public class TributaryInspector : MonoBehaviour
         return m.Success ? m.Groups[1].Value : "";
     }
 
-    // Fuente valida para el Text de UI. Se obtiene del TextMesh integrado de Unity
-    // (que el resto del proyecto ya usa sin problema), sin depender de nombres de
-    // recurso que en algunas versiones lanzan excepcion.
-    static Font GetUIFont()
-    {
-        try
-        {
-            Font f = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            if (f != null) return f;
-        }
-        catch { }
-        try
-        {
-            Font f = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            if (f != null) return f;
-        }
-        catch { }
-        GameObject probe = new GameObject("_fontProbe");
-        TextMesh tm = probe.AddComponent<TextMesh>();
-        Font rf = tm.font;
-        Object.Destroy(probe);
-        return rf;
-    }
-
     Material NewLineMat(Shader s, Color c)
     {
         Material m = new Material(s);
@@ -165,177 +146,90 @@ public class TributaryInspector : MonoBehaviour
 
     void BuildUI(Transform parent)
     {
-        GameObject canvasGO = new GameObject("InspectorCanvas");
-        canvasGO.transform.SetParent(parent, false);
-        canvas = canvasGO.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        CanvasScaler scaler = canvasGO.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920, 1080);
-        canvasGO.AddComponent<GraphicRaycaster>();
-
-        // Panel fondo
-        panel = new GameObject("Panel");
-        RectTransform pr = panel.AddComponent<RectTransform>();
-        panel.transform.SetParent(canvasGO.transform, false);
-        pr.anchorMin = new Vector2(1, 1);
-        pr.anchorMax = new Vector2(1, 1);
-        pr.pivot = new Vector2(1, 1);
-        pr.anchoredPosition = new Vector2(-20, -20);
-        pr.sizeDelta = new Vector2(560, 640);
-        Image img = panel.AddComponent<Image>();
-        img.color = new Color(0.1f, 0.1f, 0.12f, 0.9f);
-
-        Button btn = panel.AddComponent<Button>();
-        btn.targetGraphic = img;
-
-        GameObject headerGO = new GameObject("Header");
-        RectTransform hr = headerGO.AddComponent<RectTransform>();
-        headerGO.transform.SetParent(panel.transform, false);
-        Image header = headerGO.AddComponent<Image>();
-        hr.anchorMin = new Vector2(0, 1);
-        hr.anchorMax = new Vector2(1, 1);
-        hr.pivot = new Vector2(0.5f, 1);
-        hr.sizeDelta = new Vector2(0, 8);
-        hr.anchoredPosition = new Vector2(0, -4);
-        header.color = new Color(0.2f, 0.6f, 1f, 0.9f);
-
-        // Franja de casos de analisis (G/Q/EX/EY/COMBO) como la del panel del visor.
-        BuildCaseButtons(panel.transform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -12f));
-
-        // Texto de contenido
-        Font font = GetUIFont();
-        GameObject textGO = new GameObject("Texto");
-        RectTransform tr = textGO.AddComponent<RectTransform>();
-        textGO.transform.SetParent(panel.transform, false);
-        text = textGO.AddComponent<Text>();
-        if (font != null) text.font = font;
-        tr.anchorMin = new Vector2(0, 0);
-        tr.anchorMax = new Vector2(1, 1);
-        tr.offsetMin = new Vector2(12, 12);
-        tr.offsetMax = new Vector2(-12, -38);
-        text.fontSize = 16;
-        text.color = Color.white;
-        text.alignment = TextAnchor.UpperLeft;
-        text.horizontalOverflow = HorizontalWrapMode.Wrap;
-        text.verticalOverflow = VerticalWrapMode.Overflow;
-
-        // Boton cerrar (X): fondo + el texto "x" en un hijo separado (mismo patron que
-        // el texto de contenido; apilar Image+Button+Text en un GO unico falla al crear
-        // UI en codigo con Unity 6).
-        GameObject closeBtnGO = new GameObject("Cerrar");
-        RectTransform cr = closeBtnGO.AddComponent<RectTransform>();
-        closeBtnGO.transform.SetParent(panel.transform, false);
-        cr.anchorMin = new Vector2(1, 1);
-        cr.anchorMax = new Vector2(1, 1);
-        cr.pivot = new Vector2(1, 1);
-        cr.anchoredPosition = new Vector2(0, -2);
-        cr.sizeDelta = new Vector2(30, 30);
-        Image ci = closeBtnGO.AddComponent<Image>();
-        ci.color = new Color(0.8f, 0.2f, 0.2f, 0.9f);
-        Button cb = closeBtnGO.AddComponent<Button>();
-        cb.onClick.AddListener(() => panel.SetActive(false));
-
-        GameObject closeLblGO = new GameObject("Cruz");
-        RectTransform clr = closeLblGO.AddComponent<RectTransform>();
-        closeLblGO.transform.SetParent(closeBtnGO.transform, false);
-        clr.anchorMin = new Vector2(0, 0);
-        clr.anchorMax = new Vector2(1, 1);
-        clr.offsetMin = Vector2.zero;
-        clr.offsetMax = Vector2.zero;
-        Text ct = closeLblGO.AddComponent<Text>();
-        if (font != null) ct.font = font;
-        ct.fontSize = 18;
-        ct.alignment = TextAnchor.MiddleCenter;
-        ct.color = Color.white;
-        ct.text = "x";
-
+        panel = new GameObject("InspectorPanel");
+        panel.transform.SetParent(parent, false);
         panel.SetActive(false);
-    }
-
-    // Botones de caso: G | Q | EX | EY | COMBO (misma logica que el visor HTML,
-    // que selecciona el caso de fuerzas/deformada con un boton por combinacion).
-    void BuildCaseButtons(Transform parent, Vector2 anchorMin, Vector2 anchorMax, Vector2 pos)
-    {
-        Font font = GetUIFont();
-        string[] cases = { "G", "Q", "EX", "EY", "COMBO" };
-        float w = 62f, h = 26f, gap = 4f;
-        GameObject rowGO = new GameObject("Casos");
-        RectTransform rr = rowGO.AddComponent<RectTransform>();
-        rowGO.transform.SetParent(parent, false);
-        rr.anchorMin = anchorMin;
-        rr.anchorMax = anchorMax;
-        rr.pivot = new Vector2(0.5f, 1f);
-        rr.anchoredPosition = pos;
-        rr.sizeDelta = new Vector2(cases.Length * (w + gap) - gap, h);
-
-        HorizontalLayoutGroup hlg = rowGO.AddComponent<HorizontalLayoutGroup>();
-        hlg.spacing = gap;
-        hlg.childControlWidth = true;
-        hlg.childControlHeight = true;
-        hlg.childForceExpandWidth = false;
-        hlg.padding = new RectOffset(0, 0, 0, 0);
-
-        foreach (string cs in cases)
-        {
-            GameObject bGO = new GameObject("Caso_" + cs);
-            RectTransform br = bGO.AddComponent<RectTransform>();
-            bGO.transform.SetParent(rowGO.transform, false);
-            br.sizeDelta = new Vector2(w, h);
-            Image bi = bGO.AddComponent<Image>();
-            bi.color = (cs == currentCase)
-                ? new Color(0.2f, 0.7f, 0.9f, 0.9f)
-                : new Color(0.25f, 0.25f, 0.3f, 0.9f);
-            Button bb = bGO.AddComponent<Button>();
-            bb.targetGraphic = bi;
-            string caso = cs;
-            bb.onClick.AddListener(() =>
-            {
-                currentCase = caso;
-                RefreshSelectedColors();
-                UpdatePanel();
-            });
-
-            GameObject lGO = new GameObject("Lbl");
-            RectTransform lr = lGO.AddComponent<RectTransform>();
-            lGO.transform.SetParent(bGO.transform, false);
-            lr.anchorMin = Vector2.zero;
-            lr.anchorMax = Vector2.one;
-            lr.offsetMin = Vector2.zero;
-            lr.offsetMax = Vector2.zero;
-            Text lt = lGO.AddComponent<Text>();
-            if (font != null) lt.font = font;
-            lt.fontSize = 13;
-            lt.alignment = TextAnchor.MiddleCenter;
-            lt.color = Color.white;
-            lt.text = cs;
-        }
-    }
-
-    void RefreshSelectedColors()
-    {
-        Transform row = panel.transform.Find("Casos");
-        if (row == null) return;
-        foreach (Transform child in row)
-        {
-            Text lt = child.GetComponentInChildren<Text>();
-            Image bi = child.GetComponent<Image>();
-            if (bi == null) continue;
-            string name = child.name;
-            string caso = name.StartsWith("Caso_") ? name.Substring(5) : name;
-            bi.color = (caso == currentCase)
-                ? new Color(0.2f, 0.7f, 0.9f, 0.9f)
-                : new Color(0.25f, 0.25f, 0.3f, 0.9f);
-        }
     }
 
     void UpdatePanel()
     {
-        if (selected != null) text.text = BuildInfo(selected);
+        if (selected != null) panelInfo = BuildInfo(selected);
+    }
+
+    void OnGUI()
+    {
+        ElementInfoStyle.VisualizationArea = new Rect();
+        if (ElementInfoStyle.DataArea.width > 0 || panel == null || !panel.activeSelf || selected == null ||
+            (AnalysisMode.Current != null && AnalysisMode.Current.Active)) return;
+        Rect area = ElementInfoStyle.PanelRect();
+        ElementInfoStyle.VisualizationArea = area;
+        GUISkin previous = ElementInfoStyle.Begin(area);
+        bool close = ElementInfoStyle.Header(TipoNombre(selected.type) + " · " + selected.elementId,
+                                            "VISUALIZACIÓN  /  FICHA DEL ELEMENTO");
+        GUILayout.Space(8);
+        GUILayout.BeginHorizontal();
+        foreach (string cs in new[] { "G", "Q", "EX", "EY", "COMBO" })
+        {
+            Color old = GUI.backgroundColor;
+            if (cs == currentCase) GUI.backgroundColor = new Color(0.35f, 0.8f, 1f);
+            if (GUILayout.Button(cs)) { currentCase = cs; UpdatePanel(); }
+            GUI.backgroundColor = old;
+        }
+        GUILayout.EndHorizontal();
+        panelScroll = GUILayout.BeginScrollView(panelScroll, false, false);
+        ElementInfoStyle.Section("PROPIEDADES Y GEOMETRÍA");
+        string[] lines = panelInfo.Replace("\r", "").Split('\n');
+        for (int i = 1; i < lines.Length; i++)
+        {
+            string line = lines[i].Trim();
+            if (line.Length == 0) continue;
+            if (line.StartsWith("FUERZAS ["))
+            {
+                ElementInfoStyle.Section(line.TrimEnd(':'));
+                ElementInfoStyle.Note("Valores en módulo · ejes locales");
+                // Reorder the already formatted strings, preserving every displayed value.
+                if (i + 2 < lines.Length)
+                {
+                    MatchCollection fi = Regex.Matches(lines[i + 1], @"(N|Vy|Vz|T|My|Mz)=([^ ]+)");
+                    MatchCollection fj = Regex.Matches(lines[i + 2], @"(N|Vy|Vz|T|My|Mz)=([^ ]+)");
+                    if (fi.Count == 6 && fj.Count == 6)
+                    {
+                        float[] widths = { 1, 1, 1 };
+                        ElementInfoStyle.Row(new[] { "Componente", "Extremo i", "Extremo j" }, widths, true);
+                        for (int k = 0; k < 6; k++)
+                            ElementInfoStyle.Row(new[] { fi[k].Groups[1].Value,
+                                fi[k].Groups[2].Value, fj[k].Groups[2].Value }, widths);
+                        i += 2;
+                    }
+                }
+                continue;
+            }
+            if (line.StartsWith("CARGA PERMANENTE") || line.StartsWith("CARGA VARIABLE"))
+            {
+                ElementInfoStyle.Section(line.TrimEnd(':'));
+                continue;
+            }
+            int split = line.IndexOf(':');
+            if (split < 0) split = line.IndexOf(" = ", System.StringComparison.Ordinal);
+            if (split >= 0)
+                ElementInfoStyle.Pair(line.Substring(0, split), line.Substring(split + 1).Trim().TrimStart('=').Trim());
+            else
+                GUILayout.Label(line);
+        }
+        GUILayout.EndScrollView();
+        ElementInfoStyle.End(previous);
+        if (close)
+        {
+            panel.SetActive(false);
+            ClearHighlight();
+            ClearAxes();
+            ElementInfoStyle.VisualizationArea = new Rect();
+        }
     }
 
     void DoPick()
     {
+        if (ElementInfoStyle.PointerOverPanel) return;
         Camera cam = Camera.main;
         if (cam == null) return;
         Ray ray = cam.ScreenPointToRay(Input.mousePosition);
@@ -367,7 +261,8 @@ public class TributaryInspector : MonoBehaviour
 
         panel.SetActive(true);
         selected = best;
-        text.text = BuildInfo(best);
+        panelInfo = BuildInfo(best);
+        panelScroll = Vector2.zero;
         Highlight(best);
         UpdateAxes(best);
     }
