@@ -1,0 +1,6 @@
+﻿caso;suma_areas_tributarias_m2;area_lozas_total_m2;area_huecos_m2;area_lozas_aisladas_m2;n_huecos_pendientes;n_losas_aisladas;area_conservacion_rel;carga_conservacion_rel;equilibrio_error;todas_ok_eq;diafragma_compatibilidad_err_max_m;todas_ok_dia;W_CM_coincide_W_F;conservacion_q_error;todas_ok_q;F_esperada_indep_kN;F_aplicada_kN;corte_basal_error;todas_ok_sismo_basal;F_esperada_error;todas_ok_sismo_F;todas_ok
+G;5674,3915;5674,7015;0,31;2,256;9;4;0,0;0,0;0,0;True;0,0;True;True;;True;;;;True;;True;True
+Q;5674,3915;5674,7015;0,31;2,256;9;4;0,0;0,0;0,0;True;0,0;True;True;0,0;True;;;;True;;True;True
+EX;5674,3915;5674,7015;0,31;2,256;9;4;0,0;0,0;0,0;True;0,0;True;True;;True;16650,7931;16650,7931;0,0;True;0,0;True;True
+EY;5674,3915;5674,7015;0,31;2,256;9;4;0,0;0,0;0,0;True;0,0;True;True;;True;16650,7931;16650,7931;0,0;True;0,0;True;True
+COMBO;5674,3915;5674,7015;0,31;2,256;9;4;0,0;0,0;0,0;True;0,0;True;True;;True;;;;True;;True;True

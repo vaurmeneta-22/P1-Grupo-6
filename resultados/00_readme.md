@@ -3,6 +3,10 @@
 Carpeta única de resultados del análisis estructural del Edificio de
 Ingeniería. Cada subcarpeta corresponde a un tipo de resultado.
 
+Para abrir los resultados en Excel y compararlos por caso con Unity, consultar
+[GUIA_EXCEL.md](GUIA_EXCEL.md). Incluye los CSV por caso y las tablas comunes con
+coma decimal y separador punto y coma.
+
 ## Índice
 
 | Carpeta | Contenido | Se genera con |
