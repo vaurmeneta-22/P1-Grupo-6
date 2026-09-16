@@ -23,9 +23,11 @@ Laboratorio estructural digital que combina:
 El visor replica las interacciones del `edificio_3d.html`:
 
 - **6 diafragmas rígidos** (niveles 0.00, 3.56, 7.12, 10.68, 14.24 y 17.8 m) por la huella real de piso: plano casi transparente con borde cian y triangulación de polígono cóncavo (tecla `D`).
-- **Capas alternables por familia** a través de teclas, igual que el panel de checkboxes del HTML.
-- **Inspector por clic**: al hacer clic sobre una viga, columna, muro o losa se muestra un panel con sus propiedades y, en vigas, el área tributaria y las **cargas** G (permanente) y Q (sobrecarga) calculadas en el análisis.
+- **HUD del visor** replicado del HTML (`ViewerHud.cs`): barra de modo superior central (`Modo:` + botones `VISUALIZACION/ANALISIS` y `DATOS`), información arriba-izquierda (título, ayuda de cámara, contadores de nodos/elementos) y **leyenda de colores** abajo-izquierda con swatches de 14×14 y **casillas** para alternar capas (2 columnas, `Todo` alterna todas).
+- **Capas alternables por familia** a través de teclas o de las casillas de la leyenda, igual que el panel de checkboxes del HTML.
+- **Inspector por clic / doble clic**: al hacer clic sobre una viga, columna, muro o losa se muestra un panel con sus propiedades y, en vigas, el área tributaria y las **cargas** G (permanente) y Q (sobrecarga) calculadas en el análisis. En el modo análisis el **hover** resalta en magenta el elemento bajo el puntero y el **doble clic** sobre una columna/muro de hormigón dibuja la **curva P-M** con su punto de demanda, mientras que sobre una viga o un **metálico** reporta N/V/M/DEF de ambos extremos (`PickHighlight.cs`).
 - **Modo análisis** (tecla `TAB` o botón central): superpone al modelo los resultados del análisis lineal con OpenSees — deformada y diagramas de momento (M), axial (N) y corte (V).
+- **Panel DATOS** (tecla `B` o botón `DATOS`, `DataPanel.cs`): ventana derecha con **6 pestañas** — Sismo (12 columnas con ux/uy/Rz por piso), Mom-Curv, P-M (fibra vs H.A.), Reacciones (con *Pintar en 3D*), Tributarias y **Diagramas 2D N/V/M** apilados — alimentadas por la API real de `AnalysisMap`.
 - **Modo hormigón** (`H`): pinta todo el edificio en tonos de concreto (fundaciones más oscuras).
 
 ### Modo análisis del visor (TAB)
@@ -41,6 +43,8 @@ Accesible desde `edificio_3d.html` con `TAB` o el botón `ANALISIS` de la barra 
 
 Los datos se cargan desde `resultados/11_mapa_visor/analysis_map.js`, generado por `exportar_analysis_map.py` a partir de los resultados `edificio_full_results*.json`.
 
+En **Unity** todo el modo análisis está replicado: casos `1`–`5` (G/Q/EX/EY/COMBO), vistas `M`/`N`/`V`/`D`, escala de deformada `+`/`-` (10–600), reacciones 3D con `R`, **auto-encuadre de la cámara** y la barra de colores con los rangos reales en la esquina inferior derecha. `AnalysisMap` lee `Unity/Assets/StreamingAssets/analysis_map.json`, que es el mismo JSON que escribe `exportar_analysis_map.py` (copiarlo al StreamingAssets tras regenerar los resultados).
+
 ### Atajos de teclado
 
 En `edificio_3d.html` las capas se alternan con los checkboxes del panel izquierdo (Columnas, Vigas X/Y, Muros, Losas, **Metálicas**, Nodos, Ejes, Diafragmas). Teclas del HTML: `N` alterna nodos, `E` alterna sólidos+ejes y `TAB` conmuta visualización↔análisis. El visor Unity replica las capas con las teclas siguientes:
@@ -52,13 +56,19 @@ En `edificio_3d.html` las capas se alternan con los checkboxes del panel izquier
 | `Y` | Alternar vigas Y |
 | `W` | Alternar muros |
 | `L` | Alternar lozas |
+| `G` | Alternar refuerzos metálicos (columnas y vigas de acero) |
 | `P` | Alternar apoyos (fundaciones) |
 | `N` | Alternar nodos |
 | `E` | Alternar solo los ejes |
 | `D` | Alternar diafragmas rígidos |
 | `TAB` | Alternar modo visualización ↔ análisis (deformada / M / N / V) |
+| `1`–`5` | Seleccionar caso G / Q / EX / EY / COMBO (modo análisis) |
+| `M` / `N` / `V` / `D` | Vista Momento / Axial / Corte / Deformada (modo análisis) |
+| `R` | Pintar/ocultar las reacciones en 3D (modo análisis) |
+| `+` / `-` | Amplificar / reducir la escala de la deformada (10–600) |
+| `B` | Abrir/cerrar el panel DATOS (Sismo, Mom-Curv, P-M, Reacciones, Tributarias, Diagramas) |
 | `H` | Modo hormigón (concreto claro / fundaciones oscuras) |
-| Clic izquierdo | Inspector de propiedades y cargas del elemento (en modo análisis: **doble clic** sobre columna/muro de hormigón = curva P-M; **doble clic** sobre viga o **metálico** = valores M/V/N/DEF numéricos; cierre con **X**)|
+| Clic izquierdo | Inspector de propiedades y cargas del elemento; en modo análisis, el **hover** resalta el elemento en magenta y el **doble clic** sobre columna/muro de hormigón dibuja la curva P-M, o sobre viga/**metálico** los valores M/V/N/DEF numéricos (cierre con **X**) |
 
 ## Estructura
 
@@ -95,9 +105,11 @@ En `edificio_3d.html` las capas se alternan con los checkboxes del panel izquier
 ├── reports/              # Entregables semana01/02/03/04 y plan de empalmes
 ├── Unity/                # Proyecto Unity
 │   └── Assets/
-│       ├── Scripts/      # EdificioLoader.cs, CameraController.cs,
-│       │                 # DiaphragmData.cs, ElementTag.cs, TributaryInspector.cs
-│       └── StreamingAssets/   # Edificio.json + tributary_map.js (leídos en runtime)
+│       ├── Scripts/      # EdificioLoader.cs, AnalysisMap.cs, AnalysisMode.cs,
+│       │                 # CameraController.cs, PickHighlight.cs, DataPanel.cs,
+│       │                 # ViewerHud.cs, Plot2D.cs, TributaryInspector.cs,
+│       │                 # DiaphragmData.cs, ElementTag.cs
+│       └── StreamingAssets/   # Edificio.json + tributary_map.js + analysis_map.json (runtime)
 ├── data/                 # Datos compartidos (geometría, materiales, secciones)
 ├── tests/                # Verificaciones (equilibrio, superposición, tributarias, empalmes, camino de carga)
 ├── scripts/              # Utilidades (html_to_json.py, parte_d_fiber.py, parte_d_muros.py,
@@ -151,7 +163,7 @@ python opensees_edificio_v2.py --case COMBO --lambda-g 1.2 --lambda-q 1.0 --lamb
 También disponible: `benchmark_3d.py` (módulo de prueba 2D/3D) y `superposicion.py` (auditoría de la combinación; al correr completo exporta el resumen a `resultados/06_superposicion/verificacion.csv`). `exportar_analysis_map.py` adicionalmente exporta el sismo por piso a `resultados/05_sismo/sismo_por_piso.csv`.
 
 ### Modo análisis del visor (regenerar resultados)
-Los resultados del análisis (deformada, M/N/V por caso y capacidad P-M) se exportan a `resultados/11_mapa_visor/analysis_map.js`, que el visor carga con `<script>`. Regenerarlos tras un análisis nuevo:
+Los resultados del análisis (deformada, M/N/V por caso y capacidad P-M) se exportan a `resultados/11_mapa_visor/analysis_map.js` (que el visor carga con `<script>`) y, en el mismo paso, a `analysis_map.json` para Unity. Regenerarlos tras un análisis nuevo:
 
 ```bash
 cd opensees
@@ -177,7 +189,7 @@ Luego abrir `edificio_3d.html` y usar `TAB` para el modo análisis.
 4. Hacer clic en un elemento para abrir su inspector (propiedades y cargas tributarias G/Q en las vigas).
 5. Usar las teclas de la tabla anterior para alternar capas, ejes y el modo hormigón.
 
-Si se actualizó `Edificio.json`, copiarlo a `Unity/Assets/StreamingAssets/Edificio.json` (o seguir el flujo del visor con `html_to_json.py`). El inspector por clic lee sus cargas desde `StreamingAssets/tributary_map.js` (generado por el análisis tributario); ambos deben estar sincronizados con el `Edificio.json`. El modo análisis del visor lee `resultados/11_mapa_visor/analysis_map.js` y no está disponible en Unity.
+Si se actualizó `Edificio.json`, copiarlo a `Unity/Assets/StreamingAssets/Edificio.json` (o seguir el flujo del visor con `html_to_json.py`). El inspector por clic lee sus cargas desde `StreamingAssets/tributary_map.js` (generado por el análisis tributario); ambos deben estar sincronizados con el `Edificio.json`. El modo análisis del visor lee `StreamingAssets/analysis_map.json` (el mismo que exporta `exportar_analysis_map.py` a `resultados/11_mapa_visor/`), así que también conviene copiarlo a StreamingAssets para que el modo análisis y el panel DATOS funcionen en Unity (casos, deformada/M/N/V, reacciones, P-M y diagramas 2D).
 
 ## Conexiones y camino de carga
 
@@ -210,4 +222,4 @@ Issue → Plan → Build → Test → Review → Merge
 - [Enunciado del proyecto](Enunciado_Proyecto1/)
 - [Agentes IA](AGENTS.md)
 - [Avance Semana 3 (entregable)](reports/semana03.md) — casos base, curvas M-φ/P-M, verificación RC y demanda-capacidad
-- [Avance Semana 4 (entregable)](reports/semana04.md) — diagramas 2D M/V/N en el visor, auditoría de la convención de esfuerzos de extremo y traspaso del visor a Unity (pendiente)
+- [Avance Semana 4 (entregable)](reports/semana04.md) — diagramas 2D M/V/N en el visor, auditoría de la convención de esfuerzos de extremo y **traspaso completo del visor a Unity** (modo análisis, HUD, doble clic P-M / N-V-M-DEF y panel DATOS)

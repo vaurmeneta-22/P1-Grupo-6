@@ -29,6 +29,7 @@ PM_COLUMNAS = os.path.join(CAPACIDAD, "pm_columnas")
 PM_MUROS = os.path.join(CAPACIDAD, "pm_muros")
 SISMO_OUT = os.path.join(REPO, "resultados", "05_sismo")
 OUT = os.path.join(REPO, "resultados", "11_mapa_visor", "analysis_map.js")
+OUT_JSON = os.path.join(REPO, "resultados", "11_mapa_visor", "analysis_map.json")
 
 CM_TO_M = 0.01
 CASES = ["G", "Q", "EX", "EY", "COMBO"]
@@ -351,8 +352,14 @@ def main():
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(body)
 
+    # Mismo contenido en JSON plano (para Unity: JsonUtility-nop frágil). Se
+    # genera solo si el archivo cambió, para no ensuciar el commit.
+    with open(OUT_JSON, "w", encoding="utf-8") as f:
+        json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
+
     n_forces = len(forces["COMBO"])
     print(f"OK: analysis_map.js ({len(body)/1020:.0f} KB)")
+    print(f"    analysis_map.json ({os.path.getsize(OUT_JSON)/1020:.0f} KB, para Unity)")
     print(f"  elements: {len(elements_out)} | fuerzas COMBO: {n_forces} "
           f"| disp EX nodos: {len(disp['EX'])} "
           f"| vigas con fracciones: {len(beam_fractions)}")

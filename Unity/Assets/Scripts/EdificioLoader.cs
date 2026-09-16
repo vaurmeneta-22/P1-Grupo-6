@@ -14,15 +14,17 @@ public class EdificioLoader : MonoBehaviour
     public Material supportMat;
     public Material wallMat;
     public Material lozaMat;
+    public Material steelMat;
 
     [Header("Colores (como el visor 3D)")]
     public Color columnColor = new Color(0.906f, 0.298f, 0.235f);   // #e74c3c
     public Color beamXColor = new Color(0.204f, 0.596f, 0.859f);    // #3498db
     public Color beamYColor = new Color(0.180f, 0.800f, 0.443f);    // #2ecc71
-    public Color nodeColor = new Color(0.945f, 0.769f, 0.059f);     // #f1c40f
+    public Color nodeColor = new Color(0.102f, 0.737f, 0.612f);    // #1abc9c
     public Color supportColor = new Color(0.608f, 0.349f, 0.714f);  // #9b59b6
     public Color wallColor = new Color(0.608f, 0.349f, 0.714f);     // #9b59b6
     public Color lozaColor = new Color(0.902f, 0.404f, 0.133f);     // #e67e22
+    public Color steelColor = new Color(0.945f, 0.769f, 0.059f);    // #f1c40f
 
     [Header("Modo hormigon")]
     public KeyCode hormigonKey = KeyCode.H;
@@ -39,6 +41,7 @@ public class EdificioLoader : MonoBehaviour
     public KeyCode nodesKey = KeyCode.N;
     public KeyCode axesKey = KeyCode.E;
     public KeyCode diaphKey = KeyCode.D;
+    public KeyCode steelKey = KeyCode.G;
 
     [Header("Diafragmas (como el visor HTML)")]
     public Color diaphFillColor = new Color(0f, 1f, 1f);            // cian casi transparente
@@ -52,6 +55,7 @@ public class EdificioLoader : MonoBehaviour
     private GameObject beamYGroup;
     private GameObject wallGroup;
     private GameObject lozaGroup;
+    private GameObject steelGroup;
     private GameObject supportGroup;
     private GameObject axesGroup;
     private GameObject nodeGroup;
@@ -70,6 +74,17 @@ public class EdificioLoader : MonoBehaviour
     private float axisfontSize = 48f;
     private TributaryInspector inspector;
 
+    // Componentes de interaccion creados en runtime (para el HUD por capas,
+    // el boton de modo y el pintado de reacciones).
+    public AnalysisMode analysisMode;
+    public DataPanel dataPanel;
+    public VerifPanel verifPanel;
+    public int NodeCount;
+    public int ElementCount;
+
+    // Grupo raiz de los solidos (para el hover/doble-clic del PickHighlight).
+    public GameObject ElementsGroup { get { return elementsGroup; } }
+
     void Start()
     {
         QualitySettings.antiAliasing = 4;
@@ -78,6 +93,12 @@ public class EdificioLoader : MonoBehaviour
         string path = Path.Combine(Application.streamingAssetsPath, jsonFileName);
         string json = File.ReadAllText(path);
         EdificioData data = JsonUtility.FromJson<EdificioData>(json);
+
+        // Resultados del analisis (mismos datos que ANALYSIS_MAP del visor HTML).
+        LoadAnalysisMap();
+
+        NodeCount = data.nodes != null ? data.nodes.Count : 0;
+        ElementCount = data.elements != null ? data.elements.Count : 0;
 
         CreateMaterials();
         BuildSupportSet(data);
@@ -88,6 +109,7 @@ public class EdificioLoader : MonoBehaviour
         beamYGroup = new GameObject("VigasY");
         wallGroup = new GameObject("Muros");
         lozaGroup = new GameObject("Lozas");
+        steelGroup = new GameObject("Metalicas");
         supportGroup = new GameObject("Apoyos");
         axesGroup = new GameObject("Ejes");
         nodeGroup = new GameObject("Nodos");
@@ -99,6 +121,7 @@ public class EdificioLoader : MonoBehaviour
         beamYGroup.transform.parent = elementsGroup.transform;
         wallGroup.transform.parent = elementsGroup.transform;
         lozaGroup.transform.parent = elementsGroup.transform;
+        steelGroup.transform.parent = elementsGroup.transform;
         supportGroup.transform.parent = elementsGroup.transform;
 
         foreach (NodeData node in data.nodes)
@@ -114,6 +137,11 @@ public class EdificioLoader : MonoBehaviour
         CreateDiaphragms();
 
         TrySetupInspector();
+        SetupAnalysisMode();
+        SetupDataPanel();
+        SetupVerifPanel();
+        SetupPickHighlight();
+        SetupViewerHud();
 
         DisableShadows();
 
@@ -134,6 +162,33 @@ public class EdificioLoader : MonoBehaviour
                 CenterCameraOnModel(cam, center);
             }
         }
+    }
+
+    // Carga los resultados del analisis desde StreamingAssets (analysis_map.json),
+    // indispensable para el inspector (fuerzas por caso) y los modos deformada/esfuerzos.
+    void LoadAnalysisMap()
+    {
+        string amPath = Path.Combine(Application.streamingAssetsPath, "analysis_map.json");
+        if (AnalysisMap.Load(amPath))
+        {
+            Debug.Log("AnalysisMap cargado: " + AnalysisMap.ElementsByTag.Count +
+                      " elementos, fuerzas en " + string.Join(",", AnalysisMap.Forces.Keys));
+        }
+        else
+        {
+            Debug.LogWarning("AnalysisMap no disponible: " + AnalysisMap.LoadError);
+        }
+    }
+
+    // Nombre del piso por elevacion estructural (metros), igual que el visor HTML.
+    static string NombrePisoLocal(float yM)
+    {
+        if (yM < 3.56f) return "Subterraneo";
+        if (yM < 7.12f) return "Piso 1";
+        if (yM < 10.68f) return "Piso 2";
+        if (yM < 14.24f) return "Piso 3";
+        if (yM < 17.8f) return "Piso 4";
+        return "Techo";
     }
 
     // Centroide de todos los nodos (mundo Unity, con el mismo espejo de NodeToPos).
@@ -162,8 +217,14 @@ public class EdificioLoader : MonoBehaviour
         if (Input.GetKeyDown(lozasKey)) { ToggleGroup(lozaGroup); }
         if (Input.GetKeyDown(supportsKey)) { ToggleGroup(supportGroup); }
         if (Input.GetKeyDown(nodesKey)) { ToggleGroup(nodeGroup); }
-        if (Input.GetKeyDown(axesKey)) { ToggleGroup(axesGroup); }
+        if (Input.GetKeyDown(axesKey))
+        {
+            // Igual que el visor HTML: E alterna los solidos y los palitos juntos.
+            ToggleGroup(elementsGroup);
+            ToggleGroup(axesGroup);
+        }
         if (Input.GetKeyDown(diaphKey)) { ToggleGroup(diaphGroup); }
+        if (Input.GetKeyDown(steelKey)) { ToggleGroup(steelGroup); }
         if (Input.GetKeyDown(hormigonKey))
         {
             ToggleHormigon();
@@ -246,10 +307,11 @@ public class EdificioLoader : MonoBehaviour
         supportMat = NewLitMat(urp, supportColor, 0.2f, 0f);
         wallMat = NewLitMat(urp, wallColor, 0.15f, 0f);
         lozaMat = NewLitMat(urp, lozaColor, 0.1f, 0f);
+        steelMat = NewLitMat(urp, steelColor, 0.35f, 0.35f);
 
         nodeMat = NewLitMat(urp, nodeColor, 0.4f, 0f);
         nodeMat.EnableKeyword("_EMISSION");
-        nodeMat.SetColor("_EmissionColor", new Color(0.4f, 0.3f, 0f) * 0.5f);
+        nodeMat.SetColor("_EmissionColor", new Color(0f, 0.3f, 0.25f) * 0.5f);
 
         // Materiales del modo hormigon (aplicados con la tecla).
         hormigonMat = NewLitMat(urp, hormigonColor, 0.2f, 0f);
@@ -271,12 +333,13 @@ public class EdificioLoader : MonoBehaviour
         labelBgMat = new Material(sprite);
         labelBgMat.color = new Color(0f, 0f, 0f, 0.78f);
 
-        axisMats = new Material[5];
+        axisMats = new Material[6];
         axisMats[0] = NewLineMat(sprite, columnColor);
         axisMats[1] = NewLineMat(sprite, beamXColor);
         axisMats[2] = NewLineMat(sprite, beamYColor);
         axisMats[3] = NewLineMat(sprite, wallColor);      // muros
         axisMats[4] = NewLineMat(sprite, lozaColor);      // lozas
+        axisMats[5] = NewLineMat(sprite, steelColor);     // metalicas
     }
 
     Material NewLitMat(Shader s, Color c, float smooth, float metal)
@@ -401,6 +464,11 @@ public class EdificioLoader : MonoBehaviour
             CreateWall(elem, wallGroup);
             return;
         }
+        if (type == "steel_column" || type == "steel_beam")
+        {
+            CreateSteel(elem, steelGroup);
+            return;
+        }
 
         NodeData ni = allNodes.Find(n => n.id == elem.node_i);
         NodeData nj = allNodes.Find(n => n.id == elem.node_j);
@@ -418,12 +486,12 @@ public class EdificioLoader : MonoBehaviour
         if (type == "column")
         {
             GameObject c = CreateBox(elem.id, startPos, endPos, elem.b * scale, elem.b * scale, parent, mat, type);
-            AttachElementTag(c, elem, startPos, endPos);
+            AttachElementTag(c, elem, startPos, endPos, ni, nj);
         }
         else if (type == "beam_x" || type == "beam_y")
         {
             GameObject c = CreateBox(elem.id, startPos, endPos, elem.b * scale, elem.h * scale, parent, mat, type);
-            AttachElementTag(c, elem, startPos, endPos);
+            AttachElementTag(c, elem, startPos, endPos, ni, nj);
         }
 
         CreateAxisLine(elem, startPos, endPos);
@@ -431,7 +499,8 @@ public class EdificioLoader : MonoBehaviour
 
     // Anade la etiqueta de identificacion al collider del elemento para el
     // inspector por clic (raycast). Las posiciones world usan cm * scale = metros.
-    void AttachElementTag(GameObject go, ElementData elem, Vector3 start, Vector3 end)
+    void AttachElementTag(GameObject go, ElementData elem, Vector3 start, Vector3 end,
+                          NodeData ni, NodeData nj)
     {
         ElementTag tag = go.GetComponent<ElementTag>();
         if (tag == null) tag = go.AddComponent<ElementTag>();
@@ -442,6 +511,33 @@ public class EdificioLoader : MonoBehaviour
         tag.hCm = elem.h;
         tag.start = start;
         tag.end = end;
+        tag.niNode = elem.node_i;
+        tag.njNode = elem.node_j;
+
+        // Coordenadas estructurales (metros, antes del espejo X).
+        if (ni != null)
+        {
+            tag.structX_I = ni.x;
+            tag.structY_I = ni.z;
+            tag.structZ_I = ni.y;
+        }
+        if (nj != null)
+        {
+            tag.structX_J = nj.x;
+            tag.structY_J = nj.z;
+            tag.structZ_J = nj.y;
+        }
+
+        tag.piso = ni != null ? ni.floor : "";
+
+        // Enriquecer desde analysis_map si esta disponible.
+        AnalysisMap.ElementInfo ei = AnalysisMap.Element(elem.id);
+        if (ei != null)
+        {
+            tag.material = ei.material;
+            tag.supI = ei.supI;
+            tag.supJ = ei.supJ;
+        }
     }
 
     void CreateLoza(ElementData elem, GameObject parent)
@@ -469,6 +565,15 @@ public class EdificioLoader : MonoBehaviour
         tag.hCm = elem.h;
         tag.start = start;
         tag.end = end;
+        tag.niNode = elem.node_i;
+        tag.njNode = elem.node_j;
+        tag.structX_I = elem.xi;
+        tag.structY_I = elem.yi;
+        tag.structZ_I = elem.zi;
+        tag.structX_J = elem.xj;
+        tag.structY_J = elem.yj;
+        tag.structZ_J = elem.zj;
+        tag.piso = NombrePisoLocal(elem.yi * scale);
 
         // Eje (como el visor HTML): linea diagonal entre los extremos del panel.
         AddAxisLine(axisMats[4], start, end, elem.id);
@@ -516,12 +621,78 @@ public class EdificioLoader : MonoBehaviour
         tag.hCm = elem.h;
         tag.start = a;
         tag.end = top;
+        tag.niNode = elem.node_i;
+        tag.njNode = elem.node_j;
+        tag.structX_I = elem.xi;
+        tag.structY_I = elem.yi;
+        tag.structZ_I = elem.zi;
+        tag.structX_J = elem.xj;
+        tag.structY_J = elem.yj;
+        tag.structZ_J = elem.zj;
+        tag.piso = NombrePisoLocal(elem.yi * scale);
+        AnalysisMap.ElementInfo eiWall = AnalysisMap.Element(elem.id);
+        if (eiWall != null)
+        {
+            tag.material = eiWall.material;
+            tag.supI = eiWall.supI;
+            tag.supJ = eiWall.supJ;
+            if (tag.niNode == 0 && eiWall.ni > 0) tag.niNode = eiWall.ni;
+            if (tag.njNode == 0 && eiWall.nj > 0) tag.njNode = eiWall.nj;
+        }
     }
 
     void CreateAxisLine(ElementData elem, Vector3 start, Vector3 end)
     {
         int idx = elem.type == "column" ? 0 : (elem.type == "beam_x" ? 1 : 2);
         AddAxisLine(axisMats[idx], start, end, elem.id);
+    }
+
+    // Metálico (steel_column / steel_beam): tubo amarillo entre extremos.
+    // Usa las coordenadas directas (xi/yi/zi) como wall/loza (no tiene lift/ext).
+    void CreateSteel(ElementData elem, GameObject parent)
+    {
+        Vector3 start = new Vector3(-elem.xi * scale, elem.yi * scale, elem.zi * scale);
+        Vector3 end = new Vector3(-elem.xj * scale, elem.yj * scale, elem.zj * scale);
+        Vector3 dir = end - start;
+        Vector3 center = (start + end) * 0.5f;
+        float length = Mathf.Max(dir.magnitude, 0.01f);
+
+        GameObject box = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        box.name = "STEEL_" + elem.id;
+        box.transform.position = center;
+        box.transform.rotation = Quaternion.LookRotation(dir.normalized);
+        box.transform.localScale = new Vector3(elem.b * scale, elem.b * scale, length);
+        box.GetComponent<Renderer>().material = steelMat;
+        box.transform.parent = parent.transform;
+
+        ElementTag tag = box.AddComponent<ElementTag>();
+        tag.elementId = elem.id;
+        tag.type = elem.type;
+        tag.section = elem.section;
+        tag.bCm = elem.b;
+        tag.hCm = elem.h;
+        tag.start = start;
+        tag.end = end;
+        tag.niNode = elem.node_i;
+        tag.njNode = elem.node_j;
+        tag.structX_I = elem.xi;
+        tag.structY_I = elem.yi;
+        tag.structZ_I = elem.zi;
+        tag.structX_J = elem.xj;
+        tag.structY_J = elem.yj;
+        tag.structZ_J = elem.zj;
+        tag.piso = NombrePisoLocal(elem.yi * scale);
+        AnalysisMap.ElementInfo eiSteel = AnalysisMap.Element(elem.id);
+        if (eiSteel != null)
+        {
+            tag.material = eiSteel.material;
+            tag.supI = eiSteel.supI;
+            tag.supJ = eiSteel.supJ;
+            if (tag.niNode == 0 && eiSteel.ni > 0) tag.niNode = eiSteel.ni;
+            if (tag.njNode == 0 && eiSteel.nj > 0) tag.njNode = eiSteel.nj;
+        }
+
+        AddAxisLine(axisMats[5], start, end, elem.id);
     }
 
     // Dibuja una linea de eje entre dos puntos del mundo en el grupo de ejes.
@@ -675,6 +846,98 @@ public class EdificioLoader : MonoBehaviour
         GameObject inspGO = new GameObject("Inspector");
         inspector = inspGO.AddComponent<TributaryInspector>();
         inspector.Setup(tribPath, inspGO.transform);
+    }
+
+    // Crea el modo analisis (deformada / tubos M/N/V / reacciones) con datos del
+    // analisis. Replica exactamente buildAnalysis() del visor HTML.
+    void SetupAnalysisMode()
+    {
+        GameObject amGO = new GameObject("AnalysisMode");
+        analysisMode = amGO.AddComponent<AnalysisMode>();
+        analysisMode.transform.SetParent(elementsGroup.transform, false);
+        // Se activa con TAB o con el boton de la barra superior.
+    }
+
+    // Crea el panel DATOS (tecla B): 6 pestanas (Sismo, Mom-Curv, P-M,
+    // Reacciones, Tributarias, Diagramas) con datos del analisis.
+    void SetupDataPanel()
+    {
+        GameObject dpGO = new GameObject("DataPanel");
+        dpGO.transform.SetParent(transform, false);
+        dataPanel = dpGO.AddComponent<DataPanel>();
+    }
+
+    // Crea el panel VERIFICACION (tecla V): trazabilidad 147 / 261 / 446.
+    void SetupVerifPanel()
+    {
+        GameObject vpGO = new GameObject("VerifPanel");
+        vpGO.transform.SetParent(transform, false);
+        verifPanel = vpGO.AddComponent<VerifPanel>();
+    }
+
+    // Crea el hover magenta + doble-clic del modo analisis (reporte de viga /
+    // curva P-M de capacidad), replicando visor.dblclick() del HTML.
+    void SetupPickHighlight()
+    {
+        GameObject phGO = new GameObject("PickHighlight");
+        var ph = phGO.AddComponent<PickHighlight>();
+        ph.Setup(this, analysisMode);
+    }
+
+    // Crea la barra de modo superior (Modo + VISUALIZACION/ANALISIS + DATOS),
+    // el HUD de info (nodos/elementos) y la leyenda de capas con checkboxes.
+    void SetupViewerHud()
+    {
+        GameObject hudGO = new GameObject("ViewerHud");
+        var hud = hudGO.AddComponent<ViewerHud>();
+        hud.Setup(this, dataPanel);
+    }
+
+    // ---------- Capas por nombre (para el HUD con checkboxes) ----------
+    GameObject GroupOf(string layer)
+    {
+        switch (layer)
+        {
+            case "columnas": return columnGroup;
+            case "vigasX": return beamXGroup;
+            case "vigasY": return beamYGroup;
+            case "muros": return wallGroup;
+            case "losas": return lozaGroup;
+            case "metálicas": return steelGroup;
+            case "apoyos": return supportGroup;
+            case "nodos": return nodeGroup;
+            case "ejes": return axesGroup;
+            case "diafragmas": return diaphGroup;
+            case "elementos": return elementsGroup;
+            default: return null;
+        }
+    }
+
+    public void SetLayerVisible(string layer, bool visible)
+    {
+        GameObject g = GroupOf(layer);
+        if (g != null) g.SetActive(visible);
+    }
+
+    public bool IsLayerVisible(string layer)
+    {
+        GameObject g = GroupOf(layer);
+        return g != null && g.activeSelf;
+    }
+
+    // "Todo" del visor HTML: activa todas las capas (incluidos los ejes).
+    public void SetAllLayers(bool visible)
+    {
+        SetLayerVisible("columnas", visible);
+        SetLayerVisible("vigasX", visible);
+        SetLayerVisible("vigasY", visible);
+        SetLayerVisible("muros", visible);
+        SetLayerVisible("losas", visible);
+        SetLayerVisible("metálicas", visible);
+        SetLayerVisible("apoyos", visible);
+        SetLayerVisible("nodos", visible);
+        SetLayerVisible("ejes", visible);
+        SetLayerVisible("diafragmas", visible);
     }
 
     // Desactiva las sombras de todo el modelo y de la luz direccional, para que

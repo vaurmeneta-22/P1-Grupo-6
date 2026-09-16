@@ -71,3 +71,8 @@ opensees/results/*.eig
 *.tmp
 *.bak
 *.orig
+
+# Unity batch build log
+unity_build_log.txt
+unity/unity_build_log.txt
+

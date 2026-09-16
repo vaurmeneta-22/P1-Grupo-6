@@ -36,6 +36,25 @@ public class CameraController : MonoBehaviour
         UpdatePosition();
     }
 
+    // Recuadra la camara sobre un volumen (por ejemplo la deformada), manteniendo
+    // la orientacion actual del usuario (rotX/rotY) si ya navego.
+    public void FrameBounds(Bounds b)
+    {
+        if (target == null)
+        {
+            target = new GameObject("CameraTarget").transform;
+        }
+        float r = b.extents.magnitude;
+        if (r < 0.01f) r = 1f;
+        target.position = b.center;
+        panOffset = Vector3.zero;
+        Camera cam = GetComponent<Camera>();
+        float fov = cam != null ? cam.fieldOfView : 60f;
+        float dist = r / Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad) * 1.4f;
+        distance = Mathf.Clamp(dist, minDistance, maxDistance);
+        UpdatePosition();
+    }
+
     void Start()
     {
         if (target == null)
@@ -54,6 +73,14 @@ public class CameraController : MonoBehaviour
             }
             UpdatePosition();
         }
+    }
+
+    // True mientras se rota/arrastra/zoom con el raton: el hover del visor se
+    // desactiva para no resaltar elementos mientras se navega (como el HTML).
+    public bool Busy
+    {
+        get { return Input.GetMouseButton(0) || Input.GetMouseButton(1) ||
+                     Mathf.Abs(Input.GetAxis("Mouse ScrollWheel")) > 0.001f; }
     }
 
     void Update()
