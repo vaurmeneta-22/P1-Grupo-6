@@ -1,5 +1,21 @@
 # Semana 5 — AVANCE: laboratorio estructural interactivo v1
 
+> Estado al cierre (23-09): sliders **G/Q/EX/EY** implementados en Unity; la
+> combinación vive en memoria (`AnalysisMapCombination.cs`) y actualiza deformada,
+> fuerzas de extremo, reacciones, diagramas y demanda P-M sin reanálisis. En esta
+> sesión se verificó el motor C# real sobre los dos mapas (147 945 comprobaciones por
+> mapa, §3.3) y la suite Python (`35 passed`). Falta la validación **visual** en
+> Play Mode y el ensayo en el dispositivo final. Discrepancia de desplazamiento
+> 6.78e-9 documentada en §3.1 (no se declara cumplimiento de 1e-10). SQ4 sigue como
+> propuesta. [Guion reproducible y alcance actual](../docs/demo_laboratorio_interactivo.md).
+>
+> **Objetivo del avance:** convertir el visor Unity en un laboratorio interactivo en
+> el que el usuario combine G/Q/EX/EY con sliders, observe deformada/fuerzas/
+> reacciones/diagramas/P-M y distinga cuándo basta combinar casos ya calculados y
+> cuándo se requiere reanálisis (sección, apoyo, material, conectividad o geometría
+> de carga), conservando la trazabilidad con las corridas OpenSees y las dos
+> modificaciones reproducibles (§2).
+
 | Campo | Valor |
 |---|---|
 | **Proyecto** | P1 — Laboratorio Estructural Digital (Edificio de Ingeniería) |
@@ -24,6 +40,7 @@
 | Deformada | ✅ Implementada | `analysis_map` → `disp` (m); HTML modo análisis vista Deformada; Unity `AnalysisMode.cs`, tecla D, escala ×10–600 con slider, auto-encuadre |
 | Diagramas | ✅ Implementada | HTML pestaña Diagramas (M/V/N) con sub-fichas COMBO/G/Q/EX/EY; `analysis_map` → `diagramas`; Unity `Plot2D.cs`, vista M/N/V por colormap percentil 90. Cierre viga 147 al 0.00 % |
 | Superposición | ✅ Verificada | `opensees/superposicion.py`; `resultados/06_superposicion/verificacion_3combinaciones.csv` (ver §3) |
+| Superposición interactiva (sliders λ) | ✅ Implementada (validación visual pendiente) | `AnalysisMode.cs` (UI) + `AnalysisMapCombination.cs` (motor C# en memoria, ver §3.3); verificado por `tests/test_viewer_combination.ps1` (147 945 comprobaciones por mapa) |
 | P-M | ✅ Implementada | `analysis_map` → `pm_ha` (70×70, 30×356), `momcurv` (M-φ); HTML pestañas P-M y Mom-Curv; Unity `Plot2D.cs` (diamante P-M + punto de demanda + % capacidad) |
 | Modificación del modelo | ✅ Implementada (automática) | `scripts/generar_modificaciones.py` + `scripts/ejecutar_modificacion.py` (ver §2) |
 
@@ -86,8 +103,8 @@ Se verificaron **tres estados de combinación** contra los resultados numéricos
 | comboC2 | 1.0 | 1.0 | 1.0 | 1.0 | 7.410e-09 | 2.593e-14 | 5.539e-12 | SUPERPOSICION CORRECTA |
 | comboC3 | 1.0 | 0.5 | 0.3 | 0.7 | 8.422e-09 | 4.582e-14 | 8.607e-12 | SUPERPOSICION CORRECTA |
 
-- Evidencia numérica: `resultados/06_superposicion/verificacion_3combinaciones.csv` y `resultados/01_casos_base/edificio_full_results_comboC1..C3_COMBO.json`.
-- En el visor: la pestaña Diagramas/DATOS muestra los casos G/Q/EX/EY y el COMBO (equivalente a C1). La superposición se demuestra comparando cada estado combinado con la suma lineal λ·R_caso (errores < 1e-9, muy por debajo de la tolerancia 1e-10 de invariantes del proyecto).
+- Evidencia numérica: `resultados/06_superposicion/verificacion_3combinaciones.csv` y las corridas explícitas `resultados/01_casos_base/edificio_full_results_comboC1_COMBO.json`, `..._comboC2_COMBO.json` y `..._comboC3_COMBO.json`.
+- La tabla anterior contrasta combinaciones con corridas independientes. Los errores de desplazamiento son del orden de 1e-9 y **superan** la tolerancia 1e-10 del proyecto; ver §3.1. La prueba del motor Unity (§3.3) verifica por separado que los sliders reconstruyen exactamente la suma λ·componente de los casos exportados.
 
 ### 3.1 Nota de umbrales (documentada, no oculta)
 
@@ -105,6 +122,26 @@ caso COMBO · columna id 1 · sección 70×70
 ```
 
 Verificación H.A. (semanas 3-4, commits `70e1c4c` y `c57e75c`): columna 70×70 con **16 φ28** perimetrales dentro de capacidad y **79/79 muros** con **φ40** de borde dentro de capacidad en COMBO. En el visor, el doble clic dibuja el punto de demanda sobre el diamante P-M (`PickHighlight.cs` → `Plot2D.DrawPMLab`) e indica dentro/fuera.
+
+### 3.3 Motor de combinación en Unity (sliders λ)
+
+`AnalysisMapCombination.cs` lee los cuatro casos base del mapa exportado y publica `COMBO` en memoria con el mismo contrato JSON (unidades y signos conservados: kN, kN·m, m). Reglas del motor:
+
+- Suma lineal por componente con signo: `R = λ_G·R_G + λ_Q·R_Q + λ_EX·R_EX + λ_EY·R_EY`.
+- Los casos base **no se mutan**: cada `TryCombine` vuelve a sumar desde ellos.
+- Resultantes, extremos, diagramas y demanda P-M se calculan **después** de la suma (no se suman magnitudes, radios ni porcentajes de utilización).
+- Rango λ ∈ [−10, 10]; en la UI los sliders van 0..2 para G/Q y −2..2 para EX/EY. Rechazo atómico si falta un caso, hay IDs incompatibles, malla de diagrama distinta o resultado no finito (no se publica nada a medias).
+- `CombinationRevision` fuerza la actualización del inspector y de la ficha P-M del elemento activo (`TributaryInspector.cs`, `PickHighlight.cs`).
+- El visor HTML conserva su funcionamiento anterior (λ fijos por sub-ficha); los sliders se incorporaron en Unity.
+
+Verificación ejecutable del motor sobre los mapas reales:
+
+```powershell
+./tests/test_viewer_combination.ps1                                  # StreamingAssets (Mod A)
+./tests/test_viewer_combination.ps1 -Map resultados/11_mapa_visor/analysis_map.json   # línea base
+```
+
+Resultado en esta sesión: **147 945 comprobaciones por mapa** — siete combinaciones (cero, cada caso aislado, sismo negativo, 1.2/1.0/1.4/1.4 y 1.0/0.5/−0.3/0.7), inmutabilidad de los casos base y rechazo atómico ante NaN/caso ausente. Tolerancia absoluta 1e-10 sobre componentes exportadas. Esta prueba verifica la suma en el viewer; no sustituye el contraste con una corrida OpenSees independiente (esa contrastación es la de la tabla de §3).
 
 ---
 
@@ -138,7 +175,7 @@ Evaluación de si el viewer responde realmente las seis preguntas de diseño est
 | ¿Qué fuerzas tiene? | Sí — diagramas M/V/N por caso + fuerzas de extremo | Pestaña Diagramas (M/V/N, cierre 0.00 %), tabla de esfuerzos por elemento |
 | ¿Cuánta capacidad tiene? | Sí — curvas P-M y Momento-Curvatura por sección | Pestañas P-M y Mom-Curv (70×70, 30×356, muros, steel); doble clic → punto de demanda vs curva (radio 0.894) |
 
-Conclusión: el viewer contesta las **seis preguntas** con datos reales de OpenSees. Fortalezas: modo explícito VISUALIZACION ⇄ ANALISIS con panel DATOS, trazabilidad por doble clic (N/V/M/DEF/tributarias/curvas), convenciones de ingeniería consistentes y colormap por percentil 90. Limitaciones conocidas: sin **sliders de superposición** (λ fijos por sub-ficha), `Rebuild()` recrea palitos al cambiar caso/vista (costoso en gama media), HUD IMGUI no escalado a densidad alta y sin tooltips contextuales.
+Conclusión: el viewer contesta las **seis preguntas** con datos reales de OpenSees. Fortalezas: modo explícito VISUALIZACION ⇄ ANALISIS con panel DATOS, trazabilidad por doble clic (N/V/M/DEF/tributarias/curvas), convenciones de ingeniería consistentes y colormap por percentil 90. Limitaciones conocidas: la superposición interactiva se incorporó en **Unity** (§3.3) pero **HTML** mantiene λ fijos por sub-ficha; `Rebuild()` recrea palitos al cambiar caso/vista (costoso en gama media), HUD IMGUI no escalado a densidad alta y sin tooltips contextuales.
 
 ---
 
@@ -204,22 +241,41 @@ Unity.exe -batchmode -quit -projectPath "P1-Grupo-6\Unity" \
 | Superposición etiquetada | `opensees/superposicion.py --tag` (no pisa la línea base) | 3 combinaciones "SUPERPOSICION CORRECTA", errores < 1e-9 (§3) |
 | Tooling de preview móvil | `Unity/Assets/Editor/MobilePreviewTool.cs` + `BuildMobile.cs` | Batchmode abre el proyecto sin errores C# (exit 0); paquete Device Simulator resuelto; menú del simulador corregido para Unity 6000.6 (`Window/General/Device Simulator` con fallback) |
 | Navegación táctil del visor | `CameraController.cs`, `PickHighlight.cs`, `TributaryInspector.cs` + `ProjectSettings.asset` (`activeInputHandler: Both`) | Orbitar/zoom/pan por touch y tap/doble-tap de selección validados en el Device Simulator; compilación batch exitosa |
+| Motor C# de superposición en vivo | `Unity/Assets/Scripts/AnalysisMapCombination.cs` (motor) + `AnalysisMode.cs` (UI slider) + `MiniJson.cs`/`AnalysisMap.cs` (parser parcial existente) | Harness `tests/test_viewer_combination.ps1` sobre los **dos** mapas (línea base y Mod A): 147 945 comprobaciones por mapa, 7 combinaciones, casos base inmutables y rechazo atómico (§3.3) |
 
-**Regla aplicada:** ningún producto del agente se integra sin su verificación numérica o test. Convención del proyecto (AGENTS.md): umbrales 1e-10 para equilibrio, tributarias y superposición; donde se cumple 1e-6 pero no 1e-10 (desplazamiento 6.78e-9), el hecho queda documentado sin ocultarse. `python -m pytest tests -q` → **35 tests en verde** (6 módulos).
+**Regla aplicada:** ningún producto del agente se integra sin su verificación numérica o test. Convención del proyecto (AGENTS.md): umbrales 1e-10 para equilibrio, tributarias y superposición; donde se cumple 1e-6 pero no 1e-10 (desplazamiento 6.78e-9), el hecho queda documentado sin ocultarse. `python -m pytest tests -q` → **35 tests en verde** (6 módulos), re-ejecutada en el cierre del 23-09 con el mismo resultado.
 
 ---
 
 ## 8. Pendientes para el cierre (viernes 25)
 
-> **P1 — Sliders de superposición (λ_G, λ_Q, λ_EX, λ_EY)** en Unity/HTML recalculando deformada, M/N/V, reacciones y P-M en vivo reutilizando `combine()` (motor ya testeado). Verificación: 3 combinaciones que reproduzcan los casos explícitos (§3) y un COMBO armado con sliders igual al pre-computado.
+> **P1 — Sliders de superposición:** implementados en Unity con un motor C# que suma los cuatro casos exportados. Prueba numérica y compilación aprobadas; falta validación visual y rendimiento en Play Mode. HTML mantiene su funcionamiento anterior.
 >
-> **P2 — Demanda/capacidad dinámica:** al variar λ, actualizar el punto de demanda sobre las curvas P-M (el motor P-M ya existe).
+> **P2 — Demanda/capacidad dinámica:** conectada al COMBO en memoria. La ficha sigue el caso activo; falta comprobar visualmente el punto durante el arrastre.
 >
 > **P3 — Emitir el APK** instalando el módulo Android Build Support (semana 5) y validar en simulador; revisar densidad alta y costo de `Rebuild()` (pool de objetos para gama media).
 >
 > **P4 — SQ4 carga móvil** con la regla de la sección 4 (cámara → celda tributaria → vigas receptoras → M/V superpuestos).
 >
 > **P5 — Prueba sistemática en Play Mode** (distribución del HUD, encuadre, rendimiento) antes del build móvil.
+
+## 9. Verificación ejecutada en el cierre (23-09)
+
+Comandos y resultados **reales** de esta sesión (no se inventaron comprobaciones visuales):
+
+| Comando | Resultado |
+|---|---|
+| `./tests/test_viewer_combination.ps1` (StreamingAssets = Mod A) | **PASS**: 147 945 comprobaciones C# |
+| `./tests/test_viewer_combination.ps1 -Map resultados/11_mapa_visor/analysis_map.json` (línea base) | **PASS**: 147 945 comprobaciones C# |
+| `python -m pytest tests -q` | **35 passed** (6 módulos) en 0.97 s |
+| `python -c "import openseespy"` | OpenSeesPy **3.8.0.0** disponible (numpy 2.5.2) |
+
+Limitaciones registradas:
+
+- **No** se confirmó visualmente la actualización de deformada y punto P-M al arrastrar los sliders: requiere Play Mode humano (pendiente P1/P2). La prueba del motor valida la suma de componentes exportadas, no el render.
+- El reanálisis OpenSees de los cuatro casos base **no** se re-ejecutó en esta sesión; las corridas previas permanecen en `resultados/01_casos_base/` (G/Q/EX/EY, COMBO, comboC1..C3, modA, modB) y se citan como evidencia de las semanas anteriores.
+- La sesión previa reportó no poder ejecutar la suite Python por dependencias locales incompletas y un fallo de permisos al repararlas. En el cierre el entorno ya las tiene (numpy, OpenSeesPy) y la suite corre completa: la limitación quedó superada y se registra así, sin reclamar un resultado que no se hubiera obtenido.
+- Decisiones de integración: `Unity/.vsconfig` se incluye (configuración de Visual Studio con el workload ManagedGame para el proyecto Unity). Los cuatro assets de Unity sin cambio real de contenido (`EditorBuildSettings.asset`, `ShaderGraphSettings.asset`, `ProjectAuditorSettings.asset`, `UniversalRenderPipelineGlobalSettings.asset`) no se suben como modificación: sus blobs son byte-idénticos a `main` y su estado `M` es artefacto de stat/CRLF.
 
 ## Checklist de cierre
 
@@ -231,5 +287,6 @@ Unity.exe -batchmode -quit -projectPath "P1-Grupo-6\Unity" \
 - [x] UX estructural evaluada — seis preguntas confirmadas (§5).
 - [x] Preparación móvil: familia de dispositivos + Device Simulator + navegación táctil (1/2 dedos, tap/doble-tap) + script de build (§6); **APK pendiente de módulo Android (P3)**.
 - [x] IA documentada y verificada (§7).
-- [ ] Commit + push de la semana (en proceso).
-- [ ] Restaurar `StreamingAssets` a línea base tras la demo (`--restore`) o acordar dejarlo en Mod A.
+- [x] Commit + push del avance al cierre del 23-09 (rama `main`).
+- [x] `StreamingAssets` entregado en **Mod A** (decisión documentada; `--restore` recupera la línea base cuando se acuerde).
+- [ ] Validación visual en Play Mode y ensayo del guion en el dispositivo final (P1/P2/P5).

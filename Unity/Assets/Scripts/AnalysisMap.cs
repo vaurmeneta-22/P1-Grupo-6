@@ -5,7 +5,7 @@ using UnityEngine;
 
 // Carga resultados/11_mapa_visor (analysis_map.json -> StreamingAssets) y
 // expone los mismos datos que el `ANALYSIS_MAP` del visor HTML (analisis 1:1).
-public static class AnalysisMap
+public static partial class AnalysisMap
 {
     // ---------- Tipos de datos ----------
 
@@ -370,6 +370,7 @@ public static class AnalysisMap
                 foreach (KeyValuePair<string, object> kv in la)
                     LocalAxes[kv.Key] = MiniJson.NumArrayValue(kv.Value);
 
+            InitializeCombination();
             Loaded = true;
             return true;
         }

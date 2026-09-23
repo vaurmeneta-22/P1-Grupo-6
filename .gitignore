@@ -1,4 +1,5 @@
 # Python
+.local_analysis_deps/
 __pycache__/
 *.py[cod]
 *$py.class

@@ -259,6 +259,7 @@ public class PickHighlight : MonoBehaviour
         string name = meta != null ? TipoNombre(meta.type) : "Elemento";
         bool close = ElementInfoStyle.Header(name + " · " + reportId,
             "ANÁLISIS  /  " + (reportKind == 0 ? "REPORTE DE FUERZAS" : "CAPACIDAD Y DEMANDA P-M"));
+        reportCaso = am.Caso;
         ElementInfoStyle.Note("Caso del reporte: " + reportCaso);
         reportScroll = GUILayout.BeginScrollView(reportScroll, false, false);
         if (reportKind == 0) BeamReportContent(reportId, reportCaso);

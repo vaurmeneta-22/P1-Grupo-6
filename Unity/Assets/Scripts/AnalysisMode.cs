@@ -133,7 +133,12 @@ public class AnalysisMode : MonoBehaviour
     void ClearDrew()
     {
         foreach (GameObject g in drew)
-            if (g != null) Destroy(g);
+            if (g != null)
+            {
+                Renderer renderer = g.GetComponent<Renderer>();
+                if (renderer != null && renderer.sharedMaterial != null) Destroy(renderer.sharedMaterial);
+                Destroy(g);
+            }
         drew.Clear();
         Palitos.Clear();
         if (wallGroup != null) wallGroup.SetActive(true);
@@ -461,6 +466,30 @@ public class AnalysisMode : MonoBehaviour
             }
         }
         GUILayout.EndHorizontal();
+
+        ElementInfoStyle.Section("SUPERPOSICIÓN · FACTORES λ");
+        if (AnalysisMap.Loaded)
+        {
+            double[] weights = (double[])AnalysisMap.Lambdas.Clone();
+            bool changed = false;
+            for (int i = 0; i < 4; i++)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(AnalysisMap.BaseCases[i] + "  " + weights[i].ToString("F2"), GUILayout.Width(85));
+                float value = GUILayout.HorizontalSlider((float)weights[i], i < 2 ? 0f : -2f, 2f);
+                GUILayout.EndHorizontal();
+                double rounded = System.Math.Round(value, 2);
+                if (System.Math.Abs(rounded - weights[i]) > 0.00001) { weights[i] = rounded; changed = true; }
+            }
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Cero")) { weights = new double[4]; changed = true; }
+            if (GUILayout.Button("G + Q")) { weights = new double[] { 1, 1, 0, 0 }; changed = true; }
+            if (GUILayout.Button("1.2 / 1 / 1.4 / 1.4")) { weights = new double[] { 1.2, 1, 1.4, 1.4 }; changed = true; }
+            GUILayout.EndHorizontal();
+            if (changed && AnalysisMap.TryCombine(weights)) SetCaso("COMBO");
+            if (AnalysisMap.CombinationError != null) ElementInfoStyle.Note(AnalysisMap.CombinationError);
+            ElementInfoStyle.Note("λ cambia la combinación al instante, sin reanálisis.\nSección o apoyo: reanalizar los cuatro casos y reiniciar Play.");
+        }
 
         ElementInfoStyle.Section("VISTA DEL MODELO");
         GUILayout.BeginHorizontal();

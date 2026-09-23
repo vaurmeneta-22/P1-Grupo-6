@@ -33,6 +33,7 @@ public class TributaryInspector : MonoBehaviour
     private Material highlightMat;
     private ElementTag selected;
     private string currentCase = "COMBO";
+    private int combinationRevision = -1;
 
     // Triada de ejes locales (x' rojo, y' verde, z' azul) como flechas.
     private GameObject axesGroup;
@@ -163,6 +164,11 @@ public class TributaryInspector : MonoBehaviour
         ElementInfoStyle.VisualizationArea = new Rect();
         if (ElementInfoStyle.DataArea.width > 0 || panel == null || !panel.activeSelf || selected == null ||
             (AnalysisMode.Current != null && AnalysisMode.Current.Active)) return;
+        if (combinationRevision != AnalysisMap.CombinationRevision)
+        {
+            combinationRevision = AnalysisMap.CombinationRevision;
+            UpdatePanel();
+        }
         Rect area = ElementInfoStyle.PanelRect();
         ElementInfoStyle.VisualizationArea = area;
         GUISkin previous = ElementInfoStyle.Begin(area);
@@ -443,7 +449,7 @@ public class TributaryInspector : MonoBehaviour
                 string desc = MiniJson.St(combo, "descripcion");
                 double tot = MiniJson.Db(combo, "Carga_COMBO_total_kN");
                 if (tot != 0 || !string.IsNullOrEmpty(desc))
-                    sb.AppendLine().Append("Cargas del sistema (COMBO): G+Q gravitacional · EX/EY sismo · W total = ").
+                    sb.AppendLine().Append("Referencia COMBO exportada (no sliders): W total = ").
                       Append(Mathf.RoundToInt((float)tot)).Append(" kN (peso propio + losa residual por vigas)");
             }
         }

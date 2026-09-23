@@ -41,16 +41,16 @@ public static class MiniJson
 
     public static bool Bool(object o)
     {
-        if (o is bool b) return b;
+        if (o is bool) return (bool)o;
         return false;
     }
 
     public static double Num(object o)
     {
-        if (o is double d) return d;
-        if (o is float f) return f;
-        if (o is int n) return n;
-        if (o is long l) return l;
+        if (o is double) return (double)o;
+        if (o is float) return (float)o;
+        if (o is int) return (int)o;
+        if (o is long) return (long)o;
         return 0.0;
     }
 
