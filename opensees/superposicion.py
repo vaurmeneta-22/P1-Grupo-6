@@ -142,10 +142,18 @@ def forces_map(r):
 def run_explicit(lambdas, cases):
     """Corre opensees_edificio_v2.py --case COMBO con las lambdas dadas.
     Si el archivo COMBO ya existe y se pasa --reuse, se reutiliza (mas rapido
-    para iterar sobre la metrica sin re-resolver el modelo)."""
-    path = os.path.join(RESULTS, "edificio_full_results_COMBO.json")
+    para iterar sobre la metrica sin re-resolver el modelo).
+    Si se pasa --tag NOMBRE, la corrida explicita queda ETIQUETADA
+    (edificio_full_results_NOMBRE_COMBO.json) sin pisar el COMBO baseline."""
+    tag = ""
+    if "--tag" in sys.argv:
+        i = sys.argv.index("--tag")
+        if i + 1 < len(sys.argv):
+            tag = sys.argv[i + 1]
+    suf = f"_{tag}" if tag else ""
+    path = os.path.join(RESULTS, f"edificio_full_results{suf}_COMBO.json")
     if "--reuse" in sys.argv and os.path.exists(path):
-        print("\n[EXPLICITO] reutilizando edificio_full_results_COMBO.json (--reuse)")
+        print(f"\n[EXPLICITO] reutilizando edificio_full_results{suf}_COMBO.json (--reuse)")
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
 
@@ -154,6 +162,8 @@ def run_explicit(lambdas, cases):
            "--lambda-q", str(lambdas["Q"]),
            "--lambda-ex", str(lambdas["EX"]),
            "--lambda-ey", str(lambdas["EY"])]
+    if tag:
+        cmd += ["--tag", tag]
     print("\n[EXPLICITO] " + " ".join(cmd))
     r = subprocess.run(cmd, cwd=OPENSEES, capture_output=True, text=True)
     sys.stdout.write(r.stdout)
@@ -162,10 +172,8 @@ def run_explicit(lambdas, cases):
         raise RuntimeError("La corrida explicita COMBO fallo (rc=%d)" % r.returncode)
 
     if not os.path.exists(path):
-        alt = os.path.join(RESULTS, "edificio_full_results_COMBO.json")
-        if not os.path.exists(alt):
-            raise FileNotFoundError("No se encontro el resultado COMBO explicito")
-        path = alt
+        raise FileNotFoundError("No se encontro el resultado COMBO explicito "
+                                f"({path})")
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 

@@ -1,0 +1,10 @@
+combinacion,campo,max_err_rel,n,resultado
+C1 (1.2/1.0/1.4/1.4),desplazamiento,6.78e-09,516,OK
+C1 (1.2/1.0/1.4/1.4),reaccion,2.284e-14,99,OK
+C1 (1.2/1.0/1.4/1.4),fuerza_interna,4.88e-12,701,OK
+C2 (1.0/1.0/1.0/1.0),desplazamiento,7.41e-09,516,OK
+C2 (1.0/1.0/1.0/1.0),reaccion,2.593e-14,99,OK
+C2 (1.0/1.0/1.0/1.0),fuerza_interna,5.539e-12,701,OK
+C3 (1.0/0.5/0.3/0.7),desplazamiento,8.422e-09,516,OK
+C3 (1.0/0.5/0.3/0.7),reaccion,4.582e-14,99,OK
+C3 (1.0/0.5/0.3/0.7),fuerza_interna,8.607e-12,701,OK

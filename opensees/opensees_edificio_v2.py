@@ -70,6 +70,10 @@ JSON_PATH = os.path.join(REPO, "Edificio.json")
 BASE = os.path.join(REPO, "resultados", "01_casos_base")
 os.makedirs(BASE, exist_ok=True)
 OUT_JSON = os.path.join(BASE, "edificio_full_results.json")
+# Sufijo opcional (--tag) para corridas de MODIFICACION del modelo SIN pisar
+# los resultados de la linea base: los archivos salen como
+# edificio_full_results[_tag][_CASO].json.
+MOD_TAG = ""
 
 USE_DIAPHRAGM = True       # diafragma rigido por piso (AGENTS.md)
 CM_TO_M = 0.01
@@ -1589,8 +1593,18 @@ def run_case(case_name="G"):
     os.makedirs(BASE, exist_ok=True)
     # Cada caso se exporta a su propio archivo para poder compararlos por separado
     # y alimentar la Parte C (superposicion). G conserva el nombre historico.
+    # Con MOD_TAG (corrida de modificacion) el tag va antes del nombre del caso:
+    #   G     -> edificio_full_results_{MOD_TAG}.json
+    #   CASO  -> edificio_full_results_{MOD_TAG}_{CASO}.json
     out = OUT_JSON
-    if case_name != "G":
+    if MOD_TAG:
+        if case_name == "G":
+            out = OUT_JSON.replace("edificio_full_results.json",
+                                   f"edificio_full_results_{MOD_TAG}.json")
+        else:
+            out = OUT_JSON.replace("edificio_full_results.json",
+                                   f"edificio_full_results_{MOD_TAG}_{case_name}.json")
+    elif case_name != "G":
         out = OUT_JSON.replace("edificio_full_results.json",
                                f"edificio_full_results_{case_name}.json")
     with open(out, "w", encoding="utf-8") as f:
@@ -1611,6 +1625,21 @@ def main():
         i = sys.argv.index("--case")
         if i + 1 < len(sys.argv):
             only_case = sys.argv[i + 1].upper()
+
+    # MODIFICACION DEL MODELO (Semana 5): --json <path> apunta a un contrato
+    # alternativo (p.ej. Edificio_mod_A.json) y --tag <tag> etiqueta la salida
+    # para no sobrescribir la linea base.
+    global JSON_PATH, MOD_TAG
+    if "--json" in sys.argv:
+        i = sys.argv.index("--json")
+        if i + 1 < len(sys.argv):
+            JSON_PATH = os.path.abspath(sys.argv[i + 1])
+            print(f"  modelo (JSON_PATH): {JSON_PATH}")
+    if "--tag" in sys.argv:
+        i = sys.argv.index("--tag")
+        if i + 1 < len(sys.argv):
+            MOD_TAG = sys.argv[i + 1]
+            print(f"  tag de salida (MOD_TAG): {MOD_TAG}")
 
     def _flag(name):
         global LAMBDA_G, LAMBDA_Q, LAMBDA_EX, LAMBDA_EY

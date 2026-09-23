@@ -230,12 +230,27 @@ def plot_vertical(d, nombre, caso):
                    d["coords_i"][2], d["piso"], caso), fontsize=10)
 
 
-def exportar_datos():
-    """Devuelve el dict `diagramas` para analysis_map.js: 5 casos x 3 elementos."""
+def exportar_datos(tag=""):
+    """Devuelve el dict `diagramas` para analysis_map.js: 5 casos x 3 elementos.
+    Con `tag` (corrida de modificacion) prefiere los resultados etiquetados
+    edificio_full_results_<tag>_*.json y cae a la linea base si no existen."""
     with open(EDIFICIO_JSON, encoding="utf-8") as f:
         contrato = json.load(f)
     eis = {e["id"]: e for e in contrato["elements"]}
     nodes = {n["id"]: [n["x"], n["y"], n["z"]] for n in contrato["nodes"]}
+
+    def _tagged(fname):
+        if not tag:
+            return fname
+        if fname == "edificio_full_results.json":
+            candidate = fname.replace("edificio_full_results.json",
+                                      f"edificio_full_results_{tag}.json")
+        else:
+            case = fname.replace("edificio_full_results_", "").replace(".json", "")
+            candidate = fname.replace("edificio_full_results.json",
+                                      f"edificio_full_results_{tag}_{case}.json")
+        path = os.path.join(RESULTADOS_DIR, candidate)
+        return candidate if os.path.exists(path) else fname
 
     def _load(fname):
         with open(os.path.join(RESULTADOS_DIR, fname), encoding="utf-8") as f:
@@ -259,7 +274,7 @@ def exportar_datos():
 
     out = {}
     for caso, fname in CASOS:
-        data = _load(fname)
+        data = _load(_tagged(fname))
         forces = data["element_forces_global"]
         tribu = data.get("tributary_by_viga", {})
         q = _q_caso(caso, tribu.get(str(viga_tag), {}))

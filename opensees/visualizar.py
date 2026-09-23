@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 def main():
     json_path = os.path.join(os.path.dirname(__file__), "..", "Edificio.json")
@@ -20,14 +21,24 @@ def main():
         node_coords[n["id"]] = (n["x"] * scale, n["z"] * scale, n["y"] * scale)
 
     # Build elements for Three.js
-    beam_h = sections["60x80"]["h"] * scale
+    beam_h = (sections.get("60x80", {}).get("h", 80.0)) * scale
     col_top_extra = beam_h / 2
 
     elements_js = []
     for e in elements:
-        ni = node_coords[e["node_i"]]
-        nj = node_coords[e["node_j"]]
-        sec = sections[e["section"]]
+        if e.get("type") == "loza":
+            continue  # losas NO se modelan como elementos estructurales
+        if "node_i" in e:
+            ni = node_coords[e["node_i"]]
+            nj = node_coords[e["node_j"]]
+        else:
+            # muros con geometria directa (xi..zj en cm)
+            ni = (e["xi"] * scale, e["yi"] * scale, e["zi"] * scale)
+            nj = (e["xj"] * scale, e["yj"] * scale, e["zj"] * scale)
+        sec = sections.get(e["section"])
+        if sec is None:
+            # fallback: seccion derivada de las dimensiones del contrato (cm)
+            sec = {"b": e.get("b", 60.0), "h": e.get("h", 60.0)}
         b = sec["b"] * scale
         h = sec["h"] * scale
         etype = e["type"]
@@ -411,6 +422,37 @@ spherical.theta -= dx * 0.01;
 </html>"""
 
     out_path = os.path.join(os.path.dirname(__file__), "..", "edificio_3d.html")
+
+    # (P3) Regenerar NO debe perder el modo análisis: si el visor ya existe con
+    # la integracion (analysis_map.js + pestanas), se actualizan solo los datos
+    # de geometria (elements / nodesData / supportsSet) y se conserva el resto.
+    if os.path.exists(out_path):
+        with open(out_path, "r", encoding="utf-8") as f:
+            prev = f.read()
+        if "analysis_map.js" in prev:
+            def _reemplazar(texto, patron, nuevo):
+                nuevo_texto, n = re.subn(patron, lambda _m: nuevo, texto, flags=re.S)
+                return nuevo_texto, n
+
+            html, n1 = _reemplazar(
+                prev, r"const elements = \[.*?\];", "const elements = " + elements_json + ";")
+            html, n2 = _reemplazar(
+                html, r"const nodesData = \[.*?\];",
+                "const nodesData = " + nodes_json + ";")
+            html, n3 = _reemplazar(
+                html, r"const supportsSet = new Set\(\[.*?\]\);",
+                "const supportsSet = new Set(" + supports_json + ");")
+            if n1 and n2 and n3:
+                with open(out_path, "w", encoding="utf-8") as f:
+                    f.write(html)
+                print(f"HTML actualizado (geometria) en: {out_path}")
+                print("  [P3] se conservaron el <script analysis_map.js>, la pestana "
+                      "Diagramas y el panel DATOS del modo analisis.")
+                return
+            print("[aviso] No se pudieron localizar los bloques de geometria "
+                  "(esperado en un visor parcial); se regenera la vista basica.")
+            # continua con la generacion completa de abajo
+
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html)
 

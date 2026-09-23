@@ -5729,11 +5729,11 @@
     {
       "id": 147,
       "type": "beam_y",
-      "section": "50x75",
+      "section": "60x80",
       "node_i": 88,
       "node_j": 89,
-      "b": 50.0,
-      "h": 75.0,
+      "b": 60.0,
+      "h": 80.0,
       "lift_cm": 0.0,
       "ext_start_cm": 0.0,
       "ext_end_cm": -0.0,
@@ -13481,11 +13481,11 @@
         1,
         1,
         1,
-        1,
-        1,
-        1
+        0,
+        0,
+        0
       ],
-      "type": "fixed"
+      "type": "pinned"
     },
     {
       "node": 2,

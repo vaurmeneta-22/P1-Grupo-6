@@ -34,15 +34,42 @@ OUT_JSON = os.path.join(REPO, "resultados", "11_mapa_visor", "analysis_map.json"
 CM_TO_M = 0.01
 CASES = ["G", "Q", "EX", "EY", "COMBO"]
 
+# Etiqueta opcional de una corrida de MODIFICACION (--tag). Si existe un
+# archivo con tag, se prefiere; si no, se cae a la linea base. Asi el mapa de
+# una modificacion mezcla la base (G/Q/EX/EY sin re-correr) con el caso
+# modificado re-corrido (COMBO).
+TAG = ""
 
-def load_result(case):
-    fname = {
+
+def _fusion(case):
+    """Nombre de archivo de resultados. Case G -> edificio_full_results[_tag].json;
+    el resto -> edificio_full_results[_tag_][CASE].json."""
+    base = {
         "G": "edificio_full_results.json",
         "Q": "edificio_full_results_Q.json",
         "EX": "edificio_full_results_EX.json",
         "EY": "edificio_full_results_EY.json",
         "COMBO": "edificio_full_results_COMBO.json",
     }[case]
+    if not TAG:
+        return base
+    if case == "G":
+        return base.replace("edificio_full_results.json",
+                            f"edificio_full_results_{TAG}.json")
+    return base.replace(f"edificio_full_results_{case}.json",
+                        f"edificio_full_results_{TAG}_{case}.json")
+
+
+def load_result(case):
+    fname = _fusion(case)
+    if not os.path.exists(os.path.join(RESULTS, fname)):
+        fname = {
+            "G": "edificio_full_results.json",
+            "Q": "edificio_full_results_Q.json",
+            "EX": "edificio_full_results_EX.json",
+            "EY": "edificio_full_results_EY.json",
+            "COMBO": "edificio_full_results_COMBO.json",
+        }[case]
     with open(os.path.join(RESULTS, fname), encoding="utf-8") as f:
         return json.load(f)
 
@@ -67,9 +94,26 @@ def exportar_sismo_csv(sismo):
 
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
+    import argparse
+    ap = argparse.ArgumentParser(description="Exporta analysis_map.js/.json")
+    ap.add_argument("--json", default=os.path.join(REPO, "Edificio.json"),
+                    help="contrato del modelo (por defecto Edificio.json)")
+    ap.add_argument("--tag", default="",
+                    help="etiqueta de la corrida de modificacion: lee "
+                         "resultados edificio_full_results_<tag>_*.json y "
+                         "escribe analysis_map_<tag>.js/.json")
+    args = ap.parse_args()
+    global TAG
+    TAG = args.tag
+
     from diagramas_2d import exportar_datos
-    with open(os.path.join(REPO, "Edificio.json"), encoding="utf-8") as f:
+    with open(args.json, encoding="utf-8") as f:
         data = json.load(f)
+    contract_name = os.path.basename(args.json)
+
+    # Salidas: con tag se escribe analysis_map_<tag>.js/.json (no pisa base).
+    out_js = OUT.replace("analysis_map.js", f"analysis_map_{TAG}.js") if TAG else OUT
+    out_json = OUT_JSON.replace("analysis_map.json", f"analysis_map_{TAG}.json") if TAG else OUT_JSON
 
     nodes_json = data["nodes"]
     elements_json = data["elements"]
@@ -324,7 +368,8 @@ def main():
                       "alpha1": p.get("alpha1"), "beta1": p.get("beta1")}
 
     out = {
-        "generado": "opensees/exportar_analysis_map.py",
+        "generado": "opensees/exportar_analysis_map.py"
+                    + (f" (MODIFICACION: {contract_name}, tag={TAG})" if TAG else ""),
         "casos": CASES,
         "units": {"length": "m", "force": "kN", "moment": "kN*m"},
         "meta": meta_by_case,
@@ -336,7 +381,7 @@ def main():
         "tributarias": tribu,
         "momcurv": momcurv,
         "pm_ha": pm_ha,
-        "diagramas": exportar_datos(),
+        "diagramas": exportar_datos(TAG),
         "beam_fractions": beam_fractions,
         "node_coords": node_coords,
         "capacidad": capacidad,
@@ -349,17 +394,17 @@ def main():
         return json.dumps(py, ensure_ascii=False, separators=(",", ":"))
 
     body = "const ANALYSIS_MAP = " + js(out) + ";\n"
-    with open(OUT, "w", encoding="utf-8") as f:
+    with open(out_js, "w", encoding="utf-8") as f:
         f.write(body)
 
     # Mismo contenido en JSON plano (para Unity: JsonUtility-nop frágil). Se
     # genera solo si el archivo cambió, para no ensuciar el commit.
-    with open(OUT_JSON, "w", encoding="utf-8") as f:
+    with open(out_json, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
 
     n_forces = len(forces["COMBO"])
-    print(f"OK: analysis_map.js ({len(body)/1020:.0f} KB)")
-    print(f"    analysis_map.json ({os.path.getsize(OUT_JSON)/1020:.0f} KB, para Unity)")
+    print(f"OK: {os.path.basename(out_js)} ({len(body)/1020:.0f} KB)")
+    print(f"    {os.path.basename(out_json)} ({os.path.getsize(out_json)/1020:.0f} KB, para Unity)")
     print(f"  elements: {len(elements_out)} | fuerzas COMBO: {n_forces} "
           f"| disp EX nodos: {len(disp['EX'])} "
           f"| vigas con fracciones: {len(beam_fractions)}")
