@@ -15,8 +15,8 @@
 
 | Función | Estado | Módulo / evidencia |
 |---|---|---|
-| Navegación | ✅ Implementada | Unity `Assets/Scripts/CameraController.cs` (cámara orbital, pan/zoom, auto-encuadre); HTML `edificio_3d.html` (controles L109: rotar/mover/zoom, teclas N/node, E/eje) |
-| Selección | ✅ Implementada | Unity `PickHighlight.cs`, `ElementTag.cs` (hover magenta 12 px, doble clic → reporte/P-M); HTML click en elemento → resaltado + info |
+| Navegación | ✅ Implementada | Unity `Assets/Scripts/CameraController.cs` (cámara orbital, pan/zoom, auto-encuadre; **touch**: 1 dedo orbita, 2 dedos pinch-zoom y pan); HTML `edificio_3d.html` (controles L109: rotar/mover/zoom, teclas N/node, E/eje) |
+| Selección | ✅ Implementada | Unity `PickHighlight.cs`, `ElementTag.cs` (hover magenta 12 px, doble clic → reporte/P-M; **tap/doble tap** en móvil); HTML click en elemento → resaltado + info |
 | Apoyos | ✅ Implementada | HTML `supportsSet` (64 apoyos) + geometría de bases; pestaña Reacciones; checkbox *Reacciones 3D* (tecla R, esferas por magnitud); Mod B muestra apoyo articulado |
 | Ejes | ✅ Implementada | HTML checkbox "Ejes (palitos)" (L131) + GridHelper (L1473); capa de ejes en leyenda (9 capas) + teclas E/D en Unity (`ViewerHud.cs`) |
 | Cargas | ✅ Implementada | `analysis_map` → `beam_fractions`, `forces`; panel DATOS Unity `DataPanel.cs` — Sismo por piso + tributarias (p. ej. viga 147 COMBO q = 19.124 kN/m) |
@@ -164,10 +164,11 @@ Candidato propuesto por el grupo: **Samsung Galaxy A54 5G** (ARM64, soporte ARCo
 
 - Paquete instalado: `com.unity.device-simulator.devices@1.0.1` (`Unity/Packages/manifest.json`, resuelto en `packages-lock.json`). Proyecto validado en batchmode con la librería resuelta y **sin errores de compilación** (exit 0).
 - Herramienta: `Unity/Assets/Editor/MobilePreviewTool.cs` → menú **Lab/Preview Movil/**:
-  1. **Abrir Device Simulator** — presets de teléfono (Galaxy, Pixel, iPhone…).
+  1. **Abrir Device Simulator** — presets de teléfono (Galaxy, Pixel, iPhone…). *(Integrado en el editor; en Unity 6000.6 el simulador se abre en `Window > General > Device Simulator`, ruta que el menú detecta automáticamente con fallback a la ruta clásica `Window/Device Simulator`).*
   2. **Capturar screenshot** — guarda el Game view en `Unity/Builds/MobilePreview/preview_*.png`.
   3. **Abrir carpeta de capturas**.
 - Procedimiento: abrir `SampleScene` → *Lab/Preview Movil/Abrir Device Simulator* → elegir dispositivo → **Play** → *Capturar screenshot*. Evidencia de que HUD, panel DATOS y selección rinden en formato teléfono.
+- **Navegación táctil en el simulador** (`CameraController.cs`, `PickHighlight.cs`, `TributaryInspector.cs`): orbitar con 1 dedo, zoom con 2 dedos (pinch), pan con 2 dedos, `tap` para seleccionar/inspeccionar y `doble tap` para el reporte P-M / N-V-M-DEF en modo análisis. Requiere `activeInputHandler: Both` en `ProjectSettings.asset` (los scripts usan la API clásica de Input; con "solo Input System nuevo" la cámara no recibe eventos).
 - Nota técnica: se descartó la captura 100 % automática en batch mode porque el *domain reload* de Unity al entrar en Play interrumpe los callbacks del Editor; la captura se hace con un clic desde el editor.
 
 ### 6.3 Build móvil inicial
@@ -186,8 +187,9 @@ Unity.exe -batchmode -quit -projectPath "P1-Grupo-6\Unity" \
 1. Instalar `BuildLabAndroid.apk` (USB o nube) y abrirlo.
 2. Verificar que carga `Edificio.json` + `analysis_map.json` **offline** (sin datos no hay render).
 3. Rotación horizontal y vertical: HUD y paneles deben reacomodarse.
-4. Clic en una viga → resaltado + identificación; doble clic → P-M/deformada-diagramas.
-5. Pestañas/paneles de Diagramas, Reacciones, Tributarias y P-M con valores idénticos a la versión de escritorio. Revisar `Screen.width/height` y densidad alta (HUD IMGUI).
+4. Navegar el modelo por **touch**: 1 dedo orbita, 2 dedos hace zoom y pan (validado en el Device Simulator).
+5. Clic/tap en una viga → resaltado + identificación; doble tap/doble clic → P-M/deformada-diagramas.
+6. Pestañas/paneles de Diagramas, Reacciones, Tributarias y P-M con valores idénticos a la versión de escritorio. Revisar `Screen.width/height` y densidad alta (HUD IMGUI).
 
 ---
 
@@ -200,7 +202,8 @@ Unity.exe -batchmode -quit -projectPath "P1-Grupo-6\Unity" \
 | Wrapper de modificación/reanálisis por tag | `scripts/ejecutar_modificacion.py` (contrato → OpenSees → mapa → verificación → `--unity`) | 2 modificaciones (Mod A/B) corridas de punta a punta; equilibrio ΣF+ΣR < 1e-16; `todas_ok=True` |
 | Regeneración no destructiva del visor (P3) | `opensees/visualizar.py`: reemplaza solo `elements`/`nodesData`/`supportsSet`, conserva pestañas + `analysis_map.js`; soporta muros por coordenadas y secciones nuevas | Regeneración probada: 523 elementos, 536 nodos, 64 apoyos; `dt-diag` y `analysis_map.js` presentes después |
 | Superposición etiquetada | `opensees/superposicion.py --tag` (no pisa la línea base) | 3 combinaciones "SUPERPOSICION CORRECTA", errores < 1e-9 (§3) |
-| Tooling de preview móvil | `Unity/Assets/Editor/MobilePreviewTool.cs` + `BuildMobile.cs` | Batchmode abre el proyecto sin errores C# (exit 0); paquete Device Simulator resuelto |
+| Tooling de preview móvil | `Unity/Assets/Editor/MobilePreviewTool.cs` + `BuildMobile.cs` | Batchmode abre el proyecto sin errores C# (exit 0); paquete Device Simulator resuelto; menú del simulador corregido para Unity 6000.6 (`Window/General/Device Simulator` con fallback) |
+| Navegación táctil del visor | `CameraController.cs`, `PickHighlight.cs`, `TributaryInspector.cs` + `ProjectSettings.asset` (`activeInputHandler: Both`) | Orbitar/zoom/pan por touch y tap/doble-tap de selección validados en el Device Simulator; compilación batch exitosa |
 
 **Regla aplicada:** ningún producto del agente se integra sin su verificación numérica o test. Convención del proyecto (AGENTS.md): umbrales 1e-10 para equilibrio, tributarias y superposición; donde se cumple 1e-6 pero no 1e-10 (desplazamiento 6.78e-9), el hecho queda documentado sin ocultarse. `python -m pytest tests -q` → **35 tests en verde** (6 módulos).
 
@@ -226,7 +229,7 @@ Unity.exe -batchmode -quit -projectPath "P1-Grupo-6\Unity" \
 - [x] Superposición: tres estados verificados contra numéricos (§3) + demanda-capacidad (§3.2).
 - [x] Sidequest carga móvil documentada con propuesta concreta (§4).
 - [x] UX estructural evaluada — seis preguntas confirmadas (§5).
-- [x] Preparación móvil: familia de dispositivos + Device Simulator + script de build (§6); **APK pendiente de módulo Android (P3)**.
+- [x] Preparación móvil: familia de dispositivos + Device Simulator + navegación táctil (1/2 dedos, tap/doble-tap) + script de build (§6); **APK pendiente de módulo Android (P3)**.
 - [x] IA documentada y verificada (§7).
 - [ ] Commit + push de la semana (en proceso).
 - [ ] Restaurar `StreamingAssets` a línea base tras la demo (`--restore`) o acordar dejarlo en Mod A.

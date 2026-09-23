@@ -23,7 +23,20 @@ public static class MobilePreviewTool
     public static void OpenDeviceSimulator()
     {
         // El paquete com.unity.device-simulator.devices agrega los presets al Device Simulator.
-        EditorApplication.ExecuteMenuItem("Window/Device Simulator");
+        // Unity 6000.6 movio el simulador a Window > General > Device Simulator.
+        string[] posibles = { "Window/General/Device Simulator", "Window/Device Simulator" };
+        bool ok = false;
+        foreach (string item in posibles)
+        {
+            if (EditorApplication.ExecuteMenuItem(item))
+            {
+                ok = true;
+                break;
+            }
+        }
+        if (!ok)
+            Debug.LogWarning("[MobilePreview] No se encontro el menu del Device Simulator " +
+                             "(el simulador es parte del editor en Unity 6; verificar Window > General).");
     }
 
     [MenuItem(MenuRoot + "Capturar screenshot", priority = 2)]

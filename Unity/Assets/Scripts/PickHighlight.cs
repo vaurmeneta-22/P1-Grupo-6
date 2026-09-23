@@ -207,17 +207,29 @@ public class PickHighlight : MonoBehaviour
     void DetectDoubleClick()
     {
         if (ElementInfoStyle.PointerOverPanel) return;
-        if (!Input.GetMouseButtonDown(0)) return;
+        Vector2 pos;
+        bool pressed;
+        if (Input.touchCount > 0)
+        {
+            pressed = Input.GetTouch(0).phase == TouchPhase.Began;
+            pos = Input.GetTouch(0).position;
+        }
+        else
+        {
+            pressed = Input.GetMouseButtonDown(0);
+            pos = Input.mousePosition;
+        }
+        if (!pressed) return;
         float now = Time.time;
-        float dist = Vector2.Distance(Input.mousePosition, lastClickPos);
+        float dist = Vector2.Distance(pos, lastClickPos);
         bool dbl = (now - lastClickTime) < 0.35f && dist < 20f;
         lastClickTime = now;
-        lastClickPos = Input.mousePosition;
+        lastClickPos = pos;
         if (!dbl) return;
         if (!am.Active) return;
 
         int id, tubeIdx;
-        if (!PalitoAt(Input.mousePosition, out id, out tubeIdx)) id = RaycastSolid(Input.mousePosition);
+        if (!PalitoAt(pos, out id, out tubeIdx)) id = RaycastSolid(pos);
         if (id < 0) return;
         AnalysisMap.ElementInfo meta = AnalysisMap.Element(id);
         if (meta == null) return;

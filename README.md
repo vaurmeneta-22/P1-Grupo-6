@@ -43,7 +43,7 @@ Accesible desde `edificio_3d.html` con `TAB` o el botón `ANALISIS` de la barra 
 
 Los datos se cargan desde `resultados/11_mapa_visor/analysis_map.js`, generado por `exportar_analysis_map.py` a partir de los resultados `edificio_full_results*.json`.
 
-En **Unity** todo el modo análisis está replicado: casos `1`–`5` (G/Q/EX/EY/COMBO), vistas `M`/`N`/`V`/`D`, escala de deformada `+`/`-` (10–600), reacciones 3D con `R`, **auto-encuadre de la cámara** y la barra de colores con los rangos reales en la esquina inferior derecha. `AnalysisMap` lee `Unity/Assets/StreamingAssets/analysis_map.json`, que es el mismo JSON que escribe `exportar_analysis_map.py` (copiarlo al StreamingAssets tras regenerar los resultados).
+En **Unity** todo el modo análisis está replicado: casos `1`–`5` (G/Q/EX/EY/COMBO), vistas `M`/`N`/`V`/`D`, escala de deformada `+`/`-` (10–600), reacciones 3D con `R`, **auto-encuadre de la cámara** y la barra de colores con los rangos reales en la esquina inferior derecha. La navegación funciona con mouse (arrastrar-rota, rueda-zoom, clic derecho-pan) y con **touch** en móvil/simulador (1 dedo-rota, 2 dedos-pinch zoom y pan, tap-seleccionar y doble tap-reporte, `CameraController.cs` + `activeInputHandler: Both`). `AnalysisMap` lee `Unity/Assets/StreamingAssets/analysis_map.json`, que es el mismo JSON que escribe `exportar_analysis_map.py` (copiarlo al StreamingAssets tras regenerar los resultados).
 
 ### Atajos de teclado
 
@@ -69,6 +69,10 @@ En `edificio_3d.html` las capas se alternan con los checkboxes del panel izquier
 | `B` | Abrir/cerrar el panel DATOS (Sismo, Mom-Curv, P-M, Reacciones, Tributarias, Diagramas) |
 | `H` | Modo hormigón (concreto claro / fundaciones oscuras) |
 | Clic izquierdo | Inspector de propiedades y cargas del elemento; en modo análisis, el **hover** resalta el elemento en magenta y el **doble clic** sobre columna/muro de hormigón dibuja la curva P-M, o sobre viga/**metálico** los valores M/V/N/DEF numéricos (cierre con **X**) |
+| Arr. rotar (mouse) / 1 dedo | Orbitar la cámara |
+| Zoom 2 dedos (móvil) / rueda | Zoom de la cámara |
+| Pan 2 dedos (móvil) / clic derecho | Desplazar la vista (pan) |
+| Tap (móvil) | Equivale al clic izquierdo (seleccionar/inspeccionar); doble tap = doble clic (P-M / N-V-M-DEF en análisis) |
 
 ## Estructura
 

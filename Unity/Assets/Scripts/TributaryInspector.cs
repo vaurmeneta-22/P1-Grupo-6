@@ -90,7 +90,9 @@ public class TributaryInspector : MonoBehaviour
             if (panel != null) panel.SetActive(false);
             return;
         }
-        if (Input.GetMouseButtonDown(0))
+        bool tapped = Input.touchCount > 0 ? Input.GetTouch(0).phase == TouchPhase.Began
+                                           : Input.GetMouseButtonDown(0);
+        if (tapped)
         {
             DoPick();
         }
@@ -232,7 +234,9 @@ public class TributaryInspector : MonoBehaviour
         if (ElementInfoStyle.PointerOverPanel) return;
         Camera cam = Camera.main;
         if (cam == null) return;
-        Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+        Vector2 screenPos = Input.touchCount > 0 ? Input.GetTouch(0).position
+                                                 : Input.mousePosition;
+        Ray ray = cam.ScreenPointToRay(screenPos);
 
         RaycastHit[] hits = Physics.RaycastAll(ray, 1000f);
         ElementTag best = null;

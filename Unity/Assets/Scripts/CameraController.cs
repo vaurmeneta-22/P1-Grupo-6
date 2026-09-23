@@ -19,6 +19,11 @@ public class CameraController : MonoBehaviour
     private float rotY = -30f;
     private Vector3 panOffset = Vector3.zero;
 
+    private int lastTouchCount = 0;
+    private Vector2 singleLast = Vector2.zero;
+    private float pinchLastDist = 0f;
+    private Vector2 pinchLastCenter = Vector2.zero;
+
     // La camara orbital apunta al centro real del modelo. La llama EdificioLoader
     // desde su propio Start(), de forma que el encuadre no depende del orden de
     // ejecucion de los Start() entre ambos scripts.
@@ -79,13 +84,15 @@ public class CameraController : MonoBehaviour
     // desactiva para no resaltar elementos mientras se navega (como el HTML).
     public bool Busy
     {
-        get { return Input.GetMouseButton(0) || Input.GetMouseButton(1) ||
+        get { return Input.touchCount > 0 || Input.GetMouseButton(0) || Input.GetMouseButton(1) ||
                      Mathf.Abs(Input.GetAxis("Mouse ScrollWheel")) > 0.001f; }
     }
 
     void Update()
     {
         if (ElementInfoStyle.PointerOverPanel) return;
+        if (Input.touchCount > 0) { UpdateTouch(); return; }
+
         if (Input.GetMouseButton(0))
         {
             rotY += Input.GetAxis("Mouse X") * rotationSpeed;
@@ -108,6 +115,58 @@ public class CameraController : MonoBehaviour
         {
             distance -= scroll * zoomSpeed * distance;
             distance = Mathf.Clamp(distance, minDistance, maxDistance);
+            UpdatePosition();
+        }
+    }
+
+    void UpdateTouch()
+    {
+        int count = Input.touchCount;
+        if (count != lastTouchCount)
+        {
+            lastTouchCount = count;
+            singleLast = (count > 0) ? Input.GetTouch(0).position : Vector2.zero;
+            if (count >= 2)
+            {
+                pinchLastDist = Vector2.Distance(Input.GetTouch(0).position,
+                                                 Input.GetTouch(1).position);
+                pinchLastCenter = (Input.GetTouch(0).position + Input.GetTouch(1).position) * 0.5f;
+            }
+            return;
+        }
+
+        if (count == 1)
+        {
+            Touch t = Input.GetTouch(0);
+            Vector2 delta = t.position - singleLast;
+            singleLast = t.position;
+            if (t.phase == TouchPhase.Moved)
+            {
+                rotY += delta.x * rotationSpeed * 0.15f;
+                rotX -= delta.y * rotationSpeed * 0.15f;
+                rotX = Mathf.Clamp(rotX, -89f, 89f);
+                UpdatePosition();
+            }
+        }
+        else if (count >= 2)
+        {
+            Vector2 a = Input.GetTouch(0).position;
+            Vector2 b = Input.GetTouch(1).position;
+            float dist = Vector2.Distance(a, b);
+            Vector2 center = (a + b) * 0.5f;
+            if (dist > 1f && pinchLastDist > 1f)
+            {
+                float ratio = pinchLastDist / dist;
+                distance = Mathf.Clamp(distance * ratio, minDistance, maxDistance);
+            }
+            // Pan con dos dedos (igual sensibilidad que el pan con boton derecho).
+            Vector2 delta = center - pinchLastCenter;
+            Vector3 right = transform.right;
+            Vector3 up = transform.up;
+            panOffset -= right * delta.x * panSpeed * distance * 0.01f;
+            panOffset += up * delta.y * panSpeed * distance * 0.01f;
+            pinchLastDist = dist;
+            pinchLastCenter = center;
             UpdatePosition();
         }
     }
