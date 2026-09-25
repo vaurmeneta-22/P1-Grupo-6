@@ -2,10 +2,23 @@
 
 ## Estado de este avance
 
-El viewer principal es Unity. Se añadieron cuatro sliders G, Q, EX, EY en
+El viewer oficial es Unity; el HTML queda obsoleto y no se mantiene en adelante.
+Se añadieron cuatro sliders G, Q, EX, EY en
 ANÁLISIS. Modifican COMBO en memoria, conservando los casos base del JSON.
 La deformada, fuerzas de extremo, reacciones, diagramas y punto P-M se calculan
-con la misma combinación. El visor HTML todavía no incorpora estos sliders.
+con la misma combinación.
+
+SQ4 queda implementado como prototipo dentro del modo **ANÁLISIS**: doble clic
+sobre una losa abre la carga móvil, fija ese panel, lo resalta en amarillo junto
+con sus vigas receptoras y muestra el reparto de `P_user` hacia esas vigas. La
+regla fisica declarada es una carga puntual movil sobre losa: se reparte por
+area tributaria si hay match de `analysis_map.tributarias`; si no, usa las vigas
+colindantes del mismo nivel y distancia inversa. El panel muestra metodo, pesos,
+distancias, cargas asignadas y error de conservacion `|ΣP_i - P_user|`. La
+respuesta visual incluye un martillo/carga móvil arrastrable, lineas de transferencia
+y flechas proporcionales a `P_i`. Al mover el martillo dentro de la losa, el reparto
+cambia en vivo por distancia a las vigas receptoras. Es una herramienta didáctica de reparto tributario; no
+reemplaza un reanálisis OpenSees ni una envolvente normativa de carga móvil.
 
 La implementación C# compila con las referencias del proyecto Unity 6000.6.0f1.
 La prueba `tests/test_viewer_combination.ps1` ejecuta el parser y motor C# reales
@@ -27,8 +40,8 @@ el motor `AnalysisMapCombination.cs` evitan sintaxis posterior a C# 5; Unity los
 compila igual con su compilador moderno.
 
 **Pendiente de validación humana:** Play Mode, tiempo de respuesta al arrastrar,
-legibilidad del panel con scroll y demostración en el dispositivo final.
-SQ4 sigue como propuesta; no se presenta como implementado.
+legibilidad del panel con scroll, funcionamiento visual del prototipo SQ4 y
+demostración en el dispositivo final.
 
 ## Guion en vivo (6–8 minutos)
 
@@ -49,6 +62,11 @@ SQ4 sigue como propuesta; no se presenta como implementado.
    diagramas y reacciones de los sliders (las pestañas tienen selector propio).
 8. Demostrar las dos modificaciones siguientes y explicar por qué requieren
    reanálisis. Comparar el elemento 147 para sección y nodo 1 para apoyo.
+9. En modo **ANÁLISIS**, hacer doble clic sobre una losa: debe aparecer la región
+   detectada, la losa en amarillo, las vigas receptoras resaltadas, el martillo
+   rosado de carga, lineas/flechas de carga y la tabla de reparto de `P_user`.
+   Arrastrar el martillo dentro de la losa y verificar que cambian `P_i` y las
+   flechas, manteniendo `Σ asignada = P_user` con error cercano a 0.
 
 ## Dos modificaciones reproducibles ya disponibles
 
@@ -76,7 +94,7 @@ No mezclar G de una variante con Q/EX/EY de otra.
 | Intensidad de un patrón idéntico y masa fija | No, puede escalarse | Válido sólo bajo las hipótesis lineales del modelo |
 | G/Q físico que cambia masa sísmica | Sí para actualizar EX/EY | La masa depende de G + 0.50 Q |
 | Sección, apoyo, material, conectividad | Sí | Cambia el sistema estructural |
-| Área tributaria o carga móvil localizada | Sí, o casos de influencia previamente calculados | Cambia el patrón espacial |
+| Área tributaria o carga móvil localizada | Sí para respuesta estructural exacta, o casos de influencia previamente calculados | El prototipo SQ4 solo reparte y visualiza carga |
 
 Los sliders son coeficientes adimensionales. Se suman componentes con signo
 antes de calcular magnitudes, máximos o demanda P-M. Un porcentaje de utilización

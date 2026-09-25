@@ -33,6 +33,7 @@ public class AnalysisMode : MonoBehaviour
     int factor = 120;
     bool pintarReac = false;
     bool active = false;
+    bool destroying = false;
 
     GameObject group;
     List<GameObject> drew = new List<GameObject>();
@@ -118,6 +119,14 @@ public class AnalysisMode : MonoBehaviour
         else ClearDrew();
     }
 
+    public void SetActive(bool value)
+    {
+        if (active == value) return;
+        active = value;
+        if (active) Rebuild();
+        else ClearDrew();
+    }
+
     public void SetCaso(string c)
     {
         caso = c;
@@ -141,11 +150,12 @@ public class AnalysisMode : MonoBehaviour
             }
         drew.Clear();
         Palitos.Clear();
-        if (wallGroup != null) wallGroup.SetActive(true);
+        if (!destroying && wallGroup != null) wallGroup.SetActive(true);
     }
 
     void OnDestroy()
     {
+        destroying = true;
         ClearDrew();
         if (group != null) Destroy(group);
     }
@@ -519,6 +529,9 @@ public class AnalysisMode : MonoBehaviour
         bool reacPrev = pintarReac;
         pintarReac = ElementInfoStyle.Choice(pintarReac, "Reacciones 3D · " + (pintarReac ? "visibles" : "ocultas"));
         if (pintarReac != reacPrev) Rebuild();
+
+        ElementInfoStyle.Section("SQ4 CARGA MOVIL");
+        ElementInfoStyle.Note("Doble clic sobre una losa: panel amarillo + vigas receptoras + reparto de P_user. U cierra/abre el ultimo estado.");
 
         GUILayout.Space(6);
         ElementInfoStyle.Note("1–5: caso · M/N/V/DEF: vista\nR: reacciones · +/−: escala · TAB: modo");

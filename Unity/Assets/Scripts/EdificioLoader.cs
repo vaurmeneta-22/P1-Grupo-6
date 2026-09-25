@@ -17,13 +17,13 @@ public class EdificioLoader : MonoBehaviour
     public Material steelMat;
 
     [Header("Colores (como el visor 3D)")]
-    public Color columnColor = new Color(0.906f, 0.298f, 0.235f);   // #e74c3c
-    public Color beamXColor = new Color(0.204f, 0.596f, 0.859f);    // #3498db
-    public Color beamYColor = new Color(0.180f, 0.800f, 0.443f);    // #2ecc71
+    public Color columnColor = new Color(0.86f, 0.24f, 0.20f);      // coral estructural
+    public Color beamXColor = new Color(0.05f, 0.58f, 0.86f);       // azul cian
+    public Color beamYColor = new Color(0.08f, 0.68f, 0.42f);       // verde esmeralda
     public Color nodeColor = new Color(0.102f, 0.737f, 0.612f);    // #1abc9c
     public Color supportColor = new Color(0.608f, 0.349f, 0.714f);  // #9b59b6
-    public Color wallColor = new Color(0.608f, 0.349f, 0.714f);     // #9b59b6
-    public Color lozaColor = new Color(0.902f, 0.404f, 0.133f);     // #e67e22
+    public Color wallColor = new Color(0.48f, 0.28f, 0.64f);        // violeta sobrio
+    public Color lozaColor = new Color(1.0f, 0.53f, 0.16f, 0.48f);  // ambar translucido
     public Color steelColor = new Color(0.945f, 0.769f, 0.059f);    // #f1c40f
 
     [Header("Modo hormigon")]
@@ -62,6 +62,7 @@ public class EdificioLoader : MonoBehaviour
     private GameObject diaphGroup;
     private Material diaphFillMat;
     private Material diaphEdgeMat;
+    private Material lozaEdgeMat;
     private HashSet<int> supportIds = new HashSet<int>();
     private List<Transform> labels = new List<Transform>();
     private Material labelBgMat;
@@ -79,6 +80,9 @@ public class EdificioLoader : MonoBehaviour
     public AnalysisMode analysisMode;
     public DataPanel dataPanel;
     public VerifPanel verifPanel;
+    public MobileLoadSQ4 mobileLoadSQ4;
+    public ModificationMode modificationMode;
+    public ElementSearchPanel elementSearchPanel;
     public int NodeCount;
     public int ElementCount;
 
@@ -140,7 +144,10 @@ public class EdificioLoader : MonoBehaviour
         SetupAnalysisMode();
         SetupDataPanel();
         SetupVerifPanel();
+        SetupModificationMode();
+        SetupElementSearchPanel();
         SetupPickHighlight();
+        SetupMobileLoadSQ4();
         SetupViewerHud();
 
         DisableShadows();
@@ -340,6 +347,7 @@ public class EdificioLoader : MonoBehaviour
         axisMats[3] = NewLineMat(sprite, wallColor);      // muros
         axisMats[4] = NewLineMat(sprite, lozaColor);      // lozas
         axisMats[5] = NewLineMat(sprite, steelColor);     // metalicas
+        lozaEdgeMat = NewLineMat(sprite, new Color(1f, 0.78f, 0.28f, 0.92f));
     }
 
     Material NewLitMat(Shader s, Color c, float smooth, float metal)
@@ -348,6 +356,16 @@ public class EdificioLoader : MonoBehaviour
         m.color = c;
         if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", smooth);
         if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", metal);
+        if (c.a < 0.999f)
+        {
+            // URP/Lit transparency. Kept local to visual materials; structural data is unchanged.
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
+            if (m.HasProperty("_Surface")) m.SetFloat("_Surface", 1f);
+            if (m.HasProperty("_Blend")) m.SetFloat("_Blend", 0f);
+            if (m.HasProperty("_ZWrite")) m.SetFloat("_ZWrite", 0f);
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.renderQueue = 3000;
+        }
         return m;
     }
 
@@ -548,7 +566,11 @@ public class EdificioLoader : MonoBehaviour
         Vector3 center = (start + end) * 0.5f;
         float w = Mathf.Abs(elem.xi - elem.xj) * scale;
         float d = Mathf.Abs(elem.zi - elem.zj) * scale;
-        float th = Mathf.Max(elem.t, 0.01f) * scale;
+        // Visual only: draw slabs as thin plates slightly above the beam line.
+        // The structural thickness remains in Edificio.json/OpenSees; this avoids
+        // z-fighting and the long-standing beam/slab overlap in the Unity viewer.
+        float th = 0.045f;
+        center.y += 0.08f;
 
         GameObject box = GameObject.CreatePrimitive(PrimitiveType.Cube);
         box.name = "LOZA_" + elem.id;
@@ -556,6 +578,7 @@ public class EdificioLoader : MonoBehaviour
         box.transform.localScale = new Vector3(w, th, d);
         box.GetComponent<Renderer>().material = lozaMat;
         box.transform.parent = parent.transform;
+        AddSlabOutline(elem.id, center, w, d, th);
 
         ElementTag tag = box.AddComponent<ElementTag>();
         tag.elementId = elem.id;
@@ -577,6 +600,23 @@ public class EdificioLoader : MonoBehaviour
 
         // Eje (como el visor HTML): linea diagonal entre los extremos del panel.
         AddAxisLine(axisMats[4], start, end, elem.id);
+    }
+
+    void AddSlabOutline(int id, Vector3 center, float w, float d, float th)
+    {
+        GameObject edge = new GameObject("LOZA_Borde_" + id);
+        edge.transform.parent = lozaGroup.transform;
+        LineRenderer lr = edge.AddComponent<LineRenderer>();
+        lr.material = lozaEdgeMat;
+        lr.loop = true;
+        lr.startWidth = 0.065f;
+        lr.endWidth = 0.065f;
+        lr.positionCount = 4;
+        float y = center.y + th * 0.55f;
+        lr.SetPosition(0, new Vector3(center.x - w * 0.5f, y, center.z - d * 0.5f));
+        lr.SetPosition(1, new Vector3(center.x + w * 0.5f, y, center.z - d * 0.5f));
+        lr.SetPosition(2, new Vector3(center.x + w * 0.5f, y, center.z + d * 0.5f));
+        lr.SetPosition(3, new Vector3(center.x - w * 0.5f, y, center.z + d * 0.5f));
     }
 
     void CreateWall(ElementData elem, GameObject parent)
@@ -875,6 +915,21 @@ public class EdificioLoader : MonoBehaviour
         verifPanel = vpGO.AddComponent<VerifPanel>();
     }
 
+    void SetupModificationMode()
+    {
+        GameObject mmGO = new GameObject("ModificationMode");
+        mmGO.transform.SetParent(transform, false);
+        modificationMode = mmGO.AddComponent<ModificationMode>();
+    }
+
+    void SetupElementSearchPanel()
+    {
+        GameObject spGO = new GameObject("ElementSearchPanel");
+        spGO.transform.SetParent(transform, false);
+        elementSearchPanel = spGO.AddComponent<ElementSearchPanel>();
+        elementSearchPanel.Setup(this);
+    }
+
     // Crea el hover magenta + doble-clic del modo analisis (reporte de viga /
     // curva P-M de capacidad), replicando visor.dblclick() del HTML.
     void SetupPickHighlight()
@@ -884,13 +939,22 @@ public class EdificioLoader : MonoBehaviour
         ph.Setup(this, analysisMode);
     }
 
+    // SQ4: carga movil didactica asociada al usuario/camara (tecla U).
+    void SetupMobileLoadSQ4()
+    {
+        GameObject sq4GO = new GameObject("MobileLoadSQ4");
+        sq4GO.transform.SetParent(transform, false);
+        mobileLoadSQ4 = sq4GO.AddComponent<MobileLoadSQ4>();
+        mobileLoadSQ4.Setup(this);
+    }
+
     // Crea la barra de modo superior (Modo + VISUALIZACION/ANALISIS + DATOS),
     // el HUD de info (nodos/elementos) y la leyenda de capas con checkboxes.
     void SetupViewerHud()
     {
         GameObject hudGO = new GameObject("ViewerHud");
         var hud = hudGO.AddComponent<ViewerHud>();
-        hud.Setup(this, dataPanel);
+        hud.Setup(this, dataPanel, modificationMode, elementSearchPanel);
     }
 
     // ---------- Capas por nombre (para el HUD con checkboxes) ----------

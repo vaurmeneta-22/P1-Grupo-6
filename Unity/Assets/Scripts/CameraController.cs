@@ -2,6 +2,16 @@ using UnityEngine;
 
 public class CameraController : MonoBehaviour
 {
+    public struct ViewState
+    {
+        public Vector3 targetPosition;
+        public Vector3 panOffset;
+        public float rotX;
+        public float rotY;
+        public float distance;
+        public bool valid;
+    }
+
     public Transform target;
     public float distance = 20f;
     public float rotationSpeed = 3f;
@@ -11,9 +21,9 @@ public class CameraController : MonoBehaviour
     public float maxDistance = 200f;
 
     [Header("Encuadre inicial al cargar el modelo")]
-    public float initialDistance = 60f;
-    public float initialRotX = 30f;
-    public float initialRotY = -30f;
+    public float initialDistance = 72f;
+    public float initialRotX = 34f;
+    public float initialRotY = -38f;
 
     private float rotX = 30f;
     private float rotY = -30f;
@@ -57,6 +67,30 @@ public class CameraController : MonoBehaviour
         float fov = cam != null ? cam.fieldOfView : 60f;
         float dist = r / Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad) * 1.4f;
         distance = Mathf.Clamp(dist, minDistance, maxDistance);
+        UpdatePosition();
+    }
+
+    public ViewState CaptureView()
+    {
+        ViewState s = new ViewState();
+        s.targetPosition = target != null ? target.position : Vector3.zero;
+        s.panOffset = panOffset;
+        s.rotX = rotX;
+        s.rotY = rotY;
+        s.distance = distance;
+        s.valid = target != null;
+        return s;
+    }
+
+    public void RestoreView(ViewState s)
+    {
+        if (!s.valid) return;
+        if (target == null) target = new GameObject("CameraTarget").transform;
+        target.position = s.targetPosition;
+        panOffset = s.panOffset;
+        rotX = s.rotX;
+        rotY = s.rotY;
+        distance = Mathf.Clamp(s.distance, minDistance, maxDistance);
         UpdatePosition();
     }
 

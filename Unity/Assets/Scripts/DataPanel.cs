@@ -24,6 +24,7 @@ public class DataPanel : MonoBehaviour
 
     public bool Visible { get { return activo; } }
     public void Toggle() { activo = !activo; }
+    public void SetVisible(bool value) { activo = value; }
 
     void Update()
     {

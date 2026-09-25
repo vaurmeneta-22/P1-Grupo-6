@@ -2,14 +2,16 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // Replica el HUD del visor HTML:
-// - #modebar (arriba centro): "Modo:" + boton VISUALIZACION/ANALISIS [TAB] +
-//   boton DATOS.
+// - #modebar (arriba centro): VISUALIZACION / MODIFICACIONES / ANALISIS / DATOS.
 // - #info (arriba izquierda): titulo + ayuda + contadores Nodos/Elementos.
 // - #legend (abajo izquierda): leyenda de colores + checkboxes de capas.
 public class ViewerHud : MonoBehaviour
 {
     EdificioLoader loader;
     DataPanel dataPanel;
+    ModificationMode modificationMode;
+    ElementSearchPanel elementSearchPanel;
+    int tab = 0; // 0 visualizacion, 1 modificaciones, 2 analisis, 3 datos
 
     string[] layers = { "columnas", "vigasX", "vigasY", "muros", "losas", "metálicas", "nodos", "ejes", "diafragmas" };
     string[] layerLabels = { "Columnas", "Vigas X", "Vigas Y", "Muros", "Losas", "Metálicas", "Nodos", "Ejes (palitos)", "Diafragmas" };
@@ -28,10 +30,12 @@ public class ViewerHud : MonoBehaviour
         return whiteTex;
     }
 
-    public void Setup(EdificioLoader l, DataPanel dp)
+    public void Setup(EdificioLoader l, DataPanel dp, ModificationMode mm, ElementSearchPanel sp)
     {
         loader = l;
         dataPanel = dp;
+        modificationMode = mm;
+        elementSearchPanel = sp;
     }
 
     void OnGUI()
@@ -42,27 +46,30 @@ public class ViewerHud : MonoBehaviour
         DrawLayerLegend();
     }
 
-    // #modebar: Modo: [VISUALIZACION|ANALISIS] [TAB] [DATOS]
+    // #modebar: [VISUALIZACION] [MODIFICACIONES] [ANALISIS] [DATOS]
     void DrawModeBar()
     {
-        Rect toolbar = new Rect(Mathf.Max(420, Screen.width / 2f - 250f), 8, 500, 72);
+        float toolbarWidth = Mathf.Clamp(Screen.width - 432f, 520f, 900f);
+        Rect toolbar = new Rect(Mathf.Max(420, Screen.width / 2f - toolbarWidth * 0.5f), 8, toolbarWidth, 72);
         ElementInfoStyle.ToolbarArea = toolbar;
         GUISkin previous = ElementInfoStyle.Begin(toolbar);
         GUILayout.BeginHorizontal();
 
-        bool anal = AnalysisMode.Current != null && AnalysisMode.Current.Active;
-        if (ElementInfoStyle.Choice(!anal, "Visualización") && anal)
-        {
-            if (AnalysisMode.Current != null) AnalysisMode.Current.ToggleMode();
-        }
-        if (ElementInfoStyle.Choice(anal, "Análisis") && !anal)
-            if (AnalysisMode.Current != null) AnalysisMode.Current.ToggleMode();
-        if (GUILayout.Button("Datos", GUILayout.MinWidth(0), GUILayout.ExpandWidth(true)))
-        {
-            if (dataPanel != null) dataPanel.Toggle();
-        }
+        if (ElementInfoStyle.Choice(tab == 0, "Visualización")) SelectTab(0);
+        if (ElementInfoStyle.Choice(tab == 1, "Modificaciones")) SelectTab(1);
+        if (ElementInfoStyle.Choice(tab == 2, "Análisis")) SelectTab(2);
+        if (ElementInfoStyle.Choice(tab == 3, "Datos")) SelectTab(3);
         GUILayout.EndHorizontal();
         ElementInfoStyle.End(previous);
+    }
+
+    void SelectTab(int next)
+    {
+        tab = next;
+        if (AnalysisMode.Current != null) AnalysisMode.Current.SetActive(tab == 2);
+        if (modificationMode != null) modificationMode.SetActive(tab == 1);
+        if (dataPanel != null) dataPanel.SetVisible(tab == 3);
+        if (elementSearchPanel != null && tab != 0) elementSearchPanel.SetVisible(false);
     }
 
     // #info: titulo, ayuda de camara y contadores.
@@ -96,6 +103,14 @@ public class ViewerHud : MonoBehaviour
         LegendRow(new Color(0.608f, 0.349f, 0.714f), "Apoyo empotrado");   // #9b59b6
         LegendRow(new Color(0.945f, 0.769f, 0.059f), "Refuerzo metalico"); // #f1c40f
 
+        if (tab == 0)
+        {
+            ElementInfoStyle.Section("BUSCAR ELEMENTO");
+            ElementInfoStyle.Note("Localiza por tipo e ID, acerca la camara y resalta el elemento.");
+            if (GUILayout.Button(elementSearchPanel != null && elementSearchPanel.Visible ? "Cerrar buscador" : "Abrir buscador"))
+                if (elementSearchPanel != null) elementSearchPanel.Toggle();
+        }
+
         ElementInfoStyle.Section("VISIBILIDAD");
         bool all = true;
         foreach (string l in layers)
@@ -115,7 +130,7 @@ public class ViewerHud : MonoBehaviour
             GUILayout.EndHorizontal();
         }
         ElementInfoStyle.Section("NAVEGACIÓN");
-        ElementInfoStyle.Note("Clic izq.: rotar · Clic der.: mover\nRueda: zoom · N: nodos · E: ejes");
+        ElementInfoStyle.Note("Clic izq.: rotar · Clic der.: mover\nRueda: zoom · N: nodos · E: ejes\nMODIFICACIONES: Base/Mod A/Mod B\nANALISIS: doble clic losa = SQ4");
         GUILayout.EndScrollView();
         ElementInfoStyle.End(previous);
     }

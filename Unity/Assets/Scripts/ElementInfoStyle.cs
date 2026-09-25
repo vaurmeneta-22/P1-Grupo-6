@@ -6,7 +6,8 @@ public static class ElementInfoStyle
     static GUISkin skin;
     static GUIStyle title, section, muted, key, value, cell, heading;
     static Texture2D surface, stripe, button;
-    public static Rect VisualizationArea, AnalysisArea, LayerArea, DataArea, ControlsArea, ToolbarArea, VerificationArea;
+    public static Rect VisualizationArea, AnalysisArea, LayerArea, DataArea, ControlsArea, ToolbarArea, VerificationArea, SQ4Area, ModificationArea, SearchArea;
+    public static bool SQ4Dragging;
 
     public static bool PointerOverPanel
     {
@@ -14,7 +15,7 @@ public static class ElementInfoStyle
         {
             Vector2 p = new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
             bool analysis = AnalysisMode.Current != null && AnalysisMode.Current.Active;
-            return DataArea.Contains(p) || ControlsArea.Contains(p) || ToolbarArea.Contains(p) || VerificationArea.Contains(p) || LayerArea.Contains(p) || (analysis ? AnalysisArea : VisualizationArea).Contains(p);
+            return SQ4Dragging || DataArea.Contains(p) || ModificationArea.Contains(p) || SearchArea.Contains(p) || ControlsArea.Contains(p) || ToolbarArea.Contains(p) || VerificationArea.Contains(p) || SQ4Area.Contains(p) || LayerArea.Contains(p) || (analysis ? AnalysisArea : VisualizationArea).Contains(p);
         }
     }
 

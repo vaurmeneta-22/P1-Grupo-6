@@ -14,40 +14,41 @@ Laboratorio estructural digital que combina:
 | Componente | Tecnología |
 |-----------|-----------|
 | Análisis | Python + OpenSeesPy |
-| Visualización | Unity + C# (Unity 6, 6000.5.10f1) |
+| Visualización | Unity + C# (Unity 6, 6000.x) |
 | AR | AR Foundation + Image Tracking |
 | Datos | JSON (contrato OpenSees↔Unity) |
 
 ## Funcionalidades del visor Unity
 
-El visor replica las interacciones del `edificio_3d.html`:
+El visor oficial del proyecto es Unity. La interfaz principal se organiza en cuatro pestañas: **Visualización / Modificaciones / Análisis / Datos**.
 
 - **6 diafragmas rígidos** (niveles 0.00, 3.56, 7.12, 10.68, 14.24 y 17.8 m) por la huella real de piso: plano casi transparente con borde cian y triangulación de polígono cóncavo (tecla `D`).
-- **HUD del visor** replicado del HTML (`ViewerHud.cs`): barra de modo superior central (`Modo:` + botones `VISUALIZACION/ANALISIS` y `DATOS`), información arriba-izquierda (título, ayuda de cámara, contadores de nodos/elementos) y **leyenda de colores** abajo-izquierda con swatches de 14×14 y **casillas** para alternar capas (2 columnas, `Todo` alterna todas).
-- **Capas alternables por familia** a través de teclas o de las casillas de la leyenda, igual que el panel de checkboxes del HTML.
+- **HUD del visor** (`ViewerHud.cs`): barra superior con `Visualización`, `Modificaciones`, `Análisis` y `Datos`; información arriba-izquierda; leyenda de colores y casillas para alternar capas.
+- **Capas alternables por familia** a través de teclas o de las casillas de la leyenda.
+- **Buscador de elementos** en Visualización: permite elegir tipo e ID, enfoca automáticamente el elemento, lo resalta en amarillo y restaura vista/materiales con `Limpiar`.
 - **Inspector por clic / doble clic**: al hacer clic sobre una viga, columna, muro o losa se muestra un panel con sus propiedades y, en vigas, el área tributaria y las **cargas** G (permanente) y Q (sobrecarga) calculadas en el análisis. En el modo análisis el **hover** resalta en magenta el elemento bajo el puntero y el **doble clic** sobre una columna/muro de hormigón dibuja la **curva P-M** con su punto de demanda, mientras que sobre una viga o un **metálico** reporta N/V/M/DEF de ambos extremos (`PickHighlight.cs`).
-- **Modo análisis** (tecla `TAB` o botón central): superpone al modelo los resultados del análisis lineal con OpenSees — deformada y diagramas de momento (M), axial (N) y corte (V).
+- **Modo modificaciones** (`ModificationMode.cs`): ejecuta desde Unity las variantes Base, Mod A y Mod B, muestra log, guarda historial y recarga la escena al terminar.
+- **Modo análisis**: superpone al modelo los resultados del análisis lineal con OpenSees — deformada y diagramas de momento (M), axial (N) y corte (V).
+- **SQ4 carga móvil**: en Análisis, doble clic sobre una losa activa martillo/carga móvil arrastrable, vigas receptoras, reparto de `P_user`, conservación de carga y flechas de transferencia.
 - **Panel DATOS** (tecla `B` o botón `DATOS`, `DataPanel.cs`): ventana derecha con **6 pestañas** — Sismo (12 columnas con ux/uy/Rz por piso), Mom-Curv, P-M (fibra vs H.A.), Reacciones (con *Pintar en 3D*), Tributarias y **Diagramas 2D N/V/M** apilados — alimentadas por la API real de `AnalysisMap`.
 - **Modo hormigón** (`H`): pinta todo el edificio en tonos de concreto (fundaciones más oscuras).
 
-### Modo análisis del visor (TAB)
+### Modo análisis del visor
 
-Accesible desde `edificio_3d.html` con `TAB` o el botón `ANALISIS` de la barra superior:
+Accesible desde la pestaña **Análisis**:
 
 - **Vistas**: deformada (con amplificación ajustable), Momento M, Axial N y Corte V.
-- **Casos de carga**: G (permanente), Q (sobrecarga), EX, EY y COMBO (combinación por superposición `R = λG·G + λQ·Q + λEX·EX + λEY·EY`). El COMBO actual se exportó con `λG=1.2, λQ=1.0, λEX=1.4, λEY=1.4` (sismo X e Y simultáneos; corte basal ±21722 kN por eje). Los lambdas los define la corrida de OpenSees vía CLI (ver *Ejecución*).
+- **Casos de carga**: G (permanente), Q (sobrecarga), EX, EY y COMBO. En Unity los sliders `λG`, `λQ`, `λEX`, `λEY` actualizan COMBO en memoria sin reanálisis cuando se combinan casos ya calculados.
 - **Color por valor**: cada elemento se pinta con un colormap azul→verde→rojo normalizado por el **percentil 90** de los valores (evita que uno o dos muros en la base dominen la escala y dejen el resto en azul). La leyenda inferior derecha muestra los rangos reales en las unidades de cada vista (mm en deformada, kN·m en momento, kN en axial/corte).
 - **Doble clic en análisis**: sobre una **columna o muro de hormigón** dibuja en el inspector la **curva de capacidad** P-M (de las secciones de fibra RC, como **diamante completo simétrico**: rama +M a la derecha y su espejo −M a la izquierda) y marca el punto de demanda del caso activo (P axial y M resultante del extremo i del elemento), reportando el % de la **capacidad interpolada a esa misma carga axial** y si la demanda cae dentro de la curva (una demanda fuera de la curva se marca en rojo). Sobre una **viga** —y también sobre los **refuerzos metálicos** (columnas y vigas de acero, que no usan P-M)— muestra una tabla con los valores **numéricos** de N (axial), V (corte), M (momento resultante) y DEF (desplazamiento nodal) para los **dos extremos** i y j del elemento del caso activo. El inspector se cierra con la **X** de su esquina superior.
-- **Refuerzos metálicos**: 20 elementos de acero A240ES (10 columnas `300x300x20` y 10 vigas diagonales `300x300x50`, en color amarillo) insertados entre los niveles 2–3 y 4–Techo. Su capacidad P-M (tubo, fy=240 MPa) está exportada en `capacidad.steel` del `analysis_map.js`, pero por diseño el visor solo les muestra el reporte N/V/M/DEF.
+- **Refuerzos metálicos**: 20 elementos de acero A240ES (10 columnas `300x300x20` y 10 vigas diagonales `300x300x50`, en color amarillo) insertados entre los niveles 2–3 y 4–Techo. Su capacidad P-M está exportada en `analysis_map.json`, pero por diseño el visor solo les muestra el reporte N/V/M/DEF.
 - Deformada amplificable con el deslizador `x` (escala x120 por defecto, rango 10–600). M/N/V en respuesta lineal del modelo global.
 
-Los datos se cargan desde `resultados/11_mapa_visor/analysis_map.js`, generado por `exportar_analysis_map.py` a partir de los resultados `edificio_full_results*.json`.
-
-En **Unity** todo el modo análisis está replicado: casos `1`–`5` (G/Q/EX/EY/COMBO), vistas `M`/`N`/`V`/`D`, escala de deformada `+`/`-` (10–600), reacciones 3D con `R`, **auto-encuadre de la cámara** y la barra de colores con los rangos reales en la esquina inferior derecha. La navegación funciona con mouse (arrastrar-rota, rueda-zoom, clic derecho-pan) y con **touch** en móvil/simulador (1 dedo-rota, 2 dedos-pinch zoom y pan, tap-seleccionar y doble tap-reporte, `CameraController.cs` + `activeInputHandler: Both`). `AnalysisMap` lee `Unity/Assets/StreamingAssets/analysis_map.json`, que es el mismo JSON que escribe `exportar_analysis_map.py` (copiarlo al StreamingAssets tras regenerar los resultados).
+Los datos se cargan desde `Unity/Assets/StreamingAssets/analysis_map.json`, generado por `exportar_analysis_map.py` a partir de los resultados `edificio_full_results*.json`. La navegación funciona con mouse (arrastrar-rota, rueda-zoom, clic derecho-pan) y con **touch** en móvil/simulador (1 dedo-rota, 2 dedos-pinch zoom y pan, tap-seleccionar y doble tap-reporte, `CameraController.cs` + `activeInputHandler: Both`).
 
 ### Atajos de teclado
 
-En `edificio_3d.html` las capas se alternan con los checkboxes del panel izquierdo (Columnas, Vigas X/Y, Muros, Losas, **Metálicas**, Nodos, Ejes, Diafragmas). Teclas del HTML: `N` alterna nodos, `E` alterna sólidos+ejes y `TAB` conmuta visualización↔análisis. El visor Unity replica las capas con las teclas siguientes:
+En Unity las capas se alternan con las casillas del panel izquierdo o con las teclas siguientes:
 
 | Tecla | Acción |
 |-------|--------|
@@ -61,7 +62,7 @@ En `edificio_3d.html` las capas se alternan con los checkboxes del panel izquier
 | `N` | Alternar nodos |
 | `E` | Alternar solo los ejes |
 | `D` | Alternar diafragmas rígidos |
-| `TAB` | Alternar modo visualización ↔ análisis (deformada / M / N / V) |
+| `TAB` | Alternar modo análisis (deformada / M / N / V) |
 | `1`–`5` | Seleccionar caso G / Q / EX / EY / COMBO (modo análisis) |
 | `M` / `N` / `V` / `D` | Vista Momento / Axial / Corte / Deformada (modo análisis) |
 | `R` | Pintar/ocultar las reacciones en 3D (modo análisis) |
@@ -77,7 +78,6 @@ En `edificio_3d.html` las capas se alternan con los checkboxes del panel izquier
 ## Estructura
 
 ```
-├── edificio_3d.html      # Visor 3D interactivo (Three.js, fuente de edición del modelo)
 ├── Edificio.json         # Contrato OpenSees↔Unity (regenerado desde el visor)
 ├── opensees/             # Scripts de análisis estructural
 │   ├── loads/            # Definición de cargas
@@ -89,9 +89,7 @@ En `edificio_3d.html` las capas se alternan con los checkboxes del panel izquier
 │   ├── superposicion.py  # Auditoría de superposición del COMBO
 │   ├── verificador_camino_carga.py  # Verificación del camino de carga losa→viga→columna→fundación
 │   ├── areas_tributarias.py        # Áreas y cargas tributarias de vigas
-│   ├── visualizar.py     # JSON → HTML (genera el visor desde el contrato)
-│   ├── _rebuild_html_elements.py  # Regenera el array de elementos embebido en el HTML desde el JSON
-│   ├── exportar_analysis_map.py   # Resultados → analysis_map.js (modo análisis del visor)
+│   ├── exportar_analysis_map.py   # Resultados → analysis_map.json (modo análisis del visor)
 │   ├── exportar_resultados_csv.py # Resultados → CSV
 ├── resultados/                    # Resultados del análisis (carpeta tipo)
 │   ├── 00_readme.md               # Índice y semántica de sobrescritura
@@ -105,18 +103,20 @@ En `edificio_3d.html` las capas se alternan con los checkboxes del panel izquier
 │   ├── 08_verificacion/           # benchmark_3d.json, verification.md, verificacion_rc.json
 │   ├── 09_demanda_capacidad/      # demanda_capacidad_*.png + critica.json
 │   ├── 10_figuras/                # Diagramas 2D/3D y marco_3d interactivo
-│   ├── 11_mapa_visor/             # analysis_map.js, tributary_map.js, deformada_elements.js
+│   ├── 11_mapa_visor/             # analysis_map.json, tributary_map.js, mapas del visor
 ├── reports/              # Entregables semana01/02/03/04 y plan de empalmes
 ├── Unity/                # Proyecto Unity
 │   └── Assets/
 │       ├── Scripts/      # EdificioLoader.cs, AnalysisMap.cs, AnalysisMode.cs,
 │       │                 # CameraController.cs, PickHighlight.cs, DataPanel.cs,
-│       │                 # ViewerHud.cs, Plot2D.cs, TributaryInspector.cs,
+│       │                 # ViewerHud.cs, ModificationMode.cs, ElementSearchPanel.cs,
+│       │                 # Plot2D.cs, TributaryInspector.cs,
 │       │                 # DiaphragmData.cs, ElementTag.cs
 │       └── StreamingAssets/   # Edificio.json + tributary_map.js + analysis_map.json (runtime)
 ├── data/                 # Datos compartidos (geometría, materiales, secciones)
 ├── tests/                # Verificaciones (equilibrio, superposición, tributarias, empalmes, camino de carga)
-├── scripts/              # Utilidades (html_to_json.py, parte_d_fiber.py, parte_d_muros.py,
+├── scripts/              # Utilidades (generar_modificaciones.py, ejecutar_modificacion.py,
+│                         #   parte_d_fiber.py, parte_d_muros.py,
 │                         #   sensibilidad_secciones.py, comparacion_rc.py, demanda_capacidad.py)
 ├── regla_g_walls.json    # Selección de muros para la regla G de conexiones
 └── Enunciado_Proyecto1/  # Enunciado, cronograma y recursos
@@ -124,28 +124,19 @@ En `edificio_3d.html` las capas se alternan con los checkboxes del panel izquier
 
 ## Flujo de datos
 
-`opensees` calcula los resultados y escribe `Edificio.json`; `opensees/_rebuild_html_elements.py` regenera el array de elementos embebido en `edificio_3d.html`; Unity lee el JSON. Si el modelo se edita a mano en el visor, `scripts/html_to_json.py` devuelve esos cambios al contrato (incluidos los tipos nuevos `steel_column`/`steel_beam`, resolviendo `node_i`/`node_j` por proximidad de coordenadas):
+`opensees` calcula los resultados y escribe archivos `edificio_full_results*.json`. Luego `exportar_analysis_map.py` genera `analysis_map.json`; Unity consume `Edificio.json` y `analysis_map.json` desde `StreamingAssets`.
 
 ```
-data/ ──► opensees ──► Edificio.json ──► Unity (visualización)
-                ▲            │
-                └────────────┘  opensees/_rebuild_html_elements.py: JSON→HTML
-    edificio_3d.html ──► scripts/html_to_json.py: HTML→JSON
-    resultados/01_casos_base/edificio_full_results*.json ──► exportar_analysis_map.py ──► analysis_map.js
+data/ ──► opensees ──► resultados/01_casos_base/edificio_full_results*.json
+                     └──► exportar_analysis_map.py ──► analysis_map.json
+Edificio.json ───────────────────────────────────────► Unity/StreamingAssets
 ```
 
-Los tipos de elemento soportados por el modelo: `column`, `beam_x`, `beam_y`, `wall`, `loza`, `steel_column` y `steel_beam` (acero A240ES). El orden del array de elementos es **1:1** entre `edificio_3d.html`, `Edificio.json` y `analysis_map.js`: agregar elementos a uno requiere regenerar los otros dos para que el modo análisis del visor siga indexando correctamente (usar `_rebuild_html_elements.py` y `html_to_json.py` en ese orden).
+Los tipos de elemento soportados por el modelo: `column`, `beam_x`, `beam_y`, `wall`, `loza`, `steel_column` y `steel_beam` (acero A240ES). El orden de elementos debe mantenerse consistente entre `Edificio.json` y `analysis_map.json` para que el modo análisis indexe correctamente.
 
 El modelo actual contiene **536 nodos, 722 elementos** (118 columnas, 141 vigas X, 165 vigas Y, 79 muros, 199 lozas, 10 columnas y 10 vigas metálicas) y **64 apoyos fijos**. Los valores se guardan en **cm** en el JSON.
 
 ## Ejecución
-
-### Visor 3D (edición del modelo)
-Abrir `edificio_3d.html` en un navegador. Después de editar (agregar/quitar nodos, lozas, vigas, muros), regenerar el contrato:
-
-```bash
-python scripts/html_to_json.py          # actualiza Edificio.json desde el visor
-```
 
 ### OpenSeesPy
 El FE principal es `opensees_edificio_v2.py`. Cada caso construye el modelo desde cero (`ops.wipe`) y exporta su archivo de resultados:
@@ -167,7 +158,7 @@ python opensees_edificio_v2.py --case COMBO --lambda-g 1.2 --lambda-q 1.0 --lamb
 También disponible: `benchmark_3d.py` (módulo de prueba 2D/3D) y `superposicion.py` (auditoría de la combinación; al correr completo exporta el resumen a `resultados/06_superposicion/verificacion.csv`). `exportar_analysis_map.py` adicionalmente exporta el sismo por piso a `resultados/05_sismo/sismo_por_piso.csv`.
 
 ### Modo análisis del visor (regenerar resultados)
-Los resultados del análisis (deformada, M/N/V por caso y capacidad P-M) se exportan a `resultados/11_mapa_visor/analysis_map.js` (que el visor carga con `<script>`) y, en el mismo paso, a `analysis_map.json` para Unity. Regenerarlos tras un análisis nuevo:
+Los resultados del análisis (deformada, M/N/V por caso y capacidad P-M) se exportan a `resultados/11_mapa_visor/analysis_map.json` para Unity. Regenerarlos tras un análisis nuevo:
 
 ```bash
 cd opensees
@@ -184,20 +175,39 @@ python scripts/comparacion_rc.py           # verificación RC (bloque ACI/NCh vs
 python scripts/demanda_capacidad.py        # barre 128 columnas + 79 muros con el COMBO → 09_demanda_capacidad/
 ```
 
-Luego abrir `edificio_3d.html` y usar `TAB` para el modo análisis.
+Luego copiar/sincronizar el mapa con `Unity/Assets/StreamingAssets/analysis_map.json` y abrir Unity.
 
 ### Unity
 1. Abrir `Unity/` como proyecto en Unity Hub (requiere Unity 6 / 6000.x).
 2. Al abrir por primera vez Unity regenera `Library/` y los paquetes (toma unos minutos).
 3. Pulsar Play para ver el edificio: columnas, vigas, muros, lozas y los 6 diafragmas.
-4. Hacer clic en un elemento para abrir su inspector (propiedades y cargas tributarias G/Q en las vigas).
-5. Usar las teclas de la tabla anterior para alternar capas, ejes y el modo hormigón.
+4. Usar las pestañas `Visualización`, `Modificaciones`, `Análisis` y `Datos`.
+5. En `Visualización`, buscar por tipo+ID o hacer clic en un elemento para abrir su inspector.
+6. En `Modificaciones`, aplicar `Base`, `Mod A` o `Mod B` desde Unity.
+7. En `Análisis`, usar sliders `G/Q/EX/EY`, deformada, M/N/V, reacciones y SQ4.
 
-Si se actualizó `Edificio.json`, copiarlo a `Unity/Assets/StreamingAssets/Edificio.json` (o seguir el flujo del visor con `html_to_json.py`). El inspector por clic lee sus cargas desde `StreamingAssets/tributary_map.js` (generado por el análisis tributario); ambos deben estar sincronizados con el `Edificio.json`. El modo análisis del visor lee `StreamingAssets/analysis_map.json` (el mismo que exporta `exportar_analysis_map.py` a `resultados/11_mapa_visor/`), así que también conviene copiarlo a StreamingAssets para que el modo análisis y el panel DATOS funcionen en Unity (casos, deformada/M/N/V, reacciones, P-M y diagramas 2D).
+Si se actualizó `Edificio.json`, copiarlo a `Unity/Assets/StreamingAssets/Edificio.json`. El inspector por clic lee sus cargas desde `StreamingAssets/tributary_map.js`; ambos deben estar sincronizados. El modo análisis lee `StreamingAssets/analysis_map.json`.
+
+### Modificaciones reproducibles
+
+Desde Unity: pestaña **Modificaciones** → `Restaurar Base`, `Aplicar Mod A` o `Aplicar Mod B`.
+
+También se puede ejecutar por terminal:
+
+```bash
+python scripts/generar_modificaciones.py
+python scripts/ejecutar_modificacion.py --tag modA --json Edificio_mod_A.json --element 147 --unity
+python scripts/ejecutar_modificacion.py --tag modB --json Edificio_mod_B.json --element 76 --unity
+python scripts/ejecutar_modificacion.py --restore
+```
+
+- **Mod A:** viga 147, sección 60×80 → 50×75 cm.
+- **Mod B:** nodo 1, apoyo empotrado → articulado (`DOF=[1,1,1,0,0,0]`).
+- Cambiar sección/apoyo requiere reanálisis; mover sliders de casos ya calculados no.
 
 ## Conexiones y camino de carga
 
-- **Conexiones** (`opensees/conexiones.py`): implementa las reglas A-E que deciden qué nodos se conectan al FE con `rigidLink`, qué apoyos quedan fijos y cuáles "huérfanos" se soportan verticalmente. La selección de muros para la regla G se configura en `regla_g_walls.json` (editada con `muro_seleccion.html`, que vive fuera del repo como herramienta local).
+- **Conexiones** (`opensees/conexiones.py`): implementa las reglas A-E que deciden qué nodos se conectan al FE con `rigidLink`, qué apoyos quedan fijos y cuáles "huérfanos" se soportan verticalmente. La selección de muros para la regla G se configura en `regla_g_walls.json`.
 - **Camino de carga** (`opensees/verificador_camino_carga.py` + `tests/test_camino_carga.py`): verifica que cada losa se apoye y transmita su carga a través de vigas → columnas/muros → fundación, sin tramos perdidos ni elementos "flotantes".
 - **Empalmes viga-viga** (`tests/test_empalmes_viga_viga.py` + `reports/plan_empalmes_viga_viga.md`): documenta cómo se subdividen las vigas (reglas B/F) y se conectan entre sí y con los muros; el visor dibuja las fracciones reales del FE para que el doblez del empalme se vea y no parezca flotar.
 

@@ -53168,20 +53168,20 @@
     "W_sismico_efectivo_kN": 83253.9656,
     "fundacion_excluida_kN": 1582.8487,
     "G_floor_kN": {
-      "Techo": 15361.7791,
+      "Subterraneo": 1582.8487,
       "Piso 1": 9711.8995,
       "Piso 4": 16584.4222,
-      "Piso 3": 15325.4131,
-      "Subterraneo": 1582.8487,
-      "Piso 2": 14921.6687
+      "Techo": 15361.7791,
+      "Piso 2": 14921.6687,
+      "Piso 3": 15325.4131
     },
     "Q_floor_kN": {
-      "Techo": 5368.478,
+      "Subterraneo": 0.0,
       "Piso 1": 2503.5924,
       "Piso 4": 5274.0404,
-      "Piso 3": 4986.4276,
-      "Subterraneo": 0.0,
-      "Piso 2": 4565.0276
+      "Techo": 5368.478,
+      "Piso 2": 4565.0276,
+      "Piso 3": 4986.4276
     },
     "piso_to_master": {
       "Subterraneo": 314,

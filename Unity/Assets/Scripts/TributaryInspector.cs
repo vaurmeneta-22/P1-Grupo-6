@@ -26,6 +26,7 @@ public class TributaryInspector : MonoBehaviour
     const float SOBRECARGA_KNM2 = 2.0f;
 
     private Dictionary<int, TribEntry> tributaryById = new Dictionary<int, TribEntry>();
+    private Dictionary<int, string> supportLabelByNode = new Dictionary<int, string>();
     private string panelInfo = "";
     private Vector2 panelScroll;
     private GameObject panel;
@@ -44,6 +45,7 @@ public class TributaryInspector : MonoBehaviour
     public void Setup(string tributaryJsPath, Transform parent)
     {
         LoadTributaryMap(tributaryJsPath);
+        LoadSupportLabels();
 
         try
         {
@@ -126,6 +128,43 @@ public class TributaryInspector : MonoBehaviour
             t.pQ = GrabFloat(fields, "pQ");
             if (!tributaryById.ContainsKey(t.id)) tributaryById[t.id] = t;
         }
+    }
+
+    void LoadSupportLabels()
+    {
+        supportLabelByNode.Clear();
+        string path = Path.Combine(Application.streamingAssetsPath, "Edificio.json");
+        if (!File.Exists(path)) return;
+        try
+        {
+            EdificioData edificio = JsonUtility.FromJson<EdificioData>(File.ReadAllText(path));
+            if (edificio == null || edificio.supports == null) return;
+            foreach (SupportInfo s in edificio.supports)
+            {
+                if (s == null) continue;
+                supportLabelByNode[s.node] = SupportLabel(s);
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning("No se pudieron leer apoyos de Edificio.json: " + ex.Message);
+        }
+    }
+
+    static string SupportLabel(SupportInfo s)
+    {
+        string tipo = string.IsNullOrEmpty(s.type) ? "apoyo" : s.type;
+        if (s.DOF != null && s.DOF.Length >= 6)
+        {
+            bool fixedAll = s.DOF[0] == 1 && s.DOF[1] == 1 && s.DOF[2] == 1 &&
+                            s.DOF[3] == 1 && s.DOF[4] == 1 && s.DOF[5] == 1;
+            bool pinned = s.DOF[0] == 1 && s.DOF[1] == 1 && s.DOF[2] == 1 &&
+                          s.DOF[3] == 0 && s.DOF[4] == 0 && s.DOF[5] == 0;
+            if (fixedAll) tipo = "empotrado";
+            else if (pinned) tipo = "articulado";
+            return tipo + " DOF=[" + string.Join(",", System.Array.ConvertAll(s.DOF, x => x.ToString())) + "]";
+        }
+        return tipo;
     }
 
     static float GrabFloat(string fields, string key)
@@ -322,8 +361,8 @@ public class TributaryInspector : MonoBehaviour
         List<string> r = new List<string>();
         if (meta != null)
         {
-            if (meta.supI) r.Add("extremo i (nodo " + meta.ni + ") empotrado/apoyado");
-            if (meta.supJ) r.Add("extremo j (nodo " + meta.nj + ") empotrado/apoyado");
+            if (meta.supI) r.Add("extremo i (nodo " + meta.ni + ") " + ApoyoNodoLabel(meta.ni));
+            if (meta.supJ) r.Add("extremo j (nodo " + meta.nj + ") " + ApoyoNodoLabel(meta.nj));
             if (meta.type == "wall")
             {
                 double[] ci, cj;
@@ -342,6 +381,13 @@ public class TributaryInspector : MonoBehaviour
         }
         if (r.Count == 0) r.Add("continua (extremos sin apoyo directo)");
         return string.Join(" · ", r.ToArray());
+    }
+
+    string ApoyoNodoLabel(int node)
+    {
+        string label;
+        if (supportLabelByNode.TryGetValue(node, out label)) return label;
+        return "apoyado";
     }
 
     static string TipoNombre(string t)

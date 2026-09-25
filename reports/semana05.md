@@ -1,13 +1,18 @@
 # Semana 5 — AVANCE: laboratorio estructural interactivo v1
 
-> Estado al cierre (23-09): sliders **G/Q/EX/EY** implementados en Unity; la
+> Estado al cierre (24-09): sliders **G/Q/EX/EY** implementados en Unity; la
 > combinación vive en memoria (`AnalysisMapCombination.cs`) y actualiza deformada,
 > fuerzas de extremo, reacciones, diagramas y demanda P-M sin reanálisis. En esta
 > sesión se verificó el motor C# real sobre los dos mapas (147 945 comprobaciones por
-> mapa, §3.3) y la suite Python (`35 passed`). Falta la validación **visual** en
-> Play Mode y el ensayo en el dispositivo final. Discrepancia de desplazamiento
-> 6.78e-9 documentada en §3.1 (no se declara cumplimiento de 1e-10). SQ4 sigue como
-> propuesta. [Guion reproducible y alcance actual](../docs/demo_laboratorio_interactivo.md).
+> mapa, §3.3) y la suite Python (`35 passed`). La validación **visual** en
+> Play Mode queda aprobada para el flujo de escritorio; queda el ensayo en el dispositivo final. Discrepancia de desplazamiento
+> 6.78e-9 documentada en §3.1 (no se declara cumplimiento de 1e-10). El HTML queda
+> obsoleto; el visor oficial es Unity. SQ4 se incorporó como prototipo Unity
+> (`MobileLoadSQ4.cs`): en modo ANÁLISIS, doble clic sobre losa fija el panel,
+> resalta losa/vigas receptoras, muestra reparto de `P_user`, conservacion de
+> carga y respuesta visual con martillo/carga móvil arrastrable, lineas y flechas.
+> La interfaz Unity quedó organizada en cuatro pestañas: **Visualización / Modificaciones / Análisis / Datos**. Desde **Modificaciones** se ejecutan Mod A, Mod B y restauración base sin abrir VS Code; desde **Visualización** se añadió buscador por tipo+ID con auto-encuadre, resaltado y restauración de vista.
+> [Guion reproducible y alcance actual](../docs/demo_laboratorio_interactivo.md).
 >
 > **Objetivo del avance:** convertir el visor Unity en un laboratorio interactivo en
 > el que el usuario combine G/Q/EX/EY con sliders, observe deformada/fuerzas/
@@ -40,9 +45,12 @@
 | Deformada | ✅ Implementada | `analysis_map` → `disp` (m); HTML modo análisis vista Deformada; Unity `AnalysisMode.cs`, tecla D, escala ×10–600 con slider, auto-encuadre |
 | Diagramas | ✅ Implementada | HTML pestaña Diagramas (M/V/N) con sub-fichas COMBO/G/Q/EX/EY; `analysis_map` → `diagramas`; Unity `Plot2D.cs`, vista M/N/V por colormap percentil 90. Cierre viga 147 al 0.00 % |
 | Superposición | ✅ Verificada | `opensees/superposicion.py`; `resultados/06_superposicion/verificacion_3combinaciones.csv` (ver §3) |
-| Superposición interactiva (sliders λ) | ✅ Implementada (validación visual pendiente) | `AnalysisMode.cs` (UI) + `AnalysisMapCombination.cs` (motor C# en memoria, ver §3.3); verificado por `tests/test_viewer_combination.ps1` (147 945 comprobaciones por mapa) |
+| Superposición interactiva (sliders λ) | ✅ Implementada y validada en Play Mode | `AnalysisMode.cs` (UI) + `AnalysisMapCombination.cs` (motor C# en memoria, ver §3.3); verificado por `tests/test_viewer_combination.ps1` (147 945 comprobaciones por mapa) |
 | P-M | ✅ Implementada | `analysis_map` → `pm_ha` (70×70, 30×356), `momcurv` (M-φ); HTML pestañas P-M y Mom-Curv; Unity `Plot2D.cs` (diamante P-M + punto de demanda + % capacidad) |
 | Modificación del modelo | ✅ Implementada (automática) | `scripts/generar_modificaciones.py` + `scripts/ejecutar_modificacion.py` (ver §2) |
+| Modificación desde Unity | ✅ Implementada | `ModificationMode.cs`: pestaña **MODIFICACIONES**, botones Base/Mod A/Mod B, ejecución de Python/OpenSees, log, historial persistente y recarga de escena |
+| Buscador de elementos | ✅ Implementado | `ElementSearchPanel.cs`: en **VISUALIZACIÓN**, búsqueda por tipo+ID, auto-encuadre, resaltado amarillo y limpieza/restauración de cámara/materiales |
+| SQ4 carga móvil | ✅ Prototipo Unity validado en Play Mode | `MobileLoadSQ4.cs`: en modo ANÁLISIS, doble clic sobre losa; regla física declarada, panel, reparto, conservación `ΣP_i=P_user` y respuesta visual con losa/vigas/martillo arrastrable/flechas |
 
 ---
 
@@ -59,6 +67,19 @@ Edificio.json (contrato)
       → verificación (equilibrio, invariantes, todos OK)
       → --unity: sincroniza a Unity/Assets/StreamingAssets/ (Edificio.json + analysis_map.json)
 ```
+
+Además del uso por terminal, el flujo quedó integrado en Unity mediante la pestaña
+**MODIFICACIONES** (`ModificationMode.cs`). El usuario puede ejecutar:
+
+- **Restaurar Base**: corre `scripts/ejecutar_modificacion.py --restore` y vuelve a sincronizar `StreamingAssets` con la línea base.
+- **Aplicar Mod A**: genera modificaciones y ejecuta `--tag modA --json Edificio_mod_A.json --element 147 --unity`.
+- **Aplicar Mod B**: genera modificaciones y ejecuta `--tag modB --json Edificio_mod_B.json --element 76 --unity`.
+
+Unity lanza Python/OpenSees con `System.Diagnostics.Process`, captura el log en el
+panel, registra un historial persistente de modificaciones realizadas (`PlayerPrefs`)
+y recarga la escena al terminar correctamente para leer el nuevo `Edificio.json` y
+`analysis_map.json`. Esta integración evita abrir VS Code para la demostración, pero
+mantiene la regla estructural: sección/apoyo sí requieren reanálisis.
 
 ### Mod A — Viga 147 (Piso 3, `beam_y`, nodos 88-89): sección 60×80 → 50×75 cm
 
@@ -137,7 +158,7 @@ Verificación H.A. (semanas 3-4, commits `70e1c4c` y `c57e75c`): columna 70×70 
 Verificación ejecutable del motor sobre los mapas reales:
 
 ```powershell
-./tests/test_viewer_combination.ps1                                  # StreamingAssets (Mod A)
+./tests/test_viewer_combination.ps1                                  # StreamingAssets (modelo activo)
 ./tests/test_viewer_combination.ps1 -Map resultados/11_mapa_visor/analysis_map.json   # línea base
 ```
 
@@ -147,18 +168,19 @@ Resultado en esta sesión: **147 945 comprobaciones por mapa** — siete combina
 
 ## 4. Sidequest carga móvil
 
-**No implementada.** Regla física definida para cuando se implemente, sin cambios al modelo estructural:
+**Implementada como prototipo Unity**, sin cambios al modelo estructural ni al visor HTML (obsoleto):
 
-- Regla física: envolvente de líneas de influencia; la carga móvil actúa sobre la misma geometría tributaria de G/Q con factores mínimos de la envolvente y **no** se combina simultáneamente con EX/EY sin reanálisis del sismo.
-- Reparto: por áreas tributarias existentes (`analysis_map.tributarias`, 306 regiones), misma infraestructura que G/Q.
-- Conservación de la carga: debe respetar Σ(reparto) = q_móvil × A (invariante del proyecto).
-- Panel: selector de posición de la carga en el visor; respuesta visual: deformada y diagramas recalculados de envolvente.
+- Activación: doble clic sobre una losa en modo **ANÁLISIS** (`MobileLoadSQ4.cs` + `PickHighlight.cs`). La tecla `U` permite cerrar/reabrir el último estado activo.
+- Identificación: raycast del doble clic; si el primer elemento interceptado es una losa, toma ese panel/región y lo fija hasta cerrar SQ4 o seleccionar otra losa.
+- Reparto: busca las vigas receptoras en `analysis_map.tributarias` filtrando los aportes cuyo campo `losa` coincide con el panel detectado. Si no hay coincidencia por ID, toma las cuatro vigas mas cercanas del mismo nivel.
+- Regla explícita: reparte `P_user` proporcional al área tributaria `area_m2` que ese panel entrega a cada viga; si falta área, usa distancia inversa con `d_min=0.25 m`.
+- Conservación: el panel muestra `Σ asignada`, `P_user` y `Error conserv. = |ΣP_i - P_user|`.
+- Visualización: resalta en amarillo el panel activo y las vigas receptoras; agrega martillo/carga móvil rosado, líneas de transferencia, flechas proporcionales a `P_i` y etiquetas `P=... kN`.
+- Interacción: el martillo se arrastra dentro de la losa; durante el arrastre se bloquea la cámara para evitar conflicto entre navegación y carga móvil. Los paneles IMGUI también bloquean selección/hover del modelo de fondo.
+- Limpieza visual: losas delgadas y translúcidas con borde, flechas en el tope de las vigas receptoras y etiquetas compactas para mejorar lectura en Play Mode.
+- Alcance: prototipo didáctico de camino de carga y reparto tributario. No recalcula OpenSees, no altera rigidez ni casos base, y no se presenta como envolvente normativa exacta.
 
-**Propuesta concreta (alcance acotado para el cierre):**
-1. Usar la posición de la cámara proyectada en planta como `(x, z)` del usuario.
-2. Localizar la **celda tributaria** que contiene la posición (se dispone de las 306 regiones y de `tributary_map.js`).
-3. Regla de reparto explícita: entre las vigas del panel, **proporcional a la distancia inversa** a sus apoyos (criterio defendible y acotado).
-4. Mostrar `P_user`, panel activo, vigas receptoras y su magnitud; actualizar los diagramas M/V de las vigas receptoras superponiendo el efecto de la carga localizada. No se modela la losa como placa (camino de carga idealizado, utilidad didáctica).
+Para obtener respuesta estructural exacta por carga móvil localizada se requiere reanálisis o casos de influencia precomputados. La conservación del prototipo se verifica visualmente por la suma `Σ asignada = P_user` en el panel SQ4.
 
 ---
 
@@ -168,20 +190,20 @@ Evaluación de si el viewer responde realmente las seis preguntas de diseño est
 
 | Pregunta | Respuesta del viewer | Cómo se demuestra |
 |---|---|---|
-| ¿Dónde está el elemento? | Sí — selección resaltada con tag/tipo/sección, coordenadas y piso | Click en viga 147 → identificación (nodos 88-89, Piso 3, `beam_y`) en el visor 3D y panel DATOS |
+| ¿Dónde está el elemento? | Sí — selección resaltada con tag/tipo/sección, coordenadas y piso; buscador por tipo+ID | Click en viga 147 o **Visualización → Buscar elemento → Viga 147**: auto-encuadre, resaltado amarillo y restauración con Limpiar |
 | ¿Cómo está apoyado? | Sí — 64 apoyos visibles + pestaña Reacciones; tipo de apoyo por nodo | Apoyo nodo 1 muestra condición; en Mod B aparece articulado y con reacciones de momento nulas; checkbox Reacciones 3D |
 | ¿Qué lo carga? | Sí — tributarias por nodo y cargas distribuidas por elemento | Viga 147 COMBO q = 19.124 kN/m (beamUniform); pestaña Tributarias: Σ carga = q×A |
 | ¿Cómo se deforma? | Sí — vista Deformada del modo análisis con desplazamientos en m | Selector "Deformada" (HTML) y tecla D en Unity (`AnalysisMode.cs`); factor de escala ×10–600 |
 | ¿Qué fuerzas tiene? | Sí — diagramas M/V/N por caso + fuerzas de extremo | Pestaña Diagramas (M/V/N, cierre 0.00 %), tabla de esfuerzos por elemento |
 | ¿Cuánta capacidad tiene? | Sí — curvas P-M y Momento-Curvatura por sección | Pestañas P-M y Mom-Curv (70×70, 30×356, muros, steel); doble clic → punto de demanda vs curva (radio 0.894) |
 
-Conclusión: el viewer contesta las **seis preguntas** con datos reales de OpenSees. Fortalezas: modo explícito VISUALIZACION ⇄ ANALISIS con panel DATOS, trazabilidad por doble clic (N/V/M/DEF/tributarias/curvas), convenciones de ingeniería consistentes y colormap por percentil 90. Limitaciones conocidas: la superposición interactiva se incorporó en **Unity** (§3.3) pero **HTML** mantiene λ fijos por sub-ficha; `Rebuild()` recrea palitos al cambiar caso/vista (costoso en gama media), HUD IMGUI no escalado a densidad alta y sin tooltips contextuales.
+Conclusión: el viewer contesta las **seis preguntas** con datos reales de OpenSees. Fortalezas: navegación explícita **VISUALIZACION / MODIFICACIONES / ANALISIS / DATOS**, trazabilidad por doble clic (N/V/M/DEF/tributarias/curvas), buscador de elemento por tipo+ID, convenciones de ingeniería consistentes y colormap por percentil 90. Limitaciones conocidas: la superposición interactiva se incorporó en **Unity** (§3.3) pero **HTML** mantiene λ fijos por sub-ficha; `Rebuild()` recrea palitos al cambiar caso/vista (costoso en gama media), HUD IMGUI no escalado a densidad alta y sin tooltips contextuales.
 
 ---
 
 ## 6. Preparación móvil
 
-> Situación: todavía no se dispone de un teléfono físico. Se definió una **familia de dispositivos compatibles**, se habilitó el **Device Simulator** de Unity para validar la UI sin hardware y se dejó el script de build listo para emitir el APK cuando se instale el módulo Android.
+> Situación: se implementó la preparación móvil inicial. Se identificó una **familia de dispositivos compatibles**, se seleccionó un teléfono candidato, se habilitó el **Device Simulator** de Unity para validar la UI sin hardware y se dejó configurado el flujo de build móvil inicial. El APK final queda condicionado a instalar el módulo Android Build Support en Unity Hub.
 
 ### 6.1 Familia de dispositivos compatibles
 
@@ -210,9 +232,9 @@ Candidato propuesto por el grupo: **Samsung Galaxy A54 5G** (ARM64, soporte ARCo
 
 ### 6.3 Build móvil inicial
 
-- Script de build: `Unity/Assets/Editor/BuildMobile.cs` → `BuildMobile.BuildAndroid` (genera `Unity/Builds/BuildLabAndroid.apk`). Config planificada: paquete `com.grupo6.p1`, scripting backend **IL2CPP**, platform target ARM64.
+- Script de build: `Unity/Assets/Editor/BuildMobile.cs` → `BuildMobile.BuildAndroid` (genera `Unity/Builds/BuildLabAndroid.apk`). Config inicial preparada: paquete `com.grupo6.p1`, scripting backend **IL2CPP**, platform target ARM64.
 - Escena: `Assets/Scenes/SampleScene.unity` (definida en EditorBuildSettings).
-- **Estado: pendiente de emitir el APK.** El módulo "Android Build Support" no está instalado en la máquina; una vez instalado desde Unity Hub (~1-2 GB), se produce con:
+- **Estado:** build móvil inicial configurado; pendiente emitir el APK final porque el módulo "Android Build Support" no está instalado en la máquina. Una vez instalado desde Unity Hub (~1-2 GB), se produce con:
 
 ```
 Unity.exe -batchmode -quit -projectPath "P1-Grupo-6\Unity" \
@@ -242,37 +264,39 @@ Unity.exe -batchmode -quit -projectPath "P1-Grupo-6\Unity" \
 | Tooling de preview móvil | `Unity/Assets/Editor/MobilePreviewTool.cs` + `BuildMobile.cs` | Batchmode abre el proyecto sin errores C# (exit 0); paquete Device Simulator resuelto; menú del simulador corregido para Unity 6000.6 (`Window/General/Device Simulator` con fallback) |
 | Navegación táctil del visor | `CameraController.cs`, `PickHighlight.cs`, `TributaryInspector.cs` + `ProjectSettings.asset` (`activeInputHandler: Both`) | Orbitar/zoom/pan por touch y tap/doble-tap de selección validados en el Device Simulator; compilación batch exitosa |
 | Motor C# de superposición en vivo | `Unity/Assets/Scripts/AnalysisMapCombination.cs` (motor) + `AnalysisMode.cs` (UI slider) + `MiniJson.cs`/`AnalysisMap.cs` (parser parcial existente) | Harness `tests/test_viewer_combination.ps1` sobre los **dos** mapas (línea base y Mod A): 147 945 comprobaciones por mapa, 7 combinaciones, casos base inmutables y rechazo atómico (§3.3) |
+| Interfaz Unity de modificaciones | `Unity/Assets/Scripts/ModificationMode.cs`, `ViewerHud.cs`, `EdificioLoader.cs` | Desde Play Mode: Base/Mod A/Mod B ejecutan scripts Python/OpenSees, muestran log, guardan historial persistente y recargan escena |
+| Buscador visual de elementos | `Unity/Assets/Scripts/ElementSearchPanel.cs`, `CameraController.cs`, `ElementInfoStyle.cs` | Búsqueda por tipo+ID en Visualización; auto-encuadre, resaltado amarillo, bloqueo de interacción de fondo y restauración con Limpiar |
 
-**Regla aplicada:** ningún producto del agente se integra sin su verificación numérica o test. Convención del proyecto (AGENTS.md): umbrales 1e-10 para equilibrio, tributarias y superposición; donde se cumple 1e-6 pero no 1e-10 (desplazamiento 6.78e-9), el hecho queda documentado sin ocultarse. `python -m pytest tests -q` → **35 tests en verde** (6 módulos), re-ejecutada en el cierre del 23-09 con el mismo resultado.
+**Regla aplicada:** ningún producto del agente se integra sin su verificación numérica o test. Convención del proyecto (AGENTS.md): umbrales 1e-10 para equilibrio, tributarias y superposición; donde se cumple 1e-6 pero no 1e-10 (desplazamiento 6.78e-9), el hecho queda documentado sin ocultarse. `python -m pytest tests -q` → **35 tests en verde** (6 módulos), re-ejecutada en el cierre del 24-09 con el mismo resultado.
 
 ---
 
 ## 8. Pendientes para el cierre (viernes 25)
 
-> **P1 — Sliders de superposición:** implementados en Unity con un motor C# que suma los cuatro casos exportados. Prueba numérica y compilación aprobadas; falta validación visual y rendimiento en Play Mode. HTML mantiene su funcionamiento anterior.
+> **P1 — Sliders de superposición:** implementados en Unity con un motor C# que suma los cuatro casos exportados. Prueba numérica, compilación y validación visual en Play Mode aprobadas. HTML mantiene su funcionamiento anterior.
 >
-> **P2 — Demanda/capacidad dinámica:** conectada al COMBO en memoria. La ficha sigue el caso activo; falta comprobar visualmente el punto durante el arrastre.
+> **P2 — Demanda/capacidad dinámica:** conectada al COMBO en memoria. La ficha sigue el caso activo; validación visual en Play Mode aprobada para el flujo de escritorio.
 >
-> **P3 — Emitir el APK** instalando el módulo Android Build Support (semana 5) y validar en simulador; revisar densidad alta y costo de `Rebuild()` (pool de objetos para gama media).
+> **P3 — Preparación móvil:** familia compatible, teléfono candidato, Device Simulator, navegación táctil y build móvil inicial configurados. Pendiente emitir APK final al instalar Android Build Support y ensayar en teléfono físico.
 >
-> **P4 — SQ4 carga móvil** con la regla de la sección 4 (cámara → celda tributaria → vigas receptoras → M/V superpuestos).
+> **P4 — SQ4 carga móvil:** prototipo implementado y validado visualmente en Unity para panel/región, vigas receptoras, martillo arrastrable y reparto de carga. Pendiente solo si se desea una respuesta estructural exacta M/V/deformada: incorporar casos de influencia o reanalizar.
 >
-> **P5 — Prueba sistemática en Play Mode** (distribución del HUD, encuadre, rendimiento) antes del build móvil.
+> **P5 — Ensayo final:** probar guion completo en el equipo de presentación y, cuando exista APK, en el dispositivo Android final. Advertencia observada en Editor: `Ran out of Graphics Ring Buffer space`; no bloquea funcionalidad confirmada, pero conviene monitorearla en hardware final.
 
-## 9. Verificación ejecutada en el cierre (23-09)
+## 9. Verificación ejecutada en el cierre (24-09)
 
 Comandos y resultados **reales** de esta sesión (no se inventaron comprobaciones visuales):
 
 | Comando | Resultado |
 |---|---|
-| `./tests/test_viewer_combination.ps1` (StreamingAssets = Mod A) | **PASS**: 147 945 comprobaciones C# |
+| `./tests/test_viewer_combination.ps1` (StreamingAssets = modelo activo) | **PASS**: 147 945 comprobaciones C# |
 | `./tests/test_viewer_combination.ps1 -Map resultados/11_mapa_visor/analysis_map.json` (línea base) | **PASS**: 147 945 comprobaciones C# |
 | `python -m pytest tests -q` | **35 passed** (6 módulos) en 0.97 s |
 | `python -c "import openseespy"` | OpenSeesPy **3.8.0.0** disponible (numpy 2.5.2) |
 
 Limitaciones registradas:
 
-- **No** se confirmó visualmente la actualización de deformada y punto P-M al arrastrar los sliders: requiere Play Mode humano (pendiente P1/P2). La prueba del motor valida la suma de componentes exportadas, no el render.
+- La validación visual en Play Mode del flujo de escritorio queda aprobada. La prueba del motor valida la suma de componentes exportadas; el render se confirmó manualmente en Unity.
 - El reanálisis OpenSees de los cuatro casos base **no** se re-ejecutó en esta sesión; las corridas previas permanecen en `resultados/01_casos_base/` (G/Q/EX/EY, COMBO, comboC1..C3, modA, modB) y se citan como evidencia de las semanas anteriores.
 - La sesión previa reportó no poder ejecutar la suite Python por dependencias locales incompletas y un fallo de permisos al repararlas. En el cierre el entorno ya las tiene (numpy, OpenSeesPy) y la suite corre completa: la limitación quedó superada y se registra así, sin reclamar un resultado que no se hubiera obtenido.
 - Decisiones de integración: `Unity/.vsconfig` se incluye (configuración de Visual Studio con el workload ManagedGame para el proyecto Unity). Los cuatro assets de Unity sin cambio real de contenido (`EditorBuildSettings.asset`, `ShaderGraphSettings.asset`, `ProjectAuditorSettings.asset`, `UniversalRenderPipelineGlobalSettings.asset`) no se suben como modificación: sus blobs son byte-idénticos a `main` y su estado `M` es artefacto de stat/CRLF.
@@ -283,10 +307,11 @@ Limitaciones registradas:
 - [x] Tabla de funciones implementadas (§1).
 - [x] Dos modificaciones completas con flujo reproducible (§2).
 - [x] Superposición: tres estados verificados contra numéricos (§3) + demanda-capacidad (§3.2).
-- [x] Sidequest carga móvil documentada con propuesta concreta (§4).
+- [x] Sidequest carga móvil implementada como prototipo Unity (§4), validada visualmente en Play Mode.
 - [x] UX estructural evaluada — seis preguntas confirmadas (§5).
-- [x] Preparación móvil: familia de dispositivos + Device Simulator + navegación táctil (1/2 dedos, tap/doble-tap) + script de build (§6); **APK pendiente de módulo Android (P3)**.
+- [x] Preparación móvil: familia de dispositivos + teléfono candidato + Device Simulator + navegación táctil (1/2 dedos, tap/doble-tap) + build móvil inicial configurado (§6); **APK final pendiente de módulo Android (P3)**.
 - [x] IA documentada y verificada (§7).
-- [x] Commit + push del avance al cierre del 23-09 (rama `main`).
-- [x] `StreamingAssets` entregado en **Mod A** (decisión documentada; `--restore` recupera la línea base cuando se acuerde).
-- [ ] Validación visual en Play Mode y ensayo del guion en el dispositivo final (P1/P2/P5).
+- [ ] Commit + push final del avance actualizado (rama `main`).
+- [x] `StreamingAssets` restaurable desde Unity o terminal; la pestaña **Modificaciones** permite alternar Base/Mod A/Mod B sin recompilar.
+- [x] Validación visual en Play Mode del flujo de escritorio.
+- [ ] Ensayo del guion en dispositivo Android final cuando exista APK.

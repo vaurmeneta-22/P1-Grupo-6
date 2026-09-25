@@ -80,6 +80,8 @@ public class PickHighlight : MonoBehaviour
         if (cam == null) cam = Camera.main;
         if (cam == null) return;
 
+        if (ElementInfoStyle.PointerOverPanel) { ClearHover(); return; }
+
         bool busy;
         if (ctrl != null) busy = ctrl.Busy;
         else busy = Input.GetMouseButton(0) || Input.GetMouseButton(1) ||
@@ -204,6 +206,24 @@ public class PickHighlight : MonoBehaviour
         return first;
     }
 
+    ElementTag RaycastNearestTag(Vector2 mouse, out Vector3 hitPoint)
+    {
+        hitPoint = Vector3.zero;
+        if (cam == null) return null;
+        Ray ray = cam.ScreenPointToRay(mouse);
+        RaycastHit[] hits = Physics.RaycastAll(ray, 1000f);
+        if (hits.Length == 0) return null;
+        Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+        foreach (RaycastHit h in hits)
+        {
+            ElementTag t = h.collider.GetComponentInParent<ElementTag>();
+            if (t == null) continue;
+            hitPoint = h.point;
+            return t;
+        }
+        return null;
+    }
+
     void DetectDoubleClick()
     {
         if (ElementInfoStyle.PointerOverPanel) return;
@@ -227,6 +247,17 @@ public class PickHighlight : MonoBehaviour
         lastClickPos = pos;
         if (!dbl) return;
         if (!am.Active) return;
+
+        Vector3 hitPoint;
+        ElementTag nearest = RaycastNearestTag(pos, out hitPoint);
+        if (nearest != null && nearest.type == "loza")
+        {
+            if (loader != null && loader.mobileLoadSQ4 != null)
+                loader.mobileLoadSQ4.ShowPanel(nearest.elementId, hitPoint);
+            reportKind = -1;
+            ElementInfoStyle.AnalysisArea = new Rect();
+            return;
+        }
 
         int id, tubeIdx;
         if (!PalitoAt(pos, out id, out tubeIdx)) id = RaycastSolid(pos);
