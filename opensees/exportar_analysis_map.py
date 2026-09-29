@@ -138,7 +138,13 @@ def main():
     # debe dibujar la deformada como polilinea usando los nodos reales del FE,
     # no la viga recta entre sus 2 extremos (si no, el doblez del empalme
     # viga-viga no se ve y la secundaria parece "flotar").
-    beam_fractions = {vid: [{"ni": ni, "nj": nj} for (_ft, ni, nj) in fr]
+    #
+    # `tag` = tag REAL del elemento en el FE. Sin el, el diagrama N/V/M de una
+    # viga subdividida no se puede reconstruir: los tags de fraccion salen de
+    # un pool compartido (elem_pool), NO son 300000+k, y las fuerzas en
+    # `forces` estan indexadas por tag FE. La primera fraccion conserva el tag
+    # del contrato; las siguientes usan el pool (300001+ en orden global).
+    beam_fractions = {vid: [{"tag": int(ft), "ni": ni, "nj": nj} for (ft, ni, nj) in fr]
                       for vid, fr in frame_split.items()}
     node_coords = {str(tag): [x, y, z] for tag, (x, y, z) in conx["tag_coord"].items()}
 
@@ -330,13 +336,17 @@ def main():
     tribu = {}
     rg = load_result("G")
     for vid, v in rg.get("tributary_by_viga", {}).items():
+        # p a 6 decimales: es la carga distribuida REAL que el FE aplico con
+        # eleLoad. Redondeada a 3 el cierre Vz_i+Vz_j == q*L no cierra (el error
+        # de redondeo de q se multiplica por L y llega a ~1e-4 relativo), y el
+        # diagrama N/V/M se reconstruye justamente con ese q.
         tribu[int(vid)] = {
             "type": v.get("type"), "section": v.get("section"),
             "area_tributaria_m2": round(v.get("area_tributaria_m2", 0.0), 3),
             "W_G_kN": round(v.get("W_losa_G_kN", 0.0), 2),
-            "p_G_kN_m": round(v.get("p_G_kN_m", 0.0), 3),
+            "p_G_kN_m": round(v.get("p_G_kN_m", 0.0), 6),
             "W_Q_kN": round(v.get("W_losa_Q_kN", 0.0), 2),
-            "p_Q_kN_m": round(v.get("p_Q_kN_m", 0.0), 3),
+            "p_Q_kN_m": round(v.get("p_Q_kN_m", 0.0), 6),
             "aportes": v.get("aportes", []),
         }
 

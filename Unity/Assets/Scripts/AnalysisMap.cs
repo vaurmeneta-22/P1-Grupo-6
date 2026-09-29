@@ -72,6 +72,17 @@ public static partial class AnalysisMap
         public double resMJ;
     }
 
+    // Tramo real de viga subdividida en el FE. `tag` es el tag del elemento en
+    // OpenSees (distinto del id del contrato salvo en la primera fraccion), que
+    // es con el que estan indexadas las fuerzas en `forces`. `ni`/`nj` son los
+    // nodos del FE de ese tramo.
+    public class BeamFraction
+    {
+        public int tag;
+        public int ni;
+        public int nj;
+    }
+
     public class SismoRow
     {
         public string piso;
@@ -95,6 +106,7 @@ public static partial class AnalysisMap
     public static Dictionary<string, PmInfo> PmHa;
     public static Dictionary<string, Dictionary<string, DiagInfo>> Diagramas;
     public static Dictionary<int, List<KeyValuePair<int, int>>> BeamFractions;
+    public static Dictionary<int, List<BeamFraction>> BeamFractionElems;
     public static Dictionary<string, Vector3> NodeCoords;
     public static Dictionary<string, double[]> StructCoords; // tag -> [x, y, h] estructural
     public static Dictionary<string, double[]> LocalAxes;
@@ -326,8 +338,12 @@ public static partial class AnalysisMap
                     Diagramas[kv.Key] = dd;
                 }
 
-            // beam_fractions: vid -> [{ni,nj}]
+            // beam_fractions: vid -> [{ni,nj}]  (nodos, para la deformada)
+            // BeamFractionElems: vid -> [{tag,ni,nj}] (tag del FE, para fuerzas).
+            // `tag` es indispensable para los diagramas N/V/M: los tags de las
+            // fracciones salen de un pool global compartido, no son 300000+k.
             BeamFractions = new Dictionary<int, List<KeyValuePair<int, int>>>();
+            BeamFractionElems = new Dictionary<int, List<BeamFraction>>();
             Dictionary<string, object> bf = MiniJson.Dict(r, "beam_fractions");
             if (bf != null)
                 foreach (KeyValuePair<string, object> kv in bf)
@@ -335,6 +351,7 @@ public static partial class AnalysisMap
                     int vid;
                     if (!int.TryParse(kv.Key, out vid)) continue;
                     List<KeyValuePair<int, int>> segs = new List<KeyValuePair<int, int>>();
+                    List<BeamFraction> tagged = new List<BeamFraction>();
                     List<object> arr = MiniJson.AsList(kv.Value);
                     if (arr != null)
                         foreach (object o in arr)
@@ -342,8 +359,15 @@ public static partial class AnalysisMap
                             int ni = (int)MiniJson.Db(o, "ni");
                             int nj = (int)MiniJson.Db(o, "nj");
                             segs.Add(new KeyValuePair<int, int>(ni, nj));
+                            tagged.Add(new BeamFraction
+                            {
+                                tag = (int)MiniJson.Db(o, "tag"),
+                                ni = ni,
+                                nj = nj
+                            });
                         }
                     BeamFractions[vid] = segs;
+                    BeamFractionElems[vid] = tagged;
                 }
 
             // node_coords: tag -> [x,y,z] (metros, coordenadas FE)

@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -198,6 +199,83 @@ public class TributaryInspector : MonoBehaviour
         if (selected != null) panelInfo = BuildInfo(selected);
     }
 
+    // -------------------------------------------------------------------------
+    // Diagramas N / V / M del elemento seleccionado, en el caso activo.
+    //
+    // Las curvas se reconstruyen a partir de las fuerzas locales reales del FE
+    // (ver ElementDiagrams.cs, donde esta verificado el criterio de cierre), no
+    // copiando la tabla de extremos. Se muestra un plano por vez, con su
+    // cortante y su momento apilados como en Plot2D.DrawDiag.
+    // -------------------------------------------------------------------------
+    int diagramPlane = ElementDiagrams.PlanoVertical;
+    int diagramCacheTag = -1;
+    string diagramCacheCase = null;
+    int diagramCachePlane = -1;
+    int diagramCacheRev = -1;
+    ElementDiagrams.Resultado diagramCache;
+
+    static readonly string[] PlaneNames = { "x-z · Vz / My", "x-y · Vy / Mz" };
+
+    ElementDiagrams.Resultado DiagramFor(int tag, string caso, int plano)
+    {
+        if (diagramCache != null && diagramCacheTag == tag && diagramCacheCase == caso &&
+            diagramCachePlane == plano && diagramCacheRev == AnalysisMap.CombinationRevision)
+            return diagramCache;
+        diagramCache = ElementDiagrams.Construir(tag, caso, plano);
+        diagramCacheTag = tag;
+        diagramCacheCase = caso;
+        diagramCachePlane = plano;
+        diagramCacheRev = AnalysisMap.CombinationRevision;
+        return diagramCache;
+    }
+
+    void DrawDiagramBlock()
+    {
+        int tag = selected.elementId;
+
+        ElementInfoStyle.Section("DIAGRAMAS N / V / M  ·  " + currentCase);
+
+        // Selector de plano local. Para vigas el plano x-z es el vertical; para
+        // columnas, muros y elementos de acero el eje x local es el vertical, de
+        // modo que sus dos planos son horizontales.
+        GUILayout.BeginHorizontal();
+        for (int p = 0; p < PlaneNames.Length; p++)
+        {
+            Color old = GUI.backgroundColor;
+            if (p == diagramPlane) GUI.backgroundColor = new Color(0.35f, 0.8f, 1f);
+            if (GUILayout.Button(PlaneNames[p])) diagramPlane = p;
+            GUI.backgroundColor = old;
+        }
+        GUILayout.EndHorizontal();
+
+        ElementDiagrams.Resultado r = DiagramFor(tag, currentCase, diagramPlane);
+        if (r.error != null)
+        {
+            ElementInfoStyle.Note(r.error);
+            return;
+        }
+
+        string sufijo = diagramPlane == ElementDiagrams.PlanoVertical
+            ? "plano x-z · Vz [kN] · My [kN-m]"
+            : "plano x-y · Vy [kN] · Mz [kN-m]";
+        ElementInfoStyle.Note(sufijo);
+        ElementInfoStyle.Note("i → j · " + r.L.ToString("F2", CultureInfo.InvariantCulture) +
+                              " m · " + r.tramos + (r.tramos == 1 ? " tramo FE" : " tramos FE") +
+                              " · q = " + r.q.ToString("F3", CultureInfo.InvariantCulture) + " kN/m");
+
+        Rect rc = GUILayoutUtility.GetRect(10, 216, GUILayout.ExpandWidth(true));
+        GUI.BeginGroup(rc);
+        GUI.BeginClip(new Rect(0, 0, rc.width, rc.height));
+        Plot2D.DrawDiag(new Rect(0, 0, rc.width, rc.height), r.diag);
+        GUI.EndClip();
+        GUI.EndGroup();
+
+        // Cierre numerico: si el JSON no cerrara, aqui se veria.
+        ElementInfoStyle.Note("cierre máx. · N " + r.errN.ToString("E1", CultureInfo.InvariantCulture) +
+                              " kN · V " + r.errV.ToString("E1", CultureInfo.InvariantCulture) +
+                              " kN · M " + r.errM.ToString("E1", CultureInfo.InvariantCulture) + " kN-m");
+    }
+
     void OnGUI()
     {
         ElementInfoStyle.VisualizationArea = new Rect();
@@ -224,6 +302,7 @@ public class TributaryInspector : MonoBehaviour
         }
         GUILayout.EndHorizontal();
         panelScroll = GUILayout.BeginScrollView(panelScroll, false, false);
+        DrawDiagramBlock();
         ElementInfoStyle.Section("PROPIEDADES Y GEOMETRÍA");
         string[] lines = panelInfo.Replace("\r", "").Split('\n');
         for (int i = 1; i < lines.Length; i++)

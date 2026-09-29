@@ -5,19 +5,18 @@ using UnityEngine;
 
 // Panel DATOS (tecla B / boton DATOS): 6 pestanas sobre la API REAL verificada
 // de AnalysisMap. Replica 1:1 las pestanas del visor HTML (Sismo, Mom-Curv,
-// P-M, Reacciones, Tributarias, Diagramas) en una ventana derecha como #datosPanel.
+// P-M, Reacciones, Tributarias) en una ventana derecha como #datosPanel.
 public class DataPanel : MonoBehaviour
 {
     public bool activo;
     string caso = "COMBO";
     string[] casos = { "COMBO", "G", "Q", "EX", "EY" };
-    string[] tabs = { "Sismo", "Mom-Curv", "P-M", "Reacciones", "Tributarias", "Diagramas" };
+    string[] tabs = { "Sismo", "Mom-Curv", "P-M", "Reacciones", "Tributarias" };
     int tab;
     Vector2 scroll;
 
     string sismoCaso = "EX";
     string pmSec = "";
-    string diagElem = "viga";
     string tribuQ = "";
 
     Vector2 tableScroll = Vector2.zero;
@@ -40,7 +39,7 @@ public class DataPanel : MonoBehaviour
         Rect area = ElementInfoStyle.PanelRect();
         ElementInfoStyle.DataArea = area;
         GUISkin previous = ElementInfoStyle.Begin(area);
-        bool close = ElementInfoStyle.Header("Datos del análisis", "RESULTADOS  /  CONSULTA POR CATEGORÍA");
+        bool close = ElementInfoStyle.Header("Datos del anÃ¡lisis", "RESULTADOS  /  CONSULTA POR CATEGORÃA");
         GUILayout.Space(10);
         for (int row = 0; row < tabs.Length; row += 3)
         {
@@ -59,8 +58,7 @@ public class DataPanel : MonoBehaviour
             case 1: TabMomCurv(); break;
             case 2: TabPM(); break;
             case 3: TabReacciones(); break;
-            case 4: TabTributaria(); break;
-            case 5: TabDiagramas(); break;
+case 4: TabTributaria(); break;
         }
 
         GUILayout.EndScrollView();
@@ -127,8 +125,8 @@ public class DataPanel : MonoBehaviour
         double k0 = n > 1 ? (p.M_fiber[1] - p.M_fiber[0]) / (p.phi_1m[1] - p.phi_1m[0]) : 0;
         double Mfin = p.M_fiber[n - 1];
         double phimax = p.phi_1m[n - 1];
-        GUILayout.Label("Rigidez inicial (EI~) = " + Fmt(k0 / 1000.0, 0) + " MN·m²  |  " +
-                        "M_ultimo = " + Fmt(Mfin, 1) + " kN·m a phi = " + Fmt(phimax, 4) + " 1/m  |  " +
+        GUILayout.Label("Rigidez inicial (EI~) = " + Fmt(k0 / 1000.0, 0) + " MNÂ·mÂ²  |  " +
+                        "M_ultimo = " + Fmt(Mfin, 1) + " kNÂ·m a phi = " + Fmt(phimax, 4) + " 1/m  |  " +
                         "convergencia " + (p.n_ok ? "OK" : "n/a"));
     }
 
@@ -164,8 +162,8 @@ public class DataPanel : MonoBehaviour
                                      color = new Color(1f, 0.85f, 0.2f, 1f) };
         Rect rc = GUILayoutUtility.GetRect(488, 320);
         Plot2D.DrawMulti(rc, "P-M " + pmSec + " (fibra vs H.A.)", "P [kN] / M [kN-m]", true, fib, ha);
-        GUILayout.Label("Cian: fibra  ·  Naranja: bloque H.A. (alpha1 = " +
-                        (p.alpha1.HasValue ? Fmt(p.alpha1.Value, 2) : "-") + " · beta1 = " +
+        GUILayout.Label("Cian: fibra  Â·  Naranja: bloque H.A. (alpha1 = " +
+                        (p.alpha1.HasValue ? Fmt(p.alpha1.Value, 2) : "-") + " Â· beta1 = " +
                         (p.beta1.HasValue ? Fmt(p.beta1.Value, 2) : "-") + ")");
 
         if (hasFib)
@@ -176,7 +174,7 @@ public class DataPanel : MonoBehaviour
                 if (p.P_fiber[i] < pT) pT = p.P_fiber[i];
                 if (p.P_fiber[i] > pC) pC = p.P_fiber[i];
             }
-            GUILayout.Label("Puntas fibra: traccion = " + Fmt(pT, 0) + " kN · compresion = " + Fmt(pC, 0) + " kN");
+            GUILayout.Label("Puntas fibra: traccion = " + Fmt(pT, 0) + " kN Â· compresion = " + Fmt(pC, 0) + " kN");
         }
     }
 
@@ -198,7 +196,7 @@ public class DataPanel : MonoBehaviour
 
         // Pintar en 3D: espejo del checkbox del visor (paintReactions/skin).
         bool pintar = AnalysisMode.Current != null && AnalysisMode.Current.PintarReac;
-        bool np = ElementInfoStyle.Choice(pintar, "Reacciones 3D · " + (pintar ? "visibles" : "ocultas"));
+        bool np = ElementInfoStyle.Choice(pintar, "Reacciones 3D Â· " + (pintar ? "visibles" : "ocultas"));
         if (AnalysisMode.Current != null && np != pintar) AnalysisMode.Current.SetPintarReac(np);
 
         Dictionary<int, double[]> rmap;
@@ -222,7 +220,7 @@ public class DataPanel : MonoBehaviour
         foreach (double[] t in rows)
             cells.Add(new[] { t[0].ToString("F0"), Fmt(t[1], 1), Fmt(t[2], 1) });
         DrawTableH(new[] { "Apoyo", "R_vert [kN]", "|R| [kN]" }, cells, ws);
-        GUILayout.Label(rows.Count + " apoyos en el suelo (z=0) · Σ R_vert(" + caso + ") = " + Fmt(sum, 1) + " kN.");
+        GUILayout.Label(rows.Count + " apoyos en el suelo (z=0) Â· Î£ R_vert(" + caso + ") = " + Fmt(sum, 1) + " kN.");
     }
 
     // ------------------- TAB 5: TRIBUTARIAS -------------------
@@ -231,7 +229,7 @@ public class DataPanel : MonoBehaviour
         if (AnalysisMap.Tribu == null || AnalysisMap.Tribu.Count == 0)
         { GUILayout.Label("Sin tributarias en analysis_map."); return; }
 
-        ElementInfoStyle.Section("TRIBUTARIAS POR VIGA (metodo 45°)");
+        ElementInfoStyle.Section("TRIBUTARIAS POR VIGA (metodo 45Â°)");
         GUILayout.BeginHorizontal();
         GUILayout.Label("Buscar viga id:");
         tribuQ = GUILayout.TextField(tribuQ, GUILayout.Width(120));
@@ -256,51 +254,6 @@ public class DataPanel : MonoBehaviour
         DrawTableH(new[] { "Viga", "Sec.", "A_trib[m2]", "W_G[kN]", "W_Q[kN]", "p_G[kN/m]", "p_Q[kN/m]" },
                    cells, ws);
         GUILayout.Label(ids.Count + " vigas con carga de losa (G y Q) sobre " + AnalysisMap.Tribu.Count + " totales.");
-    }
-
-    // ------------------- TAB 6: DIAGRAMAS 2D -------------------
-    // Mismo dibujo que el visor HTML (drawDiagramPanels): N/V/M apilados.
-    void TabDiagramas()
-    {
-        if (AnalysisMap.Diagramas == null || AnalysisMap.Diagramas.Count == 0)
-        { GUILayout.Label("Sin diagramas en analysis_map."); return; }
-
-        ElementInfoStyle.Section("DIAGRAMAS 2D (N / V / M apilados)");
-
-        // selector de caso (los disponibles en el mapa)
-        List<string> casosDisp = AnalysisMap.Diagramas.Keys.ToList();
-        if (!casosDisp.Contains(caso)) caso = casosDisp[0];
-        GUILayout.BeginHorizontal();
-        GUILayout.Label("Caso:");
-        foreach (string c in casosDisp)
-        {
-            bool b = ElementInfoStyle.Choice(caso == c, c);
-            if (b) caso = c;
-        }
-        GUILayout.EndHorizontal();
-
-        GUILayout.BeginHorizontal();
-        GUILayout.Label("Elem:");
-        foreach (string e in new[] { "viga", "columna", "muro" })
-        {
-            bool b = ElementInfoStyle.Choice(diagElem == e, e);
-            if (b) diagElem = e;
-        }
-        GUILayout.EndHorizontal();
-
-        AnalysisMap.DiagInfo d = AnalysisMap.Diagrama(caso, diagElem);
-        if (d == null || d.x == null || d.x.Length == 0)
-        { GUILayout.Label("Sin diagrama " + diagElem + " para el caso " + caso + "."); return; }
-
-        Rect rc = GUILayoutUtility.GetRect(488, 360);
-        Plot2D.DrawDiag(rc, d);
-
-        string info = diagElem + " " + d.tag + " · " + d.seccion + " · L " + d.L.ToString("F2") + " m";
-        if (!string.IsNullOrEmpty(d.piso)) info += " · " + d.piso;
-        if (d.hasQ) info += " · q = " + Fmt(d.q, 3) + " kN/m · resid V = " + Fmt(d.resid, 2) +
-                            " · resid Mj = " + Fmt(d.resMJ, 2);
-        GUILayout.Label(info);
-        GUILayout.Label("x sobre el elemento [m]. N verde, V naranja, M cian (maximos marcados).");
     }
 
     // ------------------- helpers de tabla y numeros -------------------
