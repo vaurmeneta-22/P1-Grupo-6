@@ -519,9 +519,15 @@ SHA-256 del APK:
 ED31BB9DE6C097DEE0FD56B18E6C53C6CFB0FD72D7522367A787D33923FB1DBC
 ~~~
 
-La compilación se ejecuta mediante
-[Compilar_Viga_AR_v4.cmd](../Compilar_Viga_AR_v4.cmd), que llama a
-[scripts/build_ar_results.ps1](../scripts/build_ar_results.ps1).
+La compilación se ejecuta desde la raíz del repositorio con
+[scripts/build_ar_results.ps1](../scripts/build_ar_results.ps1):
+
+~~~powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_ar_results.ps1
+~~~
+
+Los lanzadores locales .cmd de compilación v2/v3/v4 y publicación se excluyen
+de GitHub. Los scripts PowerShell conservan el procedimiento reproducible.
 El script verifica que el APK sea nuevo y que el registro informe éxito.
 La compilación y la firma no sustituyen la prueba de visualización en el teléfono.
 
@@ -585,14 +591,17 @@ La compilación y la firma no sustituyen la prueba de visualización en el telé
 
 ---
 
-## 7. Cierre y próximos pasos
+## 7. Plan final
 
 La Semana 6 permitió pasar del prototipo con marker a una representación de
 la viga 185 a escala real, colocable y ajustable en el entorno. La confirmación
 del usuario respalda el funcionamiento de v2 y de los diagramas M/V de v3.
 La versión v4 amplía la consulta de resultados sin cambiar el análisis del edificio.
 
-Para completar la validación física:
+### 7.1 Núcleo — cierre de la entrega
+
+El núcleo reúne las comprobaciones necesarias para demostrar la colocación,
+la correspondencia con los resultados estructurales y el alcance real de la app.
 
 - [x] Colocación y ajuste funcionales confirmados en teléfono, versión v2.
 - [x] Diagramas de momento y corte confirmados en teléfono, versión v3.
@@ -608,3 +617,35 @@ Para completar la validación física:
 origen de la sesión AR, la escala 1:1, la rotación y traslación manuales, la
 función del anchor, el procesamiento que realiza el teléfono y el análisis
 estructural calculado previamente.
+
+### 7.2 Polish — mejoras de presentación y uso
+
+Estas mejoras se realizan después de comprobar el núcleo y según lo observado
+en el teléfono:
+
+- Revisar el tamaño y contraste de las etiquetas de resultados bajo distintas
+  condiciones de iluminación.
+- Mejorar la distribución del panel inferior para facilitar el acceso a casos,
+  vistas y controles sin cubrir la viga.
+- Revisar la legibilidad de los diagramas y la distinción entre geometría real
+  y resultados amplificados.
+- Preparar un recorrido breve de demostración: colocar, ajustar, fijar, caminar
+  alrededor y consultar resultados.
+- Incorporar capturas con pie de figura que indiquen versión, ID, caso y unidades.
+
+Estas tareas son mejoras propuestas; no se presentan como funcionalidades
+adicionales ya implementadas.
+
+### 7.3 Honors — extensiones opcionales
+
+Las siguientes extensiones quedan fuera del cierre mínimo de esta entrega:
+
+- Identificar automáticamente el elemento físico y asociarlo con su ID del modelo.
+- Permitir seleccionar y visualizar otras vigas con sus propios resultados.
+- Investigar anclas persistentes y recuperación de la ubicación entre sesiones.
+- Incorporar calibración con dos referencias físicas para reducir el error
+  de orientación en elementos largos.
+- Representar un sector del edificio con varios elementos y consulta individual.
+
+Cada extensión deberá comprobarse con datos y pruebas físicas antes de declararse
+validada. Las curvas P-M se mantienen fuera del alcance de la app AR actual.

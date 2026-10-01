@@ -352,20 +352,18 @@ imprimir un QR ni un marker para colocarla.
 
 1. Completar la instalación de módulos y paquetes descrita arriba.
 2. Cerrar el editor Unity si tiene este proyecto abierto.
-3. Ejecutar con doble clic **Compilar_Viga_AR_v4.cmd**, en la raíz del repositorio.
+3. Abrir PowerShell en la raíz del repositorio y ejecutar el comando indicado abajo.
 4. Esperar a que indique que el APK fue creado; conservar el registro si falla.
 
 | Archivo | Ubicación |
 |---|---|
-| Lanzador | [Compilar_Viga_AR_v4.cmd](Compilar_Viga_AR_v4.cmd) |
 | Script de compilación | [scripts/build_ar_results.ps1](scripts/build_ar_results.ps1) |
 | Registro | Unity/Builds/AR_Resultados_v4_build.log |
 | APK | Unity/Builds/P1_Grupo6_AR_Resultados_v4.apk |
 
 El script apunta a Unity 6000.6.0f1 instalado en la ruta estándar de Windows.
 En otro computador, comprobar la variable **unityExe** de build_ar_results.ps1.
-El lanzador .cmd de esta entrega contiene una ruta absoluta al script; adaptar
-esa ruta si se mueve el repositorio. También se puede ejecutar desde la raíz:
+Los lanzadores locales .cmd se excluyen de GitHub. Ejecutar desde la raíz:
 
 ~~~powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_ar_results.ps1

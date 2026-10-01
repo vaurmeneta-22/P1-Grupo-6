@@ -81,3 +81,9 @@ unity/unity_build_log.txt
 # Generated Unity native build cache and Python test cache
 Unity/.utmp/
 .pytest_cache/
+
+# Local Windows launchers (keep out of GitHub)
+/Compilar_Viga_AR_v2.cmd
+/Compilar_Viga_AR_v3.cmd
+/Compilar_Viga_AR_v4.cmd
+/Publicar_GitHub.cmd
