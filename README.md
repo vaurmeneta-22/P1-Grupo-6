@@ -237,3 +237,173 @@ Issue → Plan → Build → Test → Review → Merge
 - [Agentes IA](AGENTS.md)
 - [Avance Semana 3 (entregable)](reports/semana03.md) — casos base, curvas M-φ/P-M, verificación RC y demanda-capacidad
 - [Avance Semana 4 (entregable)](reports/semana04.md) — diagramas 2D M/V/N en el visor, auditoría de la convención de esfuerzos de extremo y **traspaso completo del visor a Unity** (modo análisis, HUD, doble clic P-M / N-V-M-DEF y panel DATOS)
+
+
+---
+
+## Instalación completa de Unity y complementos para Android/AR
+
+La versión con la que se compiló y verificó la app es **Unity 6000.6.0f1**.
+Está registrada en [ProjectVersion.txt](Unity/ProjectSettings/ProjectVersion.txt).
+Para reproducir esta entrega, instalar esa versión y abrir la carpeta **Unity/**
+del repositorio como proyecto existente.
+
+### 1. Descargas desde Unity Hub
+
+En **Unity Hub → Installs/Instalaciones → Unity 6000.6.0f1 → Add modules/Agregar módulos**,
+seleccionar:
+
+| Módulo que se debe descargar | Para qué se utiliza |
+|---|---|
+| **Android Build Support** | Permite generar la aplicación Android. |
+| **Android SDK & NDK Tools** — dentro de Android Build Support | Incluye las herramientas de Android y la compilación nativa requerida por IL2CPP. |
+| **OpenJDK** — dentro de Android Build Support | Incluye Java para Gradle y la generación del APK. |
+
+Los tres deben quedar instalados en **la misma versión del editor**.
+Si Unity ya está instalado, se pueden agregar desde ese menú sin reinstalar
+el proyecto. Unity recomienda utilizar los SDK, NDK y JDK que instala Hub para
+mantener las versiones compatibles.
+[Documentación oficial: dependencias Android](https://docs.unity.com/en-us/engine/6000.3/manual/platform-specific/android/getting-started/sdksetup/install-dependencies).
+
+En Unity, revisar **Edit → Preferences → External Tools** y seleccionar las
+herramientas Android instaladas con Unity. La licencia del editor debe estar
+activa en Unity Hub para abrir el proyecto y compilar.
+
+**Complemento opcional:** Visual Studio con el workload **Game development with Unity**
+para editar y depurar C#. La configuración del proyecto está en
+[Unity/.vsconfig](Unity/.vsconfig). Para instalar un APK ya generado en el teléfono,
+basta el APK: el teléfono no necesita Unity ni las herramientas de desarrollo.
+
+### 2. Paquetes dentro de Unity: Package Manager
+
+Al abrir el proyecto por primera vez, Package Manager descarga automáticamente
+los paquetes declarados en [manifest.json](Unity/Packages/manifest.json).
+Esperar a que termine la importación. Las versiones resueltas se conservan en
+[packages-lock.json](Unity/Packages/packages-lock.json).
+
+| Paquete | Identificador | Versión de esta entrega | Uso |
+|---|---|---|---|
+| **AR Foundation** | com.unity.xr.arfoundation | **6.6.2** | Sesión AR, planos, raycasts, cámara y anclas. |
+| **Google ARCore XR Plugin** | com.unity.xr.arcore | **6.6.2** | Proveedor AR para Android. |
+| **Input System** | com.unity.inputsystem | **1.20.0** | Entrada y actualización de posición/orientación de la cámara AR. |
+| **Universal Render Pipeline — URP** | com.unity.render-pipelines.universal | **17.6.0** | Renderizado y materiales del proyecto. |
+| **XR Plug-in Management** | com.unity.xr.management | **4.7.0** | Dependencia resuelta: configuración y activación de ARCore. |
+| **XR Core Utilities** | com.unity.xr.core-utils | **2.6.0** | Dependencia resuelta: XROrigin y utilidades XR. |
+| **Device Simulator Devices** | com.unity.device-simulator.devices | **1.0.1** | Previsualización de la interfaz móvil en el editor. |
+
+XR Plug-in Management y XR Core Utilities se resuelven como dependencias; no
+hace falta descargarlos por separado si el proyecto abre correctamente.
+Para revisar o restaurar un paquete, abrir **Package Manager**, buscarlo por
+nombre o utilizar **Install package by name** con el identificador de la tabla.
+Conservar las versiones registradas para reproducir esta entrega.
+
+AR Foundation requiere un proveedor de plataforma para funcionar en el teléfono;
+en este proyecto es ARCore.
+[Documentación oficial: configuración XR](https://docs.unity.com/en-us/engine/6000.7/manual/xr/configuring-project-for).
+
+### 3. Ajustes del proyecto que deben comprobarse
+
+- **Build Profiles:** plataforma Android.
+- **Project Settings → XR Plug-in Management → Android:** ARCore habilitado y
+  **Initialize XR on Startup** activo.
+- **Player → Active Input Handling:** Both, para conservar la entrada del visor
+  y el seguimiento de cámara mediante Input System.
+- **Player → Scripting Define Symbols:** USE_AR_FOUNDATION para Android.
+- **Scripting Backend:** IL2CPP; **Target Architectures:** ARM64.
+- **Minimum API Level:** Android API 29, equivalente a Android 10.
+- **Graphics APIs:** OpenGL ES 3 para el APK AR.
+- **URP:** utilizar los assets de renderizado incluidos en el proyecto. El
+  compilador AR selecciona Mobile_RPAsset durante el build.
+
+La escena AR utiliza ARSession, ARInputManager, XROrigin, ARPlaneManager,
+ARRaycastManager y ARAnchorManager. La cámara incorpora TrackedPoseDriver,
+ARCameraManager y ARCameraBackground. El script
+[ARPlacementSetup.cs](Unity/Assets/Editor/ARPlacementSetup.cs) crea y comprueba
+esta configuración.
+
+El Device Simulator sirve para revisar la interfaz. La detección de planos y
+la estabilidad del seguimiento se validan en un teléfono compatible con ARCore.
+
+## Realidad aumentada: Viga AR v4 — Semana 6
+
+La entrada **AR Foundation + Image Tracking** de la tabla de tecnologías describe
+el prototipo inicial con marcador. **La app vigente utiliza detección de planos,
+colocación manual y ARAnchor.** La viga está asociada al ID 185 y no requiere
+imprimir un QR ni un marker para colocarla.
+
+### Alcance y resultados
+
+- **Viga 185:** nodos 60–70, sección 60 × 80 cm y longitud 10 m, a escala 1:1.
+- Colocación sobre un plano horizontal y ajuste manual de posición/giro.
+- Anclaje al entorno para recorrer la viga con el teléfono.
+- **Momento My** en kN·m; **corte Vz** y **axial N** en kN.
+- **Desplazamientos nodales** en mm, con amplificación visual ajustable.
+- **Área tributaria:** únicamente el valor en m²; para la viga 185, 20.56 m².
+- **Cargas:** carga distribuida de losa y aportes del peso propio de esta viga
+  en sus nodos, según el caso.
+- Selector **G/Q/EX/EY/COMBO**. Los diagramas conservan los tres tramos FE de la
+  viga completa: tags 185, 300082 y 300083.
+- Los resultados proceden del JSON incorporado al APK. OpenSees se ejecutó
+  previamente en el computador.
+- Las curvas P-M permanecen en el laboratorio de escritorio y no se incluyen
+  en la interfaz de esta app AR.
+
+### Compilar el APK en Windows
+
+1. Completar la instalación de módulos y paquetes descrita arriba.
+2. Cerrar el editor Unity si tiene este proyecto abierto.
+3. Ejecutar con doble clic **Compilar_Viga_AR_v4.cmd**, en la raíz del repositorio.
+4. Esperar a que indique que el APK fue creado; conservar el registro si falla.
+
+| Archivo | Ubicación |
+|---|---|
+| Lanzador | [Compilar_Viga_AR_v4.cmd](Compilar_Viga_AR_v4.cmd) |
+| Script de compilación | [scripts/build_ar_results.ps1](scripts/build_ar_results.ps1) |
+| Registro | Unity/Builds/AR_Resultados_v4_build.log |
+| APK | Unity/Builds/P1_Grupo6_AR_Resultados_v4.apk |
+
+El script apunta a Unity 6000.6.0f1 instalado en la ruta estándar de Windows.
+En otro computador, comprobar la variable **unityExe** de build_ar_results.ps1.
+El lanzador .cmd de esta entrega contiene una ruta absoluta al script; adaptar
+esa ruta si se mueve el repositorio. También se puede ejecutar desde la raíz:
+
+~~~powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_ar_results.ps1
+~~~
+
+La aplicación se genera como **Viga AR v4**, versión **0.4.0**, código **4**,
+paquete **com.grupo6.p1.arplacement**. Antes del build se comprueban escena,
+dimensiones, identidad, independencia de cámara y resultados de los cinco casos.
+
+### Instalar y utilizar en el teléfono
+
+1. Usar un Android compatible con ARCore y Android 10 o superior. Tener
+   **Google Play Services for AR** instalado/actualizado.
+2. Transferir el APK al teléfono, por ejemplo mediante Drive, e instalarlo.
+   V4 conserva el paquete y la firma de v2/v3 para instalarse como actualización.
+3. Abrir la app y permitir el acceso a la cámara.
+4. Mover lentamente el teléfono mirando una superficie horizontal iluminada
+   y con detalles. Apuntar con la mira y pulsar **Colocar viga aquí**.
+5. Comprobar la ubicación caminando alrededor. Usar **Ajustar posición** y
+   **Fijar posición** para alinearla.
+6. Seleccionar **Momento**, **Corte**, **Axial**, **Desplaz.** o **Cargas**, y el
+   caso de análisis. Deslizar el panel inferior si algún control queda oculto.
+
+**Estado de validación:** colocación v2 y diagramas M/V v3 confirmados por el
+usuario en Xiaomi Redmi Note 12 Pro. V4 compilada y firma verificada; faltan
+confirmar sus nuevas vistas en el teléfono y medir el error de alineamiento.
+
+**Límites:** el anchor puede presentar deriva; no se guardan anclas entre sesiones.
+Las ordenadas de diagramas, desplazamientos y flechas se amplifican visualmente,
+mientras la geometría permanece a escala real. Los desplazamientos se unen
+linealmente entre nodos y las flechas de peso propio no incluyen las cargas de
+los elementos vecinos.
+
+## Documentación complementaria
+
+- [Avance Semana 1](reports/semana01.md) — benchmark y convenciones.
+- [Avance Semana 2](reports/semana02.md) — modelo y áreas tributarias.
+- [Avance Semana 5](reports/semana05.md) — laboratorio interactivo, modificaciones y superposición.
+- [Avance Semana 6](reports/semana06.md) — flujo AR, transformaciones, precisión, resultados, QA y errores conocidos.
+- [AR: colocación v2](reports/AR_Colocacion_v2.md) — colocación, ajuste y anclaje.
+- [AR: diagramas v3](reports/AR_Diagramas_v3.md) — diagramas M/V y verificación de resultados.

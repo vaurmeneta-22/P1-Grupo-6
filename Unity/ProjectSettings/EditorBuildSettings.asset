@@ -8,5 +8,12 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/SampleScene.unity
     guid: 99c9720ab356a0642a771bea13969a05
+  - enabled: 1
+    path: Assets/Scenes/ARViga185.unity
+    guid: d34480066f905c34f8508c9d74cbab7e
   m_configObjects:
+    UnityEditor.XR.ARCore.ARCoreSettings: {fileID: 11400000, guid: c20b873988419934e88542f64b1e3150, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+    com.unity.xr.arfoundation.simulation_settings: {fileID: 11400000, guid: b9211cdfbc5520c4ab6fa7cb9e9841ba, type: 2}
+    com.unity.xr.management.loader_settings: {fileID: 11400000, guid: b22df793371577841b44fac51d7b2521, type: 2}
+    xr.sdk.mock-hmd.settings: {fileID: 11400000, guid: 74d357cb33bb8d04e9f0728c0ff46413, type: 2}

@@ -77,3 +77,7 @@ opensees/results/*.eig
 unity_build_log.txt
 unity/unity_build_log.txt
 
+
+# Generated Unity native build cache and Python test cache
+Unity/.utmp/
+.pytest_cache/
