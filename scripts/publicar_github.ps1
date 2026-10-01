@@ -23,7 +23,7 @@ try {
     & git diff --cached --quiet
     $diffCode = $LASTEXITCODE
     if ($diffCode -eq 1) {
-        & git diff --cached --stat
+        & git --no-pager diff --cached --stat
         & git commit -m 'feat: agrega viga AR a escala real, resultados v4 y cierre de semana 6'
         if ($LASTEXITCODE -ne 0) { throw 'No se pudo crear el commit.' }
     } elseif ($diffCode -ne 0) {
