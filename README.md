@@ -24,10 +24,10 @@ El visor oficial del proyecto es Unity. La interfaz principal se organiza en cua
 
 - **6 diafragmas rígidos** (niveles 0.00, 3.56, 7.12, 10.68, 14.24 y 17.8 m) por la huella real de piso: plano casi transparente con borde cian y triangulación de polígono cóncavo (tecla `D`).
 - **HUD del visor** (`ViewerHud.cs`): barra superior con `Visualización`, `Modificaciones`, `Análisis` y `Datos`; información arriba-izquierda; leyenda de colores y casillas para alternar capas.
-- **Capas alternables por familia** a través de teclas o de las casillas de la leyenda.
+- **Capas alternables por familia** a través de teclas o de las casillas de la leyenda; incluye un terreno escalonado que sigue las dos cotas de las zapatas y se puede ocultar desde `Terreno`.
 - **Buscador de elementos** en Visualización: permite elegir tipo e ID, enfoca automáticamente el elemento, lo resalta en amarillo y restaura vista/materiales con `Limpiar`.
 - **Inspector por clic / doble clic**: al hacer clic sobre una viga, columna, muro o losa se muestra un panel con sus propiedades y, en vigas, el área tributaria y las **cargas** G (permanente) y Q (sobrecarga) calculadas en el análisis. En el modo análisis el **hover** resalta en magenta el elemento bajo el puntero y el **doble clic** sobre una columna/muro de hormigón dibuja la **curva P-M** con su punto de demanda, mientras que sobre una viga o un **metálico** reporta N/V/M/DEF de ambos extremos (`PickHighlight.cs`).
-- **Modo modificaciones** (`ModificationMode.cs`): ejecuta desde Unity las variantes Base, Mod A y Mod B, muestra log, guarda historial y recarga la escena al terminar.
+- **Modo modificaciones** (`ModificationMode.cs`): ejecuta desde Unity Base, Mod A, Mod B y Caso C, muestra el registro, guarda historial y recarga la escena al terminar. Incluye **Honor Track 4**, que inicia un backend Python/OpenSees local en segundo plano, envía la modificación por HTTP y muestra validación, errores, reproducibilidad y comparación directa. Caso C cambia la columna 66 de 70×70 a 40×40 cm.
 - **Modo análisis**: superpone al modelo los resultados del análisis lineal con OpenSees — deformada y diagramas de momento (M), axial (N) y corte (V).
 - **SQ4 carga móvil**: en Análisis, doble clic sobre una losa activa martillo/carga móvil arrastrable, vigas receptoras, reparto de `P_user`, conservación de carga y flechas de transferencia.
 - **Panel DATOS** (tecla `B` o botón `DATOS`, `DataPanel.cs`): ventana derecha con **6 pestañas** — Sismo (12 columnas con ux/uy/Rz por piso), Mom-Curv, P-M (fibra vs H.A.), Reacciones (con *Pintar en 3D*), Tributarias y **Diagramas 2D N/V/M** apilados — alimentadas por la API real de `AnalysisMap`.
@@ -183,14 +183,15 @@ Luego copiar/sincronizar el mapa con `Unity/Assets/StreamingAssets/analysis_map.
 3. Pulsar Play para ver el edificio: columnas, vigas, muros, lozas y los 6 diafragmas.
 4. Usar las pestañas `Visualización`, `Modificaciones`, `Análisis` y `Datos`.
 5. En `Visualización`, buscar por tipo+ID o hacer clic en un elemento para abrir su inspector.
-6. En `Modificaciones`, aplicar `Base`, `Mod A` o `Mod B` desde Unity.
+6. En `Modificaciones`, aplicar `Base`, `Mod A`, `Mod B` o `Caso C` desde Unity.
 7. En `Análisis`, usar sliders `G/Q/EX/EY`, deformada, M/N/V, reacciones y SQ4.
 
 Si se actualizó `Edificio.json`, copiarlo a `Unity/Assets/StreamingAssets/Edificio.json`. El inspector por clic lee sus cargas desde `StreamingAssets/tributary_map.js`; ambos deben estar sincronizados. El modo análisis lee `StreamingAssets/analysis_map.json`.
 
 ### Modificaciones reproducibles
 
-Desde Unity: pestaña **Modificaciones** → `Restaurar Base`, `Aplicar Mod A` o `Aplicar Mod B`.
+Desde Unity: pestaña **Modificaciones** → `Restaurar Base`, `Aplicar Mod A`, `Aplicar Mod B` o `Aplicar Caso C`.
+Para la pauta H4, abre **Modificaciones → Honor Track 4**, elige Caso A (viga 147: 50×75 cm), B (apoyo articulado en nodo 1) o C (columna 66: 40×40 cm), y pulsa **Conectar backend**. Unity se conecta a un servicio activo o inicia `scripts/backend_opensees.py` oculto en segundo plano. Una vez conectado, pulsa **Ejecutar verificación** para enviar el escenario elegido y recibir los resultados. Cada escenario recalcula G/Q/EX/EY/COMBO y compara contra una corrida directa y una repetición. **Desconectar backend** cierra el proceso iniciado por Unity; también se cierra al salir de Play/aplicación. No se requiere abrir una terminal. El reporte detallado queda en `resultados/12_h4/verificacion_h4.json`.
 
 También se puede ejecutar por terminal:
 
@@ -203,6 +204,7 @@ python scripts/ejecutar_modificacion.py --restore
 
 - **Mod A:** viga 147, sección 60×80 → 50×75 cm.
 - **Mod B:** nodo 1, apoyo empotrado → articulado (`DOF=[1,1,1,0,0,0]`).
+- **Caso C:** columna 66, sección 70×70 → 40×40 cm. Genera la curva P-M específica para el ID 66 y reanaliza G/Q/EX/EY/COMBO.
 - Cambiar sección/apoyo requiere reanálisis; mover sliders de casos ya calculados no.
 
 ## Conexiones y camino de carga
@@ -403,5 +405,6 @@ los elementos vecinos.
 - [Avance Semana 2](reports/semana02.md) — modelo y áreas tributarias.
 - [Avance Semana 5](reports/semana05.md) — laboratorio interactivo, modificaciones y superposición.
 - [Avance Semana 6](reports/semana06.md) — flujo AR, transformaciones, precisión, resultados, QA y errores conocidos.
+- [Avance Semana 7](reports/semana07.md) — reanálisis OpenSees desde Unity, backend local, casos A/B/C y evidencia de validación.
 - [AR: colocación v2](reports/AR_Colocacion_v2.md) — colocación, ajuste y anclaje.
 - [AR: diagramas v3](reports/AR_Diagramas_v3.md) — diagramas M/V y verificación de resultados.

@@ -8,6 +8,7 @@ SIN tocar la linea base. Cada modificacion = 1 variante reproducible.
   Mod A  ->  Edificio_mod_A.json   Viga 147 : seccion 60x80 -> 50x75 cm
   Mod B  ->  Edificio_mod_B.json   Columna 1 (nodo 1): base EMPOTRADA 1,1,1,1,1,1
                                     -> base ARTICULADA 1,1,1,0,0,0 (giros libres)
+  Mod C  ->  Edificio_mod_C.json   Columna 66: seccion 70x70 -> 40x40 cm + 8Ø20
 
 Uso:
     python scripts/generar_modificaciones.py
@@ -76,9 +77,24 @@ def main():
             s["DOF"] = [1, 1, 1, 0, 0, 0]
     guardar(mod_b, os.path.join(REPO, "Edificio_mod_B.json"))
 
+    # --- Mod C: reducción didáctica de sección y armadura de columna 66 ---
+    mod_c = copy.deepcopy(base)
+    columna_c = next((e for e in mod_c["elements"]
+                      if e["id"] == 66 and e["type"] == "column"), None)
+    if columna_c is None:
+        raise ValueError("No existe la columna 66 en Edificio.json")
+    columna_c["section"] = "40x40"
+    columna_c["b"] = 40.0
+    columna_c["h"] = 40.0
+    guardar(mod_c, os.path.join(REPO, "Edificio_mod_C.json"))
+
     mostrar_dif(base, mod_a, "Mod A -> Edificio_mod_A.json (rigidez viga 147)")
     mostrar_dif(base, mod_b, "Mod B -> Edificio_mod_B.json (apoyo columna 1)")
-    print("\nOK: Edificio_mod_A.json y Edificio_mod_B.json generados "
+    col_base = next(e for e in base["elements"] if e["id"] == 66)
+    print("\n=== Mod C -> Edificio_mod_C.json (columna 66) ===")
+    print(f"  columna 66 base: section={col_base['section']} b={col_base['b']}cm h={col_base['h']}cm")
+    print(f"  columna 66 mod : section={columna_c['section']} b={columna_c['b']}cm h={columna_c['h']}cm")
+    print("\nOK: Edificio_mod_A.json, Edificio_mod_B.json y Edificio_mod_C.json generados "
           "(linea base intocada).")
 
 

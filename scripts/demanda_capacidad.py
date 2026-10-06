@@ -125,10 +125,14 @@ def main():
         sec = el["section"]
         Pcap = Mcap = None
         if el["type"] == "column":
-            clave = ("columna_id70" if el.get("id70")
-                     else "columna_borde" if el.get("borde") else "columna")
-            Pcap = cap.get(clave, {}).get("P")
-            Mcap = cap.get(clave, {}).get("M")
+            # Priorizar una curva calculada para este elemento (Caso C: columna 66).
+            curva_elemento = cap.get("por_elemento", {}).get(str(eid), {})
+            Pcap, Mcap = curva_elemento.get("P"), curva_elemento.get("M")
+            if not Pcap:
+                clave = ("columna_id70" if el.get("id70")
+                         else "columna_borde" if el.get("borde") else "columna")
+                Pcap = cap.get(clave, {}).get("P")
+                Mcap = cap.get(clave, {}).get("M")
         elif el["type"] == "steel_column":
             cur = cap.get("steel", {}).get(sec) or {}
             Pcap = cur.get("P")
@@ -141,7 +145,7 @@ def main():
             "id": eid, "type": el["type"], "section": sec,
             "P_d_kN": P_d, "M_d_kNm": M_d,
             "radio": r, "cap_sec": sec, "borde": bool(el.get("borde")),
-            "id70": bool(el.get("id70")),
+            "id70": bool(el.get("id70")), "Pcap": Pcap, "Mcap": Mcap,
         })
 
     ##############################################################################
@@ -213,12 +217,13 @@ def main():
 
     # figura de la critica
     sec = crit["section"]
-    if crit["type"] == "column":
+    Pcap, Mcap = crit.get("Pcap"), crit.get("Mcap")
+    if not Pcap and crit["type"] == "column":
         clave = ("columna_id70" if crit.get("id70")
                  else "columna_borde" if crit.get("borde") else "columna")
         Pcap = cap.get(clave, {}).get("P")
         Mcap = cap.get(clave, {}).get("M")
-    else:
+    elif not Pcap:
         cur = cap.get("steel", {}).get(sec) or {}
         Pcap = cur.get("P")
         Mcap = cur.get("M")

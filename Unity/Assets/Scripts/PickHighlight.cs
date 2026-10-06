@@ -400,6 +400,11 @@ public class PickHighlight : MonoBehaviour
             GUILayout.Label("Curva P-M de capacidad no disponible para esta seccion.");
             return;
         }
+        if (id == 66 && meta.section == "40x40")
+        {
+            GUILayout.Label("Caso C · columna 66 · curva de fibras específica");
+            ElementInfoStyle.Note("Sección modificada: 40×40 cm. Capacidad P-M recalculada para este elemento.");
+        }
 
         double[] P = MiniJson.NumArrayValue(MiniJson.Get(cur, "P"));
         double[] Mc = MiniJson.NumArrayValue(MiniJson.Get(cur, "M"));
@@ -447,6 +452,13 @@ public class PickHighlight : MonoBehaviour
     {
         if (AnalysisMap.Capacidad == null) return null;
         Dictionary<string, object> C = AnalysisMap.Capacidad;
+        Dictionary<string, object> byElement = MiniJson.AsDict(MiniJson.Get(C, "por_elemento"));
+        object elementCurve;
+        if (byElement != null && byElement.TryGetValue(meta.id.ToString(), out elementCurve))
+        {
+            Dictionary<string, object> specific = MiniJson.AsDict(elementCurve);
+            if (specific != null) return specific;
+        }
         if (meta.id == 70 && C.ContainsKey("columna_id70"))
         {
             Dictionary<string, object> d = MiniJson.AsDict(C["columna_id70"]);

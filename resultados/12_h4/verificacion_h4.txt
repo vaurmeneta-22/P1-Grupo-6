@@ -1,0 +1,13 @@
+H4 — REANÁLISIS OPENSEES
+Caso B · Apoyo articulado en nodo 1
+Fecha: 2026-10-06T01:53:36-03:00
+
+[APROBADO] Modelo válido — El edificio tiene 536 nodos y 722 elementos; el apoyo del nodo 1 está articulado. También se comprobó que rechace una entrada estructural inválida.
+[APROBADO] Errores controlados — Se provocaron dos errores de prueba y ambos fueron detectados. El código 1 significa que se rechazó correctamente el archivo faltante; no es un fallo del análisis.
+[APROBADO] Backend preparó resultados — Python/OpenSees calculó los cinco escenarios para Caso B · Apoyo articulado en nodo 1 y preparó el modelo y el mapa para Unity.
+[APROBADO] Mismos resultados — Se comparó cada escenario con OpenSees ejecutado directamente. La mayor diferencia encontrada fue 0; dentro del límite aceptado.
+[APROBADO] Cálculo repetible — Se repitió el análisis con los mismos datos. La mayor diferencia fue 0; las corridas coinciden dentro del límite aceptado.
+
+Tolerancia comparación: abs 1.0e-08 + rel 1.0e-09 × escala.
+El backend local Python/OpenSees respondió a la solicitud de Unity.
+Reporte detallado: resultados/12_h4/verificacion_h4.json

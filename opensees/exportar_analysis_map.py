@@ -102,6 +102,8 @@ def main():
                     help="etiqueta de la corrida de modificacion: lee "
                          "resultados edificio_full_results_<tag>_*.json y "
                          "escribe analysis_map_<tag>.js/.json")
+    ap.add_argument("--capacity-json", default="",
+                    help="curva P-M específica por elemento que se inserta en capacidad.por_elemento")
     args = ap.parse_args()
     global TAG
     TAG = args.tag
@@ -298,6 +300,19 @@ def main():
         "muro": load_pm("pm_muro_30x356.json"),
         "muros": muros_capacidad,
     }
+    if args.capacity_json:
+        with open(args.capacity_json, encoding="utf-8") as f:
+            pm_element = json.load(f)
+        element_id = pm_element.get("element_id")
+        p_values = pm_element.get("P_kN_fiber", [])
+        m_values = pm_element.get("M_kNm_fiber", [])
+        if element_id is None or not p_values or len(p_values) != len(m_values):
+            raise ValueError("Curva P-M específica por elemento incompleta")
+        capacidad["por_elemento"] = {str(int(element_id)): {
+            "P": p_values, "M": m_values, "seccion": pm_element.get("seccion", ""),
+            "armadura": pm_element.get("armadura", ""),
+            "rho": pm_element.get("rho"),
+            "recubrimiento_centro_barra_mm": pm_element.get("recubrimiento_centro_barra_mm")}}
 
     # Capacidad P-M de acero A240ES para tubos huecos cuadrados.
     FY_STEEL_KPA = 240_000.0   # kPa

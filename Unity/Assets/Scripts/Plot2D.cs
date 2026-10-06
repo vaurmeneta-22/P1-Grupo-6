@@ -7,6 +7,12 @@ using UnityEngine;
 // Ademas: DrawMulti (series multiples) y DrawDiag / DrawPMLab (canvas del visor).
 public static class Plot2D
 {
+    static Texture2D singleCache, multiCache;
+    static double[] singleXCache, singleYCache;
+    static Series[] multiSeriesCache;
+    static int singleWidthCache, singleHeightCache, multiWidthCache, multiHeightCache;
+    static bool multiMirrorCache;
+
     public static Texture2D Make(double[] xs, double[] ys, string title, string unit, int W = 520, int H = 220)
     {
         var tx = new Texture2D(W, H, TextureFormat.RGBA32, false);
@@ -29,8 +35,14 @@ public static class Plot2D
         if (ys != null && ys.Length > 0) { ymin = ymax = ys[0]; for (int i = 1; i < ys.Length; i++) { if (double.IsNaN(ys[i]) || double.IsInfinity(ys[i])) continue; if (ys[i] < ymin) ymin = ys[i]; if (ys[i] > ymax) ymax = ys[i]; } }
         if (xmax - xmin < 1e-9) { xmin -= 1; xmax += 1; }
         if (ymax - ymin < 1e-9) { ymin -= 1; ymax += 1; }
+        bool nonnegativeX = xmin >= 0, nonnegativeY = ymin >= 0;
+        bool nonpositiveX = xmax <= 0, nonpositiveY = ymax <= 0;
         double mx = (xmax - xmin) * 0.08, my = (ymax - ymin) * 0.14;
         xmin -= mx; xmax += mx; ymin -= my; ymax += my;
+        if (nonnegativeX) xmin = 0;
+        if (nonpositiveX) xmax = 0;
+        if (nonnegativeY) ymin = 0;
+        if (nonpositiveY) ymax = 0;
 
         for (int g = 0; g <= 4; g++)
         {
@@ -52,6 +64,7 @@ public static class Plot2D
             int Y0 = y0 + (int)Math.Round((ya - ymin) / (ymax - ymin) * ph);
             int X1 = x0 + (int)Math.Round((xb - xmin) / (xmax - xmin) * pw);
             int Y1 = y0 + (int)Math.Round((yb - ymin) / (ymax - ymin) * ph);
+            Line(tx, X0, Y0 + 1, X1, Y1 + 1, new Color(0.78f, 0.49f, 0.05f, 1f));
             Line(tx, X0, Y0, X1, Y1, ln);
         }
 
@@ -65,13 +78,16 @@ public static class Plot2D
         {
             int X = x0 + (int)Math.Round((xs[imax] - xmin) / (xmax - xmin) * pw);
             int Y = y0 + (int)Math.Round((ys[imax] - ymin) / (ymax - ymin) * ph);
-            for (int a = 0; a <= 8; a++)
-            {
-                tx.SetPixel(Mathf.Clamp(X + a, 0, W - 1), Mathf.Clamp(Y, 0, H - 1), pk);
-                tx.SetPixel(Mathf.Clamp(X - a, 0, W - 1), Mathf.Clamp(Y, 0, H - 1), pk);
-                tx.SetPixel(Mathf.Clamp(X, 0, W - 1), Mathf.Clamp(Y + a, 0, H - 1), pk);
-                tx.SetPixel(Mathf.Clamp(X, 0, W - 1), Mathf.Clamp(Y - a, 0, H - 1), pk);
-            }
+            for (int dy = -5; dy <= 5; dy++)
+                for (int dx = -5; dx <= 5; dx++)
+                    if (dx * dx + dy * dy <= 25)
+                        tx.SetPixel(Mathf.Clamp(X + dx, 0, W - 1),
+                                    Mathf.Clamp(Y + dy, 0, H - 1), pk);
+            for (int dy = -2; dy <= 2; dy++)
+                for (int dx = -2; dx <= 2; dx++)
+                    if (dx * dx + dy * dy <= 4)
+                        tx.SetPixel(Mathf.Clamp(X + dx, 0, W - 1),
+                                    Mathf.Clamp(Y + dy, 0, H - 1), Color.white);
         }
 
         tx.Apply();
@@ -80,17 +96,94 @@ public static class Plot2D
 
     public static void Draw(Rect rc, double[] xs, double[] ys, string title, string unit)
     {
-        var st = new GUIStyle();
-        st.fontSize = 12;
-        st.normal.textColor = new Color(0.95f, 0.95f, 0.95f, 1f);
-        var st2 = new GUIStyle(st);
-        st2.fontSize = 11;
-        st2.normal.textColor = new Color(0.75f, 0.8f, 0.85f, 1f);
-        Texture2D t = Make(xs, ys, title, unit, (int)rc.width, (int)rc.height);
-        GUI.DrawTexture(rc, t);
-        GUI.Label(new Rect(rc.x + 12, rc.y + 6, rc.width - 24, 20), title, st);
-        GUI.Label(new Rect(rc.x + 12, rc.yMax - 22, rc.width - 24, 18), unit, st2);
-        UnityEngine.Object.Destroy(t);
+        var titleStyle = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 14,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleLeft
+        };
+        titleStyle.normal.textColor = new Color(0.93f, 0.96f, 1f, 1f);
+        var tickStyle = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 10,
+            alignment = TextAnchor.MiddleRight,
+            padding = new RectOffset(0, 2, 0, 0)
+        };
+        tickStyle.normal.textColor = new Color(0.60f, 0.69f, 0.78f, 1f);
+        var xTickStyle = new GUIStyle(tickStyle) { alignment = TextAnchor.MiddleCenter };
+        var unitStyle = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 11,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter
+        };
+        unitStyle.normal.textColor = new Color(0.73f, 0.82f, 0.91f, 1f);
+        int width = Mathf.Max(1, Mathf.RoundToInt(rc.width));
+        int height = Mathf.Max(1, Mathf.RoundToInt(rc.height));
+        if (singleCache == null || singleXCache != xs || singleYCache != ys ||
+            singleWidthCache != width || singleHeightCache != height)
+        {
+            if (singleCache != null) UnityEngine.Object.Destroy(singleCache);
+            singleCache = Make(xs, ys, title, unit, width, height);
+            singleXCache = xs; singleYCache = ys;
+            singleWidthCache = width; singleHeightCache = height;
+        }
+        GUI.DrawTexture(rc, singleCache);
+        GUI.Label(new Rect(rc.x + 12, rc.y + 4, rc.width - 24, 22), title, titleStyle);
+        DrawTicks(rc, xs, ys, tickStyle, xTickStyle);
+        GUI.Label(new Rect(rc.x + 48, rc.yMax - 19, rc.width - 60, 16), unit, unitStyle);
+    }
+
+    static void DrawTicks(Rect rc, double[] xs, double[] ys, GUIStyle yStyle, GUIStyle xStyle)
+    {
+        if (xs == null || ys == null || xs.Length == 0 || ys.Length == 0) return;
+        int n = Math.Min(xs.Length, ys.Length);
+        double xmin = xs[0], xmax = xs[0], ymin = ys[0], ymax = ys[0];
+        for (int i = 0; i < n; i++)
+        {
+            if (double.IsNaN(xs[i]) || double.IsInfinity(xs[i]) ||
+                double.IsNaN(ys[i]) || double.IsInfinity(ys[i])) continue;
+            xmin = Math.Min(xmin, xs[i]); xmax = Math.Max(xmax, xs[i]);
+            ymin = Math.Min(ymin, ys[i]); ymax = Math.Max(ymax, ys[i]);
+        }
+        if (xmax - xmin < 1e-9) { xmin -= 1; xmax += 1; }
+        if (ymax - ymin < 1e-9) { ymin -= 1; ymax += 1; }
+        bool nonnegativeX = xmin >= 0, nonnegativeY = ymin >= 0;
+        bool nonpositiveX = xmax <= 0, nonpositiveY = ymax <= 0;
+        double dx = (xmax - xmin) * 0.08, dy = (ymax - ymin) * 0.14;
+        xmin -= dx; xmax += dx; ymin -= dy; ymax += dy;
+        if (nonnegativeX) xmin = 0;
+        if (nonpositiveX) xmax = 0;
+        if (nonnegativeY) ymin = 0;
+        if (nonpositiveY) ymax = 0;
+
+        const float left = 46f, right = 12f, top = 30f, bottom = 38f;
+        float pw = Mathf.Max(1f, rc.width - left - right);
+        float ph = Mathf.Max(1f, rc.height - top - bottom);
+        for (int g = 0; g <= 4; g++)
+        {
+            double fx = g / 4.0;
+            string xv = FormatTick(xmin + (xmax - xmin) * fx);
+            float xp = rc.x + left + pw * (float)fx;
+            float labelX = Mathf.Clamp(xp - 28f, rc.x + 42f, rc.xMax - 66f);
+            GUI.Label(new Rect(labelX, rc.yMax - bottom + 2f, 56f, 15f), xv, xStyle);
+
+            double fy = 1.0 - fx;
+            string yv = FormatTick(ymin + (ymax - ymin) * fy);
+            float yp = rc.y + top + ph * (float)fx - 7f;
+            GUI.Label(new Rect(rc.x + 1f, yp, 40f, 15f), yv, yStyle);
+        }
+    }
+
+    static string FormatTick(double value)
+    {
+        double a = Math.Abs(value);
+        if (a >= 10000) return (value / 1000.0).ToString("0.#") + "k";
+        if (a >= 100) return value.ToString("0");
+        if (a >= 1) return value.ToString("0.#");
+        if (a >= 0.1) return value.ToString("0.00");
+        if (a >= 0.01) return value.ToString("0.000");
+        return value.ToString("0.0000");
     }
 
     static void Line(Texture2D tx, int X0, int Y0, int X1, int Y1, Color c)
@@ -119,17 +212,96 @@ public static class Plot2D
 
     public static void DrawMulti(Rect rc, string title, string unit, bool mirrorX, params Series[] series)
     {
-        var st = new GUIStyle();
-        st.fontSize = 12;
-        st.normal.textColor = new Color(0.95f, 0.95f, 0.95f, 1f);
-        var st2 = new GUIStyle(st);
-        st2.fontSize = 11;
-        st2.normal.textColor = new Color(0.75f, 0.8f, 0.85f, 1f);
-        Texture2D t = MakeMultiTex((int)rc.width, (int)rc.height, mirrorX, series);
-        GUI.DrawTexture(rc, t);
-        GUI.Label(new Rect(rc.x + 12, rc.y + 6, rc.width - 24, 20), title, st);
-        GUI.Label(new Rect(rc.x + 12, rc.yMax - 22, rc.width - 24, 18), unit, st2);
-        UnityEngine.Object.Destroy(t);
+        var st = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 14,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleLeft
+        };
+        st.normal.textColor = new Color(0.93f, 0.96f, 1f, 1f);
+        var tick = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 10,
+            alignment = TextAnchor.MiddleRight,
+            padding = new RectOffset(0, 2, 0, 0)
+        };
+        tick.normal.textColor = new Color(0.60f, 0.69f, 0.78f, 1f);
+        var xtick = new GUIStyle(tick) { alignment = TextAnchor.MiddleCenter };
+        var units = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 11,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter
+        };
+        units.normal.textColor = new Color(0.73f, 0.82f, 0.91f, 1f);
+        int width = Mathf.Max(1, Mathf.RoundToInt(rc.width));
+        int height = Mathf.Max(1, Mathf.RoundToInt(rc.height));
+        if (multiCache == null || !SameSeries(multiSeriesCache, series) ||
+            multiWidthCache != width || multiHeightCache != height || multiMirrorCache != mirrorX)
+        {
+            if (multiCache != null) UnityEngine.Object.Destroy(multiCache);
+            multiCache = MakeMultiTex(width, height, mirrorX, series);
+            multiSeriesCache = series != null ? (Series[])series.Clone() : null;
+            multiWidthCache = width; multiHeightCache = height; multiMirrorCache = mirrorX;
+        }
+        GUI.DrawTexture(rc, multiCache);
+        GUI.Label(new Rect(rc.x + 12, rc.y + 4, rc.width - 24, 22), title, st);
+        DrawMultiTicks(rc, mirrorX, series, tick, xtick);
+        GUI.Label(new Rect(rc.x + 48, rc.yMax - 19, rc.width - 60, 16), unit, units);
+    }
+
+    static bool SameSeries(Series[] a, Series[] b)
+    {
+        if (System.Object.ReferenceEquals(a, b)) return true;
+        if (a == null || b == null || a.Length != b.Length) return false;
+        for (int i = 0; i < a.Length; i++)
+            if (a[i].x != b[i].x || a[i].y != b[i].y || !a[i].color.Equals(b[i].color)) return false;
+        return true;
+    }
+
+    static void DrawMultiTicks(Rect rc, bool mirrorX, Series[] series,
+                               GUIStyle yStyle, GUIStyle xStyle)
+    {
+        bool any = false;
+        double xmin = 0, xmax = 1, ymin = 0, ymax = 1;
+        for (int s = 0; s < (series != null ? series.Length : 0); s++)
+        {
+            double[] xs = series[s].x, ys = series[s].y;
+            if (xs == null || ys == null) continue;
+            int n = Math.Min(xs.Length, ys.Length);
+            for (int i = 0; i < n; i++)
+            {
+                if (double.IsNaN(xs[i]) || double.IsInfinity(xs[i]) ||
+                    double.IsNaN(ys[i]) || double.IsInfinity(ys[i])) continue;
+                if (!any) { xmin = xmax = xs[i]; ymin = ymax = ys[i]; any = true; }
+                else
+                {
+                    xmin = Math.Min(xmin, xs[i]); xmax = Math.Max(xmax, xs[i]);
+                    ymin = Math.Min(ymin, ys[i]); ymax = Math.Max(ymax, ys[i]);
+                }
+            }
+        }
+        if (!any) return;
+        if (xmax - xmin < 1e-9) { xmin -= 1; xmax += 1; }
+        if (ymax - ymin < 1e-9) { ymin -= 1; ymax += 1; }
+        double dx = (xmax - xmin) * 0.08, dy = (ymax - ymin) * 0.14;
+        xmin -= dx; xmax += dx; ymin -= dy; ymax += dy;
+        if (mirrorX) { xmax = Math.Max(xmax, -xmin); xmin = -xmax; }
+
+        const float left = 46f, right = 12f, top = 30f, bottom = 38f;
+        float pw = Mathf.Max(1f, rc.width - left - right);
+        float ph = Mathf.Max(1f, rc.height - top - bottom);
+        for (int g = 0; g <= 4; g++)
+        {
+            double f = g / 4.0;
+            float xp = rc.x + left + pw * (float)f;
+            float lx = Mathf.Clamp(xp - 28f, rc.x + 42f, rc.xMax - 66f);
+            GUI.Label(new Rect(lx, rc.yMax - bottom + 2f, 56f, 15f),
+                      FormatTick(xmin + (xmax - xmin) * f), xStyle);
+            float yp = rc.y + top + ph * (float)f - 7f;
+            GUI.Label(new Rect(rc.x + 1f, yp, 40f, 15f),
+                      FormatTick(ymax - (ymax - ymin) * f), yStyle);
+        }
     }
 
     public static void DrawMulti(Rect rc, string title, string unit, params Series[] series)

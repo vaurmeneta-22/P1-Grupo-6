@@ -37,9 +37,13 @@ public class DataPanel : MonoBehaviour
         int previousDepth = GUI.depth;
         GUI.depth = -10;
         Rect area = ElementInfoStyle.PanelRect();
+        // Keep the single-curve view compact on tall portrait screens; data
+        // tables and other tabs retain the full height and scroll as needed.
+        if (tab == 1)
+            area.height = Mathf.Min(area.height, Mathf.Max(430f, Screen.height * 0.80f));
         ElementInfoStyle.DataArea = area;
         GUISkin previous = ElementInfoStyle.Begin(area);
-        bool close = ElementInfoStyle.Header("Datos del anÃ¡lisis", "RESULTADOS  /  CONSULTA POR CATEGORÃA");
+        bool close = ElementInfoStyle.Header("Datos del análisis", "RESULTADOS  /  CONSULTA POR CATEGORÍA");
         GUILayout.Space(10);
         for (int row = 0; row < tabs.Length; row += 3)
         {
@@ -58,7 +62,7 @@ public class DataPanel : MonoBehaviour
             case 1: TabMomCurv(); break;
             case 2: TabPM(); break;
             case 3: TabReacciones(); break;
-case 4: TabTributaria(); break;
+            case 4: TabTributaria(); break;
         }
 
         GUILayout.EndScrollView();
@@ -72,7 +76,7 @@ case 4: TabTributaria(); break;
     void TabSismo()
     {
         if (AnalysisMap.Sismo == null || AnalysisMap.Sismo.Count == 0)
-        { GUILayout.Label("Sin datos de sismo en analysis_map."); return; }
+        { GUILayout.Label("No hay datos sísmicos disponibles."); return; }
 
         List<string> keys = AnalysisMap.Sismo.Keys.ToList();
         if (!keys.Contains(sismoCaso)) sismoCaso = keys[0];
@@ -106,28 +110,31 @@ case 4: TabTributaria(); break;
             });
         }
         DrawTableH(head, cells, ws);
-        GUILayout.Label("Masa sismica W = G + 50% Q | Corte basal |F| = " + Fmt(sumF, 1) + " kN.");
+        GUILayout.Label("Masa sísmica W = G + 50 % Q  ·  Corte basal |F| = " + Fmt(sumF, 1) + " kN.");
     }
 
     // ------------------- TAB 2: MOMENTO-CURVATURA -------------------
     void TabMomCurv()
     {
-        ElementInfoStyle.Section("MOM-CURV (columna 70x70, fiber, P = 0)");
+        ElementInfoStyle.Section("MOMENTO-CURVATURA · columna 70×70 · fibra · P = 0");
         AnalysisMap.PmInfo p = AnalysisMap.MomCurv;
         if (p == null || p.M_fiber == null || p.M_fiber.Length == 0 ||
             p.phi_1m == null || p.phi_1m.Length == 0)
-        { GUILayout.Label("Sin curva M-phi (genera figures con parte_d_fiber.py)."); return; }
+        { GUILayout.Label("No hay curva momento-curvatura disponible."); return; }
 
-        Rect rc = GUILayoutUtility.GetRect(488, 260);
-        Plot2D.Draw(rc, p.phi_1m, p.M_fiber, "M vs phi (" + caso + ")", "M [kN-m]");
+        float plotHeight = Mathf.Clamp(Screen.height * 0.45f, 300f, 420f);
+        Rect rc = GUILayoutUtility.GetRect(0f, plotHeight, GUILayout.ExpandWidth(true));
+        Plot2D.Draw(rc, p.phi_1m, p.M_fiber, "Momento-curvatura · " + caso,
+                    "φ  [1/m]                         M  [kN·m]");
 
         int n = p.phi_1m.Length;
         double k0 = n > 1 ? (p.M_fiber[1] - p.M_fiber[0]) / (p.phi_1m[1] - p.phi_1m[0]) : 0;
         double Mfin = p.M_fiber[n - 1];
         double phimax = p.phi_1m[n - 1];
-        GUILayout.Label("Rigidez inicial (EI~) = " + Fmt(k0 / 1000.0, 0) + " MNÂ·mÂ²  |  " +
-                        "M_ultimo = " + Fmt(Mfin, 1) + " kNÂ·m a phi = " + Fmt(phimax, 4) + " 1/m  |  " +
-                        "convergencia " + (p.n_ok ? "OK" : "n/a"));
+        GUILayout.Label("Rigidez inicial (EI≈) = " + Fmt(k0 / 1000.0, 0) + " MN·m²\n" +
+                        "Momento último = " + Fmt(Mfin, 1) + " kN·m  ·  " +
+                        "curvatura = " + Fmt(phimax, 4) + " 1/m  ·  " +
+                        "convergencia: " + (p.n_ok ? "OK" : "n/a"));
     }
 
     // ------------------- TAB 3: P-M FIBRA vs H.A. -------------------
@@ -135,7 +142,7 @@ case 4: TabTributaria(); break;
     void TabPM()
     {
         if (AnalysisMap.PmHa == null || AnalysisMap.PmHa.Count == 0)
-        { GUILayout.Label("Sin P-M fibra/HA (genera figures/pm_*.json)."); return; }
+        { GUILayout.Label("No hay curvas P-M disponibles."); return; }
 
         List<string> secs = AnalysisMap.PmHa.Keys.ToList();
         if (!secs.Contains(pmSec)) pmSec = secs[0];
@@ -154,16 +161,17 @@ case 4: TabTributaria(); break;
                       p.P_fiber != null && p.P_fiber.Length == p.M_fiber.Length;
         bool hasHa = p.M_HA != null && p.M_HA.Length > 0 &&
                      p.P_HA != null && p.P_HA.Length == p.M_HA.Length;
-        if (!hasFib && !hasHa) { GUILayout.Label("Seccion sin curva P-M."); return; }
+        if (!hasFib && !hasHa) { GUILayout.Label("La sección seleccionada no tiene curvas P-M."); return; }
 
         var fib = new Plot2D.Series { x = p.M_fiber, y = p.P_fiber,
                                       color = new Color(0f, 1f, 1f, 1f) };
         var ha = new Plot2D.Series { x = p.M_HA, y = p.P_HA,
                                      color = new Color(1f, 0.85f, 0.2f, 1f) };
-        Rect rc = GUILayoutUtility.GetRect(488, 320);
-        Plot2D.DrawMulti(rc, "P-M " + pmSec + " (fibra vs H.A.)", "P [kN] / M [kN-m]", true, fib, ha);
-        GUILayout.Label("Cian: fibra  Â·  Naranja: bloque H.A. (alpha1 = " +
-                        (p.alpha1.HasValue ? Fmt(p.alpha1.Value, 2) : "-") + " Â· beta1 = " +
+        float plotHeight = Mathf.Clamp(Screen.height * 0.42f, 300f, 420f);
+        Rect rc = GUILayoutUtility.GetRect(0f, plotHeight, GUILayout.ExpandWidth(true));
+        Plot2D.DrawMulti(rc, "Interacción P-M · " + pmSec, "P [kN] / M [kN·m]", true, fib, ha);
+        GUILayout.Label("Cian: modelo de fibras  ·  Naranja: bloque de hormigón (α₁ = " +
+                        (p.alpha1.HasValue ? Fmt(p.alpha1.Value, 2) : "-") + " · β₁ = " +
                         (p.beta1.HasValue ? Fmt(p.beta1.Value, 2) : "-") + ")");
 
         if (hasFib)
@@ -174,7 +182,7 @@ case 4: TabTributaria(); break;
                 if (p.P_fiber[i] < pT) pT = p.P_fiber[i];
                 if (p.P_fiber[i] > pC) pC = p.P_fiber[i];
             }
-            GUILayout.Label("Puntas fibra: traccion = " + Fmt(pT, 0) + " kN Â· compresion = " + Fmt(pC, 0) + " kN");
+            GUILayout.Label("Extremos de la curva: tracción = " + Fmt(pT, 0) + " kN · compresión = " + Fmt(pC, 0) + " kN");
         }
     }
 
@@ -182,7 +190,7 @@ case 4: TabTributaria(); break;
     void TabReacciones()
     {
         if (AnalysisMap.Reacciones == null || AnalysisMap.Reacciones.Count == 0)
-        { GUILayout.Label("Sin reacciones en analysis_map."); return; }
+        { GUILayout.Label("No hay reacciones disponibles."); return; }
 
         ElementInfoStyle.Section("REACCIONES DE APOYO");
         GUILayout.BeginHorizontal();
@@ -196,12 +204,12 @@ case 4: TabTributaria(); break;
 
         // Pintar en 3D: espejo del checkbox del visor (paintReactions/skin).
         bool pintar = AnalysisMode.Current != null && AnalysisMode.Current.PintarReac;
-        bool np = ElementInfoStyle.Choice(pintar, "Reacciones 3D Â· " + (pintar ? "visibles" : "ocultas"));
+        bool np = ElementInfoStyle.Choice(pintar, "Reacciones 3D · " + (pintar ? "visibles" : "ocultas"));
         if (AnalysisMode.Current != null && np != pintar) AnalysisMode.Current.SetPintarReac(np);
 
         Dictionary<int, double[]> rmap;
         if (!AnalysisMap.Reacciones.TryGetValue(caso, out rmap) || rmap == null || rmap.Count == 0)
-        { GUILayout.Label("Sin reacciones para el caso " + caso); return; }
+        { GUILayout.Label("No hay reacciones para el caso " + caso + "."); return; }
 
         List<double[]> rows = new List<double[]>();
         double sum = 0;
@@ -220,18 +228,18 @@ case 4: TabTributaria(); break;
         foreach (double[] t in rows)
             cells.Add(new[] { t[0].ToString("F0"), Fmt(t[1], 1), Fmt(t[2], 1) });
         DrawTableH(new[] { "Apoyo", "R_vert [kN]", "|R| [kN]" }, cells, ws);
-        GUILayout.Label(rows.Count + " apoyos en el suelo (z=0) Â· Î£ R_vert(" + caso + ") = " + Fmt(sum, 1) + " kN.");
+        GUILayout.Label(rows.Count + " apoyos en el suelo (z=0) · Σ R vertical (" + caso + ") = " + Fmt(sum, 1) + " kN.");
     }
 
     // ------------------- TAB 5: TRIBUTARIAS -------------------
     void TabTributaria()
     {
         if (AnalysisMap.Tribu == null || AnalysisMap.Tribu.Count == 0)
-        { GUILayout.Label("Sin tributarias en analysis_map."); return; }
+        { GUILayout.Label("No hay áreas tributarias disponibles."); return; }
 
-        ElementInfoStyle.Section("TRIBUTARIAS POR VIGA (metodo 45Â°)");
+        ElementInfoStyle.Section("ÁREA TRIBUTARIA POR VIGA (método 45°)");
         GUILayout.BeginHorizontal();
-        GUILayout.Label("Buscar viga id:");
+        GUILayout.Label("Buscar viga ID:");
         tribuQ = GUILayout.TextField(tribuQ, GUILayout.Width(120));
         GUILayout.EndHorizontal();
 
@@ -285,7 +293,7 @@ case 4: TabTributaria(); break;
         return v.ToString("F" + Mathf.Clamp(dec, 0, 6));
     }
 
-    // Rz suele ser muy pequeno: notacion exponencial cuando |v| < 1e-3.
+    // Rz suele ser muy pequeño: notación exponencial cuando |v| < 1e-3.
     static string FmtRz(double v)
     {
         if (double.IsNaN(v) || double.IsInfinity(v)) return "-";

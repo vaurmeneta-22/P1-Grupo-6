@@ -54,6 +54,20 @@ COLUMNA_BORDE = {
     "fuente": "plano pórtico extremo (4 phi28 esquinas + 16 phi36 perimetrales)",
 }
 
+# Variante didáctica Caso C: columna 66 reducida a 40x40 cm con cuatro barras
+# longitudinales Ø12 en las esquinas. Cuantía longitudinal = 0.28%; para
+# demostración deliberada de falla, no usar como detalle constructivo.
+COLUMNA_MOD_C = {
+    "nombre": "columna_id66_mod_c_40x40",
+    "tipo": "columna_mod_c",
+    "b": 400.0, "h": 400.0,
+    "rec": 56.0,
+    "estrobo": 10.0,
+    "db": 12.0, "barras": 4,
+    "nFY": 24, "nFZ": 8,
+    "fuente": "Caso C didáctico, elemento 66: 4 phi12 en esquinas",
+}
+
 # Seccion especial (SOLO elemento id=70): columna 70x70 del portico extremo
 # con enfierradura FULL phi36 perimetral: 16 phi36 intermedias + 4 phi36 en
 # las esquinas = 20 barras phi36. As = 20 x phi36 = 203.6 cm2 (rho = 4.16%).
@@ -239,6 +253,23 @@ def build_columna_id70(mat_conc, mat_ac, sec_tag):
     ops.layer("straight", mat_ac, 4, a36, -ysup + dy, xl, ysup - dy, xl)
 
 
+def build_columna_mod_c(section, mat_conc, mat_ac, sec_tag):
+    """Sección específica Caso C: 40x40 cm, 4Ø12 en las esquinas."""
+    import openseespy.opensees as ops
+    b, h, r = section["b"], section["h"], section["rec"]
+    d = section["db"]
+    y, z = h / 2.0 - r, b / 2.0 - r
+    a = abar(d)
+
+    ops.section("Fiber", sec_tag, "-GJ", 1.0)
+    ops.patch("rect", mat_conc, section["nFY"], section["nFZ"],
+              -h / 2, -b / 2, h / 2, b / 2)
+    # Una barra en cada esquina.
+    for yy in (-y, y):
+        for zz in (-z, z):
+            ops.layer("straight", mat_ac, 1, a, yy, zz, yy, zz)
+
+
 def build_muro(section, mat_conc, mat_ac, sec_tag):
     """Crea la seccion fibra de un muro generico (2D, flexion en el plano).
     Eje y = largo Lw (flexion fuerte), z = espesor bw.
@@ -285,6 +316,8 @@ def build(section, mat_conc, mat_ac, sec_tag):
         build_columna_borde(mat_conc, mat_ac, sec_tag)
     elif section["tipo"] == "columna_id70":
         build_columna_id70(mat_conc, mat_ac, sec_tag)
+    elif section["tipo"] == "columna_mod_c":
+        build_columna_mod_c(section, mat_conc, mat_ac, sec_tag)
     elif section["tipo"] == "muro":
         build_muro(section, mat_conc, mat_ac, sec_tag)
     else:
@@ -293,7 +326,7 @@ def build(section, mat_conc, mat_ac, sec_tag):
 
 def area_concreto(section):
     """Area bruta de hormigon (mm2)."""
-    if section["tipo"] in ("columna", "columna_borde", "columna_id70"):
+    if section["tipo"] in ("columna", "columna_borde", "columna_id70", "columna_mod_c"):
         return section["b"] * section["h"]
     return section["bw"] * section["Lw"]
 
@@ -303,6 +336,8 @@ def area_acero(section):
     if section["tipo"] == "columna":
         asb = abar(section["db"])
         return section["barras"] * asb
+    if section["tipo"] == "columna_mod_c":
+        return section["barras"] * abar(section["db"])
     if section["tipo"] in ("columna_borde", "columna_id70"):
         return (section["n_esq"] * abar(section["db_esq"])
                 + section["n_int"] * abar(section["db"]))

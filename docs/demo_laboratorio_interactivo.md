@@ -68,7 +68,7 @@ demostración en el dispositivo final.
    Arrastrar el martillo dentro de la losa y verificar que cambian `P_i` y las
    flechas, manteniendo `Σ asignada = P_user` con error cercano a 0.
 
-## Dos modificaciones reproducibles ya disponibles
+## Variantes de modificación reproducibles
 
 Ejecutar desde la raíz del repositorio con Python y OpenSeesPy instalados.
 Detener Play antes de sincronizar archivos; volver a Play después de cada variante.
@@ -77,11 +77,15 @@ Detener Play antes de sincronizar archivos; volver a Play después de cada varia
 python scripts/generar_modificaciones.py
 python scripts/ejecutar_modificacion.py --tag modA --json Edificio_mod_A.json --element 147 --all-cases --combo-lambdas 1.2,1.0,1.4,1.4 --unity
 python scripts/ejecutar_modificacion.py --tag modB --json Edificio_mod_B.json --element 1 --all-cases --combo-lambdas 1.2,1.0,1.4,1.4 --unity
+python scripts/generar_pm_caso_c.py
+python scripts/ejecutar_modificacion.py --tag modC --json Edificio_mod_C.json --element 66 --all-cases --unity --capacity-json resultados/07_capacidad/pm_columnas/pm_columna_id66_40x40.json
 python scripts/ejecutar_modificacion.py --restore
 ```
 
 - **Mod A:** sección de viga 147, 60×80 a 50×75 cm. Cambian rigidez y peso propio.
 - **Mod B:** nodo 1, empotramiento a articulación. Cambian condiciones de borde.
+- **Caso C:** columna 66, sección 70×70 a 40×40 cm. El script genera su curva P-M Fiber exclusiva para el ID 66; el pipeline recalcula G/Q/EX/EY/COMBO y la añade al mapa Unity.
+- **Caso C:** columna 66 de 70×70 a 40×40 cm. Se recalculan cinco casos y una curva P-M de fibras exclusiva del ID 66.
 
 Ambas regeneran resultados etiquetados y sincronizan contrato y mapa del mismo
 modelo. La copia de StreamingAssets encontrada al iniciar este avance era Mod A.
@@ -94,6 +98,7 @@ No mezclar G de una variante con Q/EX/EY de otra.
 | Intensidad de un patrón idéntico y masa fija | No, puede escalarse | Válido sólo bajo las hipótesis lineales del modelo |
 | G/Q físico que cambia masa sísmica | Sí para actualizar EX/EY | La masa depende de G + 0.50 Q |
 | Sección, apoyo, material, conectividad | Sí | Cambia el sistema estructural |
+| Sección de columna con cambio de capacidad P-M | Sí | Requiere generar la curva de fibras de la sección editada |
 | Área tributaria o carga móvil localizada | Sí para respuesta estructural exacta, o casos de influencia previamente calculados | El prototipo SQ4 solo reparte y visualiza carga |
 
 Los sliders son coeficientes adimensionales. Se suman componentes con signo

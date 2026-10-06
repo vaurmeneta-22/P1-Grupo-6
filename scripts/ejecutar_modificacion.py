@@ -155,6 +155,8 @@ def main():
                     help="elemento a comparar antes/despues")
     ap.add_argument("--unity", action="store_true",
                     help="sincronizar StreamingAssets con la corrida modificada")
+    ap.add_argument("--capacity-json", default="",
+                    help="curva P-M específica por elemento para incluir en analysis_map")
     ap.add_argument("--restore", action="store_true",
                     help="restaurar StreamingAssets a la linea base")
     for lam in ("--lambda-g", "--lambda-q", "--lambda-ex", "--lambda-ey"):
@@ -199,6 +201,12 @@ def main():
 
     # 2) Exportar analysis_map etiquetado
     cmd2 = [sys.executable, EXPORT_MAP, "--json", json_mod, "--tag", args.tag]
+    if args.capacity_json:
+        capacity_path = os.path.abspath(args.capacity_json)
+        if not os.path.isfile(capacity_path):
+            print(f"[ERROR] no existe la curva P-M: {capacity_path}")
+            return 1
+        cmd2 += ["--capacity-json", capacity_path]
     print(">>> Exportar mapa:", " ".join(cmd2[1:]))
     r2 = subprocess.run(cmd2, cwd=REPO, encoding="utf-8")
     if r2.returncode != 0:

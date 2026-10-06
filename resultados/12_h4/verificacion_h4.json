@@ -1,0 +1,288 @@
+{
+  "timestamp": "2026-10-06T01:53:36-03:00",
+  "case_id": "B",
+  "case_name": "Caso B · Apoyo articulado en nodo 1",
+  "element_id": null,
+  "checks": {
+    "Modelo válido": {
+      "pass": true,
+      "detail": "El edificio tiene 536 nodos y 722 elementos; el apoyo del nodo 1 está articulado. También se comprobó que rechace una entrada estructural inválida."
+    },
+    "Errores controlados": {
+      "pass": true,
+      "detail": "Se provocaron dos errores de prueba y ambos fueron detectados. El código 1 significa que se rechazó correctamente el archivo faltante; no es un fallo del análisis."
+    },
+    "Backend preparó resultados": {
+      "pass": true,
+      "detail": "Python/OpenSees calculó los cinco escenarios para Caso B · Apoyo articulado en nodo 1 y preparó el modelo y el mapa para Unity."
+    },
+    "Mismos resultados": {
+      "pass": true,
+      "detail": "Se comparó cada escenario con OpenSees ejecutado directamente. La mayor diferencia encontrada fue 0; dentro del límite aceptado."
+    },
+    "Cálculo repetible": {
+      "pass": true,
+      "detail": "Se repitió el análisis con los mismos datos. La mayor diferencia fue 0; las corridas coinciden dentro del límite aceptado."
+    }
+  },
+  "comparisons": {
+    "unity_vs_direct": {
+      "G": {
+        "pass": true,
+        "numeric_values": 20539,
+        "max_abs_difference": 0.0,
+        "max_relative_difference": 0.0,
+        "abs_tolerance": 1e-08,
+        "rel_tolerance": 1e-09,
+        "errors": []
+      },
+      "Q": {
+        "pass": true,
+        "numeric_values": 20540,
+        "max_abs_difference": 0.0,
+        "max_relative_difference": 0.0,
+        "abs_tolerance": 1e-08,
+        "rel_tolerance": 1e-09,
+        "errors": []
+      },
+      "EX": {
+        "pass": true,
+        "numeric_values": 20543,
+        "max_abs_difference": 0.0,
+        "max_relative_difference": 0.0,
+        "abs_tolerance": 1e-08,
+        "rel_tolerance": 1e-09,
+        "errors": []
+      },
+      "EY": {
+        "pass": true,
+        "numeric_values": 20543,
+        "max_abs_difference": 0.0,
+        "max_relative_difference": 0.0,
+        "abs_tolerance": 1e-08,
+        "rel_tolerance": 1e-09,
+        "errors": []
+      },
+      "COMBO": {
+        "pass": true,
+        "numeric_values": 20539,
+        "max_abs_difference": 0.0,
+        "max_relative_difference": 0.0,
+        "abs_tolerance": 1e-08,
+        "rel_tolerance": 1e-09,
+        "errors": []
+      }
+    },
+    "repeatability": {
+      "G": {
+        "pass": true,
+        "numeric_values": 20539,
+        "max_abs_difference": 0.0,
+        "max_relative_difference": 0.0,
+        "abs_tolerance": 1e-08,
+        "rel_tolerance": 1e-09,
+        "errors": []
+      },
+      "Q": {
+        "pass": true,
+        "numeric_values": 20540,
+        "max_abs_difference": 0.0,
+        "max_relative_difference": 0.0,
+        "abs_tolerance": 1e-08,
+        "rel_tolerance": 1e-09,
+        "errors": []
+      },
+      "EX": {
+        "pass": true,
+        "numeric_values": 20543,
+        "max_abs_difference": 0.0,
+        "max_relative_difference": 0.0,
+        "abs_tolerance": 1e-08,
+        "rel_tolerance": 1e-09,
+        "errors": []
+      },
+      "EY": {
+        "pass": true,
+        "numeric_values": 20543,
+        "max_abs_difference": 0.0,
+        "max_relative_difference": 0.0,
+        "abs_tolerance": 1e-08,
+        "rel_tolerance": 1e-09,
+        "errors": []
+      },
+      "COMBO": {
+        "pass": true,
+        "numeric_values": 20539,
+        "max_abs_difference": 0.0,
+        "max_relative_difference": 0.0,
+        "abs_tolerance": 1e-08,
+        "rel_tolerance": 1e-09,
+        "errors": []
+      }
+    }
+  },
+  "comparison_rows": [
+    {
+      "case_name": "G",
+      "node": "apoyo 1",
+      "unity": {
+        "load_kN": 73488.0313,
+        "n_kN": 1005.4663856174,
+        "my_kNm": 0.0,
+        "mz_kNm": -0.0,
+        "disp_mm": 0.0
+      },
+      "direct": {
+        "load_kN": 73488.0313,
+        "n_kN": 1005.4663856174,
+        "my_kNm": 0.0,
+        "mz_kNm": -0.0,
+        "disp_mm": 0.0
+      },
+      "delta": {
+        "load_kN": 0.0,
+        "n_kN": 0.0,
+        "my_kNm": 0.0,
+        "mz_kNm": 0.0,
+        "disp_mm": 0.0
+      },
+      "repeat_max_difference": 0.0,
+      "pass": true
+    },
+    {
+      "case_name": "Q",
+      "node": "apoyo 1",
+      "unity": {
+        "load_kN": 22697.566,
+        "n_kN": 281.2049113157,
+        "my_kNm": 0.0,
+        "mz_kNm": -0.0,
+        "disp_mm": 0.0
+      },
+      "direct": {
+        "load_kN": 22697.566,
+        "n_kN": 281.2049113157,
+        "my_kNm": 0.0,
+        "mz_kNm": -0.0,
+        "disp_mm": 0.0
+      },
+      "delta": {
+        "load_kN": 0.0,
+        "n_kN": 0.0,
+        "my_kNm": 0.0,
+        "mz_kNm": 0.0,
+        "disp_mm": 0.0
+      },
+      "repeat_max_difference": 0.0,
+      "pass": true
+    },
+    {
+      "case_name": "EX",
+      "node": "apoyo 1",
+      "unity": {
+        "load_kN": 16650.7931,
+        "n_kN": 101.0287398126,
+        "my_kNm": 0.0,
+        "mz_kNm": 0.0,
+        "disp_mm": 0.0
+      },
+      "direct": {
+        "load_kN": 16650.7931,
+        "n_kN": 101.0287398126,
+        "my_kNm": 0.0,
+        "mz_kNm": 0.0,
+        "disp_mm": 0.0
+      },
+      "delta": {
+        "load_kN": 0.0,
+        "n_kN": 0.0,
+        "my_kNm": 0.0,
+        "mz_kNm": 0.0,
+        "disp_mm": 0.0
+      },
+      "repeat_max_difference": 0.0,
+      "pass": true
+    },
+    {
+      "case_name": "EY",
+      "node": "apoyo 1",
+      "unity": {
+        "load_kN": 16650.7931,
+        "n_kN": -1110.7755163389,
+        "my_kNm": -0.0,
+        "mz_kNm": -0.0,
+        "disp_mm": 0.0
+      },
+      "direct": {
+        "load_kN": 16650.7931,
+        "n_kN": -1110.7755163389,
+        "my_kNm": -0.0,
+        "mz_kNm": -0.0,
+        "disp_mm": 0.0
+      },
+      "delta": {
+        "load_kN": 0.0,
+        "n_kN": 0.0,
+        "my_kNm": 0.0,
+        "mz_kNm": 0.0,
+        "disp_mm": 0.0
+      },
+      "repeat_max_difference": 0.0,
+      "pass": true
+    },
+    {
+      "case_name": "COMBO",
+      "node": "apoyo 1",
+      "unity": {
+        "load_kN": 157505.4242,
+        "n_kN": 74.1190869198,
+        "my_kNm": 0.0,
+        "mz_kNm": 0.0,
+        "disp_mm": 0.0
+      },
+      "direct": {
+        "load_kN": 157505.4242,
+        "n_kN": 74.1190869198,
+        "my_kNm": 0.0,
+        "mz_kNm": 0.0,
+        "disp_mm": 0.0
+      },
+      "delta": {
+        "load_kN": 0.0,
+        "n_kN": 0.0,
+        "my_kNm": 0.0,
+        "mz_kNm": 0.0,
+        "disp_mm": 0.0
+      },
+      "repeat_max_difference": 0.0,
+      "pass": true
+    }
+  ],
+  "check_rows": [
+    {
+      "name": "Modelo válido",
+      "pass": true,
+      "detail": "El edificio tiene 536 nodos y 722 elementos; el apoyo del nodo 1 está articulado. También se comprobó que rechace una entrada estructural inválida."
+    },
+    {
+      "name": "Errores controlados",
+      "pass": true,
+      "detail": "Se provocaron dos errores de prueba y ambos fueron detectados. El código 1 significa que se rechazó correctamente el archivo faltante; no es un fallo del análisis."
+    },
+    {
+      "name": "Backend preparó resultados",
+      "pass": true,
+      "detail": "Python/OpenSees calculó los cinco escenarios para Caso B · Apoyo articulado en nodo 1 y preparó el modelo y el mapa para Unity."
+    },
+    {
+      "name": "Mismos resultados",
+      "pass": true,
+      "detail": "Se comparó cada escenario con OpenSees ejecutado directamente. La mayor diferencia encontrada fue 0; dentro del límite aceptado."
+    },
+    {
+      "name": "Cálculo repetible",
+      "pass": true,
+      "detail": "Se repitió el análisis con los mismos datos. La mayor diferencia fue 0; las corridas coinciden dentro del límite aceptado."
+    }
+  ]
+}

@@ -6,6 +6,8 @@ public class EdificioLoader : MonoBehaviour
 {
     public string jsonFileName = "Edificio.json";
     public float scale = 0.01f;
+    private const float SlabVisualThickness = 0.045f;
+    private const float SlabVisualOffset = 0.08f;
 
     public Material columnMat;
     public Material beamXMat;
@@ -30,6 +32,7 @@ public class EdificioLoader : MonoBehaviour
     public KeyCode hormigonKey = KeyCode.H;
     public Color hormigonColor = new Color(0.62f, 0.62f, 0.63f);        // concreto claro
     public Color zapataColor = new Color(0.36f, 0.37f, 0.39f);          // concreto mas oscuro
+    public Color terrainSurfaceColor = new Color(0.43f, 0.37f, 0.27f); // suelo
 
     [Header("Teclas")]
     public KeyCode columnsKey = KeyCode.C;
@@ -60,6 +63,7 @@ public class EdificioLoader : MonoBehaviour
     private GameObject axesGroup;
     private GameObject nodeGroup;
     private GameObject diaphGroup;
+    private GameObject terrainGroup;
     private Material diaphFillMat;
     private Material diaphEdgeMat;
     private Material lozaEdgeMat;
@@ -69,6 +73,8 @@ public class EdificioLoader : MonoBehaviour
     private Material[] axisMats;
     private Material hormigonMat;
     private Material zapataMat;
+    private Material terrainSurfaceMat;
+    private Material terrainCutMat;
     private bool hormigonMode = false;
     private Dictionary<Renderer, Material> originalMaterials = new Dictionary<Renderer, Material>();
     private float labelScale = 0.04f;
@@ -94,7 +100,10 @@ public class EdificioLoader : MonoBehaviour
         QualitySettings.antiAliasing = 4;
         Application.targetFrameRate = 60;
 
-        string path = Path.Combine(Application.streamingAssetsPath, jsonFileName);
+        string runtimeModelPath = Path.Combine(Application.persistentDataPath, jsonFileName);
+        string path = File.Exists(runtimeModelPath)
+            ? runtimeModelPath
+            : Path.Combine(Application.streamingAssetsPath, jsonFileName);
         string json = File.ReadAllText(path);
         EdificioData data = JsonUtility.FromJson<EdificioData>(json);
 
@@ -135,10 +144,11 @@ public class EdificioLoader : MonoBehaviour
 
         foreach (ElementData elem in data.elements)
         {
-            CreateElement(elem, data.nodes);
+            CreateElement(elem, data.nodes, data.elements);
         }
 
         CreateDiaphragms();
+        CreateSteppedTerrain(data);
 
         TrySetupInspector();
         SetupAnalysisMode();
@@ -171,11 +181,14 @@ public class EdificioLoader : MonoBehaviour
         }
     }
 
-    // Carga los resultados del analisis desde StreamingAssets (analysis_map.json),
-    // indispensable para el inspector (fuerzas por caso) y los modos deformada/esfuerzos.
+    // Prioriza resultados recién recibidos del backend; si no hay override,
+    // usa el mapa empaquetado en StreamingAssets.
     void LoadAnalysisMap()
     {
-        string amPath = Path.Combine(Application.streamingAssetsPath, "analysis_map.json");
+        string runtimeMapPath = Path.Combine(Application.persistentDataPath, "analysis_map.json");
+        string amPath = File.Exists(runtimeMapPath)
+            ? runtimeMapPath
+            : Path.Combine(Application.streamingAssetsPath, "analysis_map.json");
         if (AnalysisMap.Load(amPath))
         {
             Debug.Log("AnalysisMap cargado: " + AnalysisMap.ElementsByTag.Count +
@@ -323,6 +336,8 @@ public class EdificioLoader : MonoBehaviour
         // Materiales del modo hormigon (aplicados con la tecla).
         hormigonMat = NewLitMat(urp, hormigonColor, 0.2f, 0f);
         zapataMat = NewLitMat(urp, zapataColor, 0.2f, 0f);
+        terrainSurfaceMat = NewLitMat(urp, terrainSurfaceColor, 0.05f, 0f);
+        terrainCutMat = NewLitMat(urp, new Color(0.31f, 0.27f, 0.21f), 0f, 0f);
 
         // Materiales de los diafragmas (como el visor HTML).
         Shader sper = Shader.Find("Universal Render Pipeline/Unlit");
@@ -432,6 +447,122 @@ public class EdificioLoader : MonoBehaviour
         label.name = "Label_" + nodeId;
     }
 
+    // El contrato tiene la mayoría de las zapatas en z=0 y otro grupo en
+    // z=356 cm. El suelo llega al fondo visual de cada zapata y levanta una
+    // plataforma con un corte escalonado entre ambas cotas.
+    void CreateSteppedTerrain(EdificioData data)
+    {
+        if (data == null || data.supports == null || data.nodes == null || data.supports.Length == 0)
+            return;
+
+        Dictionary<int, NodeData> nodesById = new Dictionary<int, NodeData>();
+        foreach (NodeData node in data.nodes)
+            if (node != null) nodesById[node.id] = node;
+
+        List<NodeData> supportNodes = new List<NodeData>();
+        foreach (SupportInfo support in data.supports)
+        {
+            NodeData node;
+            if (nodesById.TryGetValue(support.node, out node)) supportNodes.Add(node);
+        }
+        if (supportNodes.Count == 0) return;
+
+        List<float> supportLevels = new List<float>();
+        foreach (NodeData node in supportNodes) supportLevels.Add(node.z * scale);
+        float lowestLevel = MinValue(supportLevels);
+        List<float> lowLevels = new List<float>();
+        List<float> highLevels = new List<float>();
+        foreach (float level in supportLevels)
+        {
+            if (level <= lowestLevel + 0.5f) lowLevels.Add(level);
+            else highLevels.Add(level);
+        }
+        float lowNodeY = Median(lowLevels);
+        float highNodeY = highLevels.Count > 0 ? Median(highLevels) : lowNodeY;
+        const float footingDepth = 1f;
+        const float baseSoilDepth = 1.5f;
+        const float capThickness = 0.05f;
+        float lowGrade = lowNodeY - footingDepth;
+        float highGrade = highNodeY - footingDepth;
+
+        float minX = float.PositiveInfinity, maxX = float.NegativeInfinity;
+        float minZ = float.PositiveInfinity, maxZ = float.NegativeInfinity;
+        float highMinX = float.PositiveInfinity, highMaxX = float.NegativeInfinity;
+        float highMinZ = float.PositiveInfinity, highMaxZ = float.NegativeInfinity;
+        foreach (NodeData node in supportNodes)
+        {
+            Vector3 p = NodeToPos(node);
+            minX = Mathf.Min(minX, p.x); maxX = Mathf.Max(maxX, p.x);
+            minZ = Mathf.Min(minZ, p.z); maxZ = Mathf.Max(maxZ, p.z);
+            if (highLevels.Count > 0 && node.z * scale > lowestLevel + 0.5f)
+            {
+                highMinX = Mathf.Min(highMinX, p.x); highMaxX = Mathf.Max(highMaxX, p.x);
+                highMinZ = Mathf.Min(highMinZ, p.z); highMaxZ = Mathf.Max(highMaxZ, p.z);
+            }
+        }
+
+        const float outerMargin = 3f;
+        const float benchMargin = 1.5f;
+        minX -= outerMargin; maxX += outerMargin;
+        minZ -= outerMargin; maxZ += outerMargin;
+        terrainGroup = new GameObject("Terreno");
+
+        // Suelo bajo: la cara superior queda al nivel del fondo de las zapatas.
+        float baseTop = lowGrade - capThickness;
+        CreateTerrainBlock("Suelo_base", new Vector3((minX + maxX) * 0.5f,
+            baseTop - baseSoilDepth * 0.5f, (minZ + maxZ) * 0.5f),
+            new Vector3(maxX - minX, baseSoilDepth, maxZ - minZ), terrainCutMat);
+        CreateTerrainBlock("Superficie_baja", new Vector3((minX + maxX) * 0.5f,
+            lowGrade - capThickness * 0.5f, (minZ + maxZ) * 0.5f),
+            new Vector3(maxX - minX, capThickness, maxZ - minZ), terrainSurfaceMat);
+
+        if (highLevels.Count > 0 && highGrade > lowGrade + capThickness)
+        {
+            highMinX -= benchMargin; highMaxX += benchMargin;
+            highMinZ -= benchMargin; highMaxZ += benchMargin;
+            float fillBottom = lowGrade - capThickness;
+            float fillTop = highGrade - capThickness;
+            CreateTerrainBlock("Corte_escalonado", new Vector3((highMinX + highMaxX) * 0.5f,
+                (fillBottom + fillTop) * 0.5f, (highMinZ + highMaxZ) * 0.5f),
+                new Vector3(highMaxX - highMinX, fillTop - fillBottom,
+                            highMaxZ - highMinZ), terrainCutMat);
+            CreateTerrainBlock("Superficie_alta", new Vector3((highMinX + highMaxX) * 0.5f,
+                highGrade - capThickness * 0.5f, (highMinZ + highMaxZ) * 0.5f),
+                new Vector3(highMaxX - highMinX, capThickness,
+                            highMaxZ - highMinZ), terrainSurfaceMat);
+        }
+    }
+
+    void CreateTerrainBlock(string blockName, Vector3 position, Vector3 size, Material material)
+    {
+        GameObject block = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        block.name = blockName;
+        block.transform.SetParent(terrainGroup.transform, true);
+        block.transform.position = position;
+        block.transform.localScale = size;
+        Renderer renderer = block.GetComponent<Renderer>();
+        renderer.sharedMaterial = material;
+        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
+        Collider collider = block.GetComponent<Collider>();
+        if (collider != null) Destroy(collider);
+    }
+
+    static float MinValue(List<float> values)
+    {
+        float result = float.PositiveInfinity;
+        foreach (float value in values) result = Mathf.Min(result, value);
+        return result;
+    }
+
+    static float Median(List<float> values)
+    {
+        if (values == null || values.Count == 0) return 0f;
+        values.Sort();
+        int middle = values.Count / 2;
+        return values.Count % 2 == 0 ? (values[middle - 1] + values[middle]) * 0.5f : values[middle];
+    }
+
     Vector3 NodeToPos(NodeData n)
     {
         // Espejo en X para igualar la orientacion del visor 3D (Three.js es
@@ -468,7 +599,7 @@ public class EdificioLoader : MonoBehaviour
         }
     }
 
-    void CreateElement(ElementData elem, List<NodeData> allNodes)
+    void CreateElement(ElementData elem, List<NodeData> allNodes, List<ElementData> allElements)
     {
         string type = elem.type;
 
@@ -494,6 +625,23 @@ public class EdificioLoader : MonoBehaviour
 
         Vector3 startPos, endPos;
         ComputeElementExtremes(elem, ni, nj, out startPos, out endPos);
+
+        // Visual alignment of the two edge beams with their adjacent slabs.
+        // Node coordinates and analysis results retain their structural levels.
+        if (elem.id == 240 || elem.id == 241)
+        {
+            int slabId = elem.id == 240 ? 531 : 530;
+            ElementData slab = allElements.Find(e => e.id == slabId && e.type == "loza");
+            if (slab != null)
+            {
+                float slabTop = (slab.yi + slab.yj) * 0.5f * scale
+                    + SlabVisualOffset + SlabVisualThickness * 0.5f;
+                float liftToSlab = slabTop - elem.h * scale * 0.5f
+                    - (startPos.y + endPos.y) * 0.5f;
+                startPos.y += liftToSlab;
+                endPos.y += liftToSlab;
+            }
+        }
 
         Material mat = columnMat;
         GameObject parent;
@@ -569,8 +717,8 @@ public class EdificioLoader : MonoBehaviour
         // Visual only: draw slabs as thin plates slightly above the beam line.
         // The structural thickness remains in Edificio.json/OpenSees; this avoids
         // z-fighting and the long-standing beam/slab overlap in the Unity viewer.
-        float th = 0.045f;
-        center.y += 0.08f;
+        float th = SlabVisualThickness;
+        center.y += SlabVisualOffset;
 
         GameObject box = GameObject.CreatePrimitive(PrimitiveType.Cube);
         box.name = "LOZA_" + elem.id;
@@ -629,6 +777,21 @@ public class EdificioLoader : MonoBehaviour
         Vector3 center = (start + end) * 0.5f;
         float b = elem.b * scale;
         float h = elem.h * scale;
+
+        // These roof panels store the storey height in h instead of their
+        // plan width. Use the declared section for rendering only; keep the
+        // structural contract and previously calculated results unchanged.
+        if (elem.id == 299 || elem.id == 309 || elem.id == 319 || elem.id == 324
+            || elem.id == 467 || elem.id == 468 || elem.id == 482 || elem.id == 483)
+        {
+            string[] dimensions = (elem.section ?? "").Split('x');
+            float widthCm;
+            if (dimensions.Length == 2 && float.TryParse(dimensions[1],
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out widthCm)
+                && widthCm > 0f && !float.IsInfinity(widthCm))
+                h = widthCm * scale;
+        }
 
         GameObject box = GameObject.CreatePrimitive(PrimitiveType.Cube);
         box.name = "WALL_" + elem.id;
@@ -972,6 +1135,7 @@ public class EdificioLoader : MonoBehaviour
             case "nodos": return nodeGroup;
             case "ejes": return axesGroup;
             case "diafragmas": return diaphGroup;
+            case "terreno": return terrainGroup;
             case "elementos": return elementsGroup;
             default: return null;
         }
@@ -1002,6 +1166,7 @@ public class EdificioLoader : MonoBehaviour
         SetLayerVisible("nodos", visible);
         SetLayerVisible("ejes", visible);
         SetLayerVisible("diafragmas", visible);
+        SetLayerVisible("terreno", visible);
     }
 
     // Desactiva las sombras de todo el modelo y de la luz direccional, para que
@@ -1009,7 +1174,7 @@ public class EdificioLoader : MonoBehaviour
     // cubos, losas y diafragmas que con sombras se ven ruidosos).
     void DisableShadows()
     {
-        GameObject[] roots = { elementsGroup, nodeGroup, axesGroup, diaphGroup };
+        GameObject[] roots = { elementsGroup, nodeGroup, axesGroup, diaphGroup, terrainGroup };
         foreach (GameObject root in roots)
         {
             if (root == null) continue;
@@ -1019,7 +1184,7 @@ public class EdificioLoader : MonoBehaviour
                 r.receiveShadows = false;
             }
         }
-        foreach (Light l in FindObjectsOfType<Light>())
+        foreach (Light l in FindObjectsByType<Light>(FindObjectsSortMode.None))
         {
             l.shadows = LightShadows.None;
         }

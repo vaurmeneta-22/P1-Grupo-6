@@ -13,8 +13,8 @@ public class ViewerHud : MonoBehaviour
     ElementSearchPanel elementSearchPanel;
     int tab = 0; // 0 visualizacion, 1 modificaciones, 2 analisis, 3 datos
 
-    string[] layers = { "columnas", "vigasX", "vigasY", "muros", "losas", "metálicas", "nodos", "ejes", "diafragmas" };
-    string[] layerLabels = { "Columnas", "Vigas X", "Vigas Y", "Muros", "Losas", "Metálicas", "Nodos", "Ejes (palitos)", "Diafragmas" };
+    string[] layers = { "columnas", "vigasX", "vigasY", "muros", "losas", "metálicas", "nodos", "ejes", "diafragmas", "terreno" };
+    string[] layerLabels = { "Columnas", "Vigas X", "Vigas Y", "Muros", "Losas", "Metálicas", "Nodos", "Ejes (palitos)", "Diafragmas", "Terreno" };
 
     Vector2 layerScroll;
     static Texture2D whiteTex;
@@ -102,6 +102,7 @@ public class ViewerHud : MonoBehaviour
         LegendRow(new Color(0.102f, 0.737f, 0.612f), "Nodo");              // #1abc9c
         LegendRow(new Color(0.608f, 0.349f, 0.714f), "Apoyo empotrado");   // #9b59b6
         LegendRow(new Color(0.945f, 0.769f, 0.059f), "Refuerzo metalico"); // #f1c40f
+        LegendRow(new Color(0.43f, 0.37f, 0.27f), "Terreno");
 
         if (tab == 0)
         {
