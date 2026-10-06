@@ -16,7 +16,7 @@ Laboratorio estructural digital que combina:
 | Componente | Tecnología |
 |-----------|-----------|
 | Análisis | Python + OpenSeesPy |
-| Visualización | Unity + C# (Unity 6, 6000.x) |
+| Visualización | Unity + C# (**6000.6.0f1**) |
 | AR | AR Foundation + ARCore, detección de planos y ARAnchor |
 | VR | Google Cardboard XR Plugin, estéreo y seguimiento de orientación |
 | Datos | JSON (contrato OpenSees↔Unity) |
@@ -181,7 +181,7 @@ python scripts/demanda_capacidad.py        # barre 128 columnas + 79 muros con e
 Luego copiar/sincronizar el mapa con `Unity/Assets/StreamingAssets/analysis_map.json` y abrir Unity.
 
 ### Unity
-1. Abrir `Unity/` como proyecto en Unity Hub (requiere Unity 6 / 6000.x).
+1. Abrir `Unity/` como proyecto en Unity Hub con **Unity 6000.6.0f1** (ver la guía de instalación más abajo).
 2. Al abrir por primera vez Unity regenera `Library/` y los paquetes (toma unos minutos).
 3. Pulsar Play para ver el edificio: columnas, vigas, muros, lozas y los 6 diafragmas.
 4. Usar las pestañas `Visualización`, `Modificaciones`, `Análisis` y `Datos`.
@@ -246,7 +246,39 @@ Issue → Plan → Build → Test → Review → Merge
 
 ---
 
-## Instalación completa de Unity y complementos para Android/AR
+## Instalación en otro PC: Unity, Android/AR/VR y Python/OpenSees
+
+Esta guía reproduce el entorno de **Windows de 64 bits** de la entrega. Para
+abrir el visor y consultar los resultados incluidos se necesita Unity; para
+**Modificaciones y Honor Track 4** también se necesita Python/OpenSeesPy; para
+compilar el APK se necesitan los módulos Android. El teléfono utiliza los
+resultados incorporados al APK y no instala Python ni ejecuta el backend local.
+
+### 0. Obtener el proyecto completo
+
+1. Instalar [Git para Windows](https://git-scm.com/downloads/win), disponible
+   desde la terminal y otras aplicaciones mediante el PATH. Package Manager
+   también lo necesita para descargar el plugin Cardboard desde GitHub.
+   [Requisito oficial de Unity para dependencias Git](https://docs.unity3d.com/6000.0/Documentation/Manual/upm-git.html).
+2. Clonar el repositorio en una carpeta con permiso de escritura:
+
+   ```powershell
+   git clone https://github.com/vaurmeneta-22/P1-Grupo-6.git
+   cd P1-Grupo-6
+   git --version
+   ```
+
+3. Conservar la raíz completa: `Unity/`, `scripts/`, `opensees/`, `data/`,
+   `resultados/` y los JSON del modelo. H4 busca los scripts desde esa raíz.
+   En Unity Hub agregar **la subcarpeta Unity/**, no la raíz del repositorio.
+4. Mantener los archivos `.meta`, `Packages/manifest.json`,
+   `Packages/packages-lock.json` y `ProjectSettings/` incluidos en Git.
+   Unity regenera `Library/`, `Temp/` y `Logs/`; no se deben copiar de otro PC.
+
+La primera importación y compilación requieren Internet para descargar paquetes
+de Unity, Cardboard y dependencias de Gradle. Los APK de `Unity/Builds/` se
+generan localmente y están excluidos de Git: clonar el repositorio no descarga
+el APK ya compilado.
 
 La versión con la que se compiló y verificó la app es **Unity 6000.6.0f1**.
 Está registrada en [ProjectVersion.txt](Unity/ProjectSettings/ProjectVersion.txt).
@@ -274,6 +306,21 @@ En Unity, revisar **Edit → Preferences → External Tools** y seleccionar las
 herramientas Android instaladas con Unity. La licencia del editor debe estar
 activa en Unity Hub para abrir el proyecto y compilar.
 
+Herramientas comprobadas en la instalación usada para la entrega:
+
+| Herramienta | Versión |
+|---|---|
+| Editor Unity | **6000.6.0f1** |
+| Android SDK Platform / compile SDK / target API del APK AR+VR | **36** |
+| Android SDK Build Tools | **36.0.0** |
+| Android NDK | **r27c — 27.2.12479018** |
+| OpenJDK incluido con Unity | **17.0.18** |
+| Android mínimo del APK | **API 29 — Android 10** |
+
+Usar **SDK/NDK/JDK installed with Unity** en External Tools. No hace falta
+instalar Android Studio ni un Java independiente para este flujo. Si faltan
+componentes Android, completarlos desde Hub antes de compilar.
+
 **Complemento opcional:** Visual Studio con el workload **Game development with Unity**
 para editar y depurar C#. La configuración del proyecto está en
 [Unity/.vsconfig](Unity/.vsconfig). Para instalar un APK ya generado en el teléfono,
@@ -290,10 +337,14 @@ Esperar a que termine la importación. Las versiones resueltas se conservan en
 |---|---|---|---|
 | **AR Foundation** | com.unity.xr.arfoundation | **6.6.2** | Sesión AR, planos, raycasts, cámara y anclas. |
 | **Google ARCore XR Plugin** | com.unity.xr.arcore | **6.6.2** | Proveedor AR para Android. |
+| **Google Cardboard XR Plugin** | com.google.xr.cardboard | **1.35.0**, commit `36ac9815b8f191fe11e149b7f323368fa86655a6` | Render estereoscópico y seguimiento VR. |
 | **Input System** | com.unity.inputsystem | **1.20.0** | Entrada y actualización de posición/orientación de la cámara AR. |
 | **Universal Render Pipeline — URP** | com.unity.render-pipelines.universal | **17.6.0** | Renderizado y materiales del proyecto. |
 | **XR Plug-in Management** | com.unity.xr.management | **4.7.0** | Dependencia resuelta: configuración y activación de ARCore. |
 | **XR Core Utilities** | com.unity.xr.core-utils | **2.6.0** | Dependencia resuelta: XROrigin y utilidades XR. |
+| **XR Legacy Input Helpers** | com.unity.xr.legacyinputhelpers | **3.0.1** | Dependencia resuelta de los proveedores XR. |
+| **XR Mock HMD** | com.unity.xr.mock-hmd | **1.5.0-exp.3** | Simulación XR en el editor. |
+| **Unity UI** | com.unity.ugui | **2.6.0** | Interfaz del menú móvil y los paneles VR. |
 | **Device Simulator Devices** | com.unity.device-simulator.devices | **1.0.1** | Previsualización de la interfaz móvil en el editor. |
 
 XR Plug-in Management y XR Core Utilities se resuelven como dependencias; no
@@ -302,6 +353,14 @@ Para revisar o restaurar un paquete, abrir **Package Manager**, buscarlo por
 nombre o utilizar **Install package by name** con el identificador de la tabla.
 Conservar las versiones registradas para reproducir esta entrega.
 
+Cardboard ya está fijado a ese commit en el manifest; conservar esa referencia
+para evitar descargar otra versión. No es necesario importarlo manualmente ni
+agregar sus ejemplos al proyecto.
+[Guía oficial de Cardboard](https://developers.google.com/cardboard/develop/unity/quickstart).
+Las versiones de **todos los demás paquetes**, incluidos herramientas de editor
+y dependencias transitivas, están en `manifest.json` y `packages-lock.json`;
+esos archivos son la referencia completa, además de la tabla anterior.
+
 AR Foundation requiere un proveedor de plataforma para funcionar en el teléfono;
 en este proyecto es ARCore.
 [Documentación oficial: configuración XR](https://docs.unity.com/en-us/engine/6000.7/manual/xr/configuring-project-for).
@@ -309,16 +368,19 @@ en este proyecto es ARCore.
 ### 3. Ajustes del proyecto que deben comprobarse
 
 - **Build Profiles:** plataforma Android.
-- **Project Settings → XR Plug-in Management → Android:** ARCore habilitado y
-  **Initialize XR on Startup** activo.
+- **Project Settings → XR Plug-in Management → Android:** proveedores ARCore y
+  Cardboard registrados. En el APK combinado, **Initialize XR on Startup queda
+  desactivado durante la compilación**: el menú inicia el proveedor del modo
+  elegido. Usar el compilador AR+VR del proyecto para aplicar esa configuración.
 - **Player → Active Input Handling:** Both, para conservar la entrada del visor
   y el seguimiento de cámara mediante Input System.
 - **Player → Scripting Define Symbols:** USE_AR_FOUNDATION para Android.
 - **Scripting Backend:** IL2CPP; **Target Architectures:** ARM64.
 - **Minimum API Level:** Android API 29, equivalente a Android 10.
-- **Graphics APIs:** OpenGL ES 3 para el APK AR.
+- **Graphics APIs:** OpenGL ES 3 para el APK AR+VR.
 - **URP:** utilizar los assets de renderizado incluidos en el proyecto. El
-  compilador AR selecciona Mobile_RPAsset durante el build.
+  pipeline predeterminado y la calidad PC utilizan PC_RPAsset; el compilador
+  móvil selecciona Mobile_RPAsset durante el build.
 
 La escena AR utiliza ARSession, ARInputManager, XROrigin, ARPlaneManager,
 ARRaycastManager y ARAnchorManager. La cámara incorpora TrackedPoseDriver,
@@ -328,6 +390,64 @@ esta configuración.
 
 El Device Simulator sirve para revisar la interfaz. La detección de planos y
 la estabilidad del seguimiento se validan en un teléfono compatible con ARCore.
+
+### 4. Python y OpenSeesPy para modificaciones y H4
+
+Instalar **Python 3.12 de 64 bits** desde [python.org](https://www.python.org/downloads/windows/)
+y marcar **Add python.exe to PATH**. La versión de Python está indicada en
+[.python-version](.python-version). OpenSeesPy **3.8.0.0** es la versión registrada
+en el [reporte de semana 5](reports/semana05.md); su distribución Windows requiere
+Python 3.12 según la [documentación oficial](https://openseespydoc.readthedocs.io/en/latest/).
+
+Cerrar Unity y Unity Hub después de instalar Python/Git y abrir una terminal
+nueva para que las aplicaciones reciban el PATH actualizado. Desde la raíz:
+
+```powershell
+python --version
+python -m pip install "openseespy==3.8.0.0" "openseespywin==3.8.0.0" matplotlib pytest
+python -m pip check
+python -c "import sys; import openseespy.opensees as ops; import matplotlib; import pytest; print(sys.executable); print('OpenSees:', ops.version())"
+```
+
+El primer comando debe mostrar **Python 3.12.x**. El último debe importar las
+dependencias y mostrar el intérprete y la versión del motor sin excepciones.
+Se instala OpenSeesPy en ese mismo intérprete: Unity ejecuta **`python`** mediante
+un proceso externo. Que funcione solamente `py`, o instalar paquetes en otro
+entorno de Python, no garantiza que Unity los encuentre.
+
+`matplotlib` permite generar las figuras de capacidad y `pytest` ejecuta las
+pruebas. NumPy se instala como dependencia de Matplotlib. Sus versiones y las
+de otras dependencias auxiliares **no están bloqueadas en el repositorio**:
+estos comandos preparan el entorno, pero no constituyen un lock completo de
+Python. Para registrar el entorno instalado, guardar `python -m pip freeze`.
+
+El backend `scripts/backend_opensees.py` utiliza el servidor HTTP de la biblioteca
+estándar de Python: no requiere Flask, FastAPI ni instalar OpenSees.exe.
+En **Modificaciones → Honor Track 4 → Conectar backend**, Unity inicia o conecta
+el servicio en **127.0.0.1:8765**. El puerto debe estar disponible para el backend;
+el servicio se ejecuta en el mismo PC. No hace falta iniciarlo manualmente.
+
+### 5. Comprobación inicial y problemas frecuentes
+
+- Abrir `Unity/Assets/Scenes/SampleScene.unity` para el visor de escritorio y
+  esperar a que termine la importación, sin errores de compilación, antes de Play.
+- Para la app conjunta, usar **Lab → Móvil → Compilar APK AR + Cardboard VR**.
+  Este menú configura las escenas y XR. También existe
+  [scripts/build_mobile_vr.ps1](scripts/build_mobile_vr.ps1): apunta a
+  `C:\Program Files\Unity\Hub\Editor\6000.6.0f1\Editor\Unity.exe`.
+  Si Unity está instalado en otra ruta, ajustar su variable `unityExe` o usar
+  el menú del editor. Cerrar Unity antes de ejecutar el script batch.
+- Si Cardboard no se descarga, comprobar `git --version`, la conexión a GitHub
+  y reiniciar Hub después de instalar Git. Conservar el manifest y el lock.
+- Si aparece **python no encontrado** o **No module named openseespy**, repetir
+  la comprobación de Python anterior y reiniciar Hub; los paquetes deben estar
+  instalados en el intérprete que devuelve `python`.
+- Si falla H4, revisar el log de Unity y `resultados/12_h4/`. Comprobar que se
+  clonó el repositorio completo y que el backend puede usar el puerto 8765.
+- Para comprobar el entorno de análisis, ejecutar desde la raíz
+  `python -m pytest tests -q`. H4 se valida desde su propia pestaña con los casos
+  A/B/C y la comparación directa. Consultar resultados precalculados no requiere
+  recalcular ni sobrescribir los archivos existentes.
 
 ## Realidad aumentada: Viga AR v4 — Semana 6
 
