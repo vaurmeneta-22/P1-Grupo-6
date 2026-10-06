@@ -12,6 +12,10 @@ public static class Plot2D
     static Series[] multiSeriesCache;
     static int singleWidthCache, singleHeightCache, multiWidthCache, multiHeightCache;
     static bool multiMirrorCache;
+    static Texture2D diagramCache;
+    static double[] diagramXCache, diagramNCache, diagramVCache, diagramMCache;
+    static int diagramWidthCache, diagramHeightCache;
+    static double diagramLengthCache;
 
     public static Texture2D Make(double[] xs, double[] ys, string title, string unit, int W = 520, int H = 220)
     {
@@ -411,88 +415,98 @@ public static class Plot2D
         var gr = new Color(0.22f, 0.26f, 0.30f, 1f);
         var midc = new Color(0.23f, 0.23f, 0.35f, 1f);
 
-        var tx = new Texture2D(W, H, TextureFormat.RGBA32, false);
-        for (int y = 0; y < H; y++)
-            for (int xx = 0; xx < W; xx++)
-                tx.SetPixel(xx, y, bg);
-
         Color[] cols = { new Color(0.18f, 0.80f, 0.44f, 1f),  // N verde
                          new Color(1f, 0.70f, 0.28f, 1f),     // V naranja
                          new Color(0f, 1f, 1f, 1f) };         // M cian
         double[][] valsA = { N, V, M };
-
-        // Convencion: S = offset desde el tope del rect (0=arriba, igual que la
-        // GUI). e = H - S es la fila de la textura (las filas crecen hacia arriba).
-        for (int s = 0; s < 3; s++)
+        bool rebuildTexture = diagramCache == null || diagramXCache != x ||
+            diagramNCache != N || diagramVCache != V || diagramMCache != M ||
+            diagramWidthCache != W || diagramHeightCache != H || diagramLengthCache != d.L;
+        if (rebuildTexture)
         {
-            double[] vals = valsA[s];
-            if (vals == null || vals.Length == 0) continue;
-            int topS = PT + s * (NH + 3);
-            int botS = topS + NH;
-            int midS = topS + NH / 2;
-            int eT = H - topS, eB = H - botS, eM = H - midS;
-            double maxA = 1e-9;
-            for (int i = 0; i < vals.Length; i++)
-            {
-                double a = Math.Abs(vals[i]);
-                if (a > maxA) maxA = a;
-            }
-            maxA *= 1.15;
+            if (diagramCache != null) UnityEngine.Object.Destroy(diagramCache);
+            var tx = new Texture2D(W, H, TextureFormat.RGBA32, false);
+            for (int y = 0; y < H; y++)
+                for (int xx = 0; xx < W; xx++)
+                    tx.SetPixel(xx, y, bg);
 
-            for (int gx = PXL; gx <= PXL + NW; gx++) { tx.SetPixel(gx, eT, gr); tx.SetPixel(gx, eB, gr); }
-            for (int gx = PXL; gx <= PXL + NW; gx++) { tx.SetPixel(gx, eM, midc); tx.SetPixel(gx, eM - 1, midc); }
-
-            int iMax = 0;
-            for (int i = 1; i < vals.Length; i++)
-                if (Math.Abs(vals[i]) > Math.Abs(vals[iMax])) iMax = i;
-
-            Color c = cols[s];
-            // curva (valor positivo -> fila grande -> mas arriba en la pantalla)
-            for (int i = 1; i < x.Length && i < vals.Length; i++)
+            // Convencion: S = offset desde el tope del rect (0=arriba, igual que la
+            // GUI). e = H - S es la fila de la textura (las filas crecen hacia arriba).
+            for (int s = 0; s < 3; s++)
             {
-                int X0 = PXL + (int)Math.Round(NW * (x[i - 1] / d.L));
-                int X1 = PXL + (int)Math.Round(NW * (x[i] / d.L));
-                int Y0 = eM + (int)Math.Round((vals[i - 1] / maxA) * (NH / 2.0));
-                int Y1 = eM + (int)Math.Round((vals[i] / maxA) * (NH / 2.0));
-                Line(tx, X0, Y0, X1, Y1, c);
-                Line(tx, X0, Y0 + 1, X1, Y1 + 1, c);
-            }
-            // relleno hacia el eje 0 (barrido por columna)
-            for (int gx = PXL; gx <= PXL + NW; gx++)
-            {
-                double fx = (double)(gx - PXL) / NW;
-                double v = Interp(x, vals, fx * d.L);
-                int yv = eM + (int)Math.Round((v / maxA) * (NH / 2.0));
-                int lo = Math.Min(eM, yv), hi = Math.Max(eM, yv);
-                for (int i = lo; i <= hi; i++)
+                double[] vals = valsA[s];
+                if (vals == null || vals.Length == 0) continue;
+                int topS = PT + s * (NH + 3);
+                int botS = topS + NH;
+                int midS = topS + NH / 2;
+                int eT = H - topS, eB = H - botS, eM = H - midS;
+                double maxA = 1e-9;
+                for (int i = 0; i < vals.Length; i++)
                 {
-                    if (i < eB || i > eT) continue;
-                    Color p = tx.GetPixel(gx, i);
-                    tx.SetPixel(gx, i, Color.Lerp(p, c, 0.35f));
+                    double a = Math.Abs(vals[i]);
+                    if (a > maxA) maxA = a;
                 }
+                maxA *= 1.15;
+                double verticalSign = s == 2 ? -1.0 : 1.0;
+
+                for (int gx = PXL; gx <= PXL + NW; gx++) { tx.SetPixel(gx, eT, gr); tx.SetPixel(gx, eB, gr); }
+                for (int gx = PXL; gx <= PXL + NW; gx++) { tx.SetPixel(gx, eM, midc); tx.SetPixel(gx, eM - 1, midc); }
+
+                int iMax = 0;
+                for (int i = 1; i < vals.Length; i++)
+                    if (Math.Abs(vals[i]) > Math.Abs(vals[iMax])) iMax = i;
+
+                Color c = cols[s];
+                // En el diagrama de momentos solo se invierte el signo visual:
+                // negativo arriba y positivo abajo. N y V conservan su convención.
+                for (int i = 1; i < x.Length && i < vals.Length; i++)
+                {
+                    int X0 = PXL + (int)Math.Round(NW * (x[i - 1] / d.L));
+                    int X1 = PXL + (int)Math.Round(NW * (x[i] / d.L));
+                    int Y0 = eM + (int)Math.Round((verticalSign * vals[i - 1] / maxA) * (NH / 2.0));
+                    int Y1 = eM + (int)Math.Round((verticalSign * vals[i] / maxA) * (NH / 2.0));
+                    Line(tx, X0, Y0, X1, Y1, c);
+                    Line(tx, X0, Y0 + 1, X1, Y1 + 1, c);
+                }
+                for (int gx = PXL; gx <= PXL + NW; gx++)
+                {
+                    double fx = (double)(gx - PXL) / NW;
+                    double v = verticalSign * Interp(x, vals, fx * d.L);
+                    int yv = eM + (int)Math.Round((v / maxA) * (NH / 2.0));
+                    int lo = Math.Min(eM, yv), hi = Math.Max(eM, yv);
+                    for (int i = lo; i <= hi; i++)
+                    {
+                        if (i < eB || i > eT) continue;
+                        Color p = tx.GetPixel(gx, i);
+                        tx.SetPixel(gx, i, Color.Lerp(p, c, 0.35f));
+                    }
+                }
+                int xm = PXL + (int)Math.Round(NW * (x[Mathf.Min(iMax, x.Length - 1)] / d.L));
+                int ym = eM + (int)Math.Round((verticalSign * vals[iMax] / maxA) * (NH / 2.0));
+                for (int gx = xm - 3; gx <= xm + 3; gx++)
+                    for (int gy = ym - 3; gy <= ym + 3; gy++)
+                        if ((gx - xm) * (gx - xm) + (gy - ym) * (gy - ym) <= 9)
+                            tx.SetPixel(Mathf.Clamp(gx, 0, W - 1), Mathf.Clamp(gy, 0, H - 1), c);
             }
-            // punto del maximo
-            int xm = PXL + (int)Math.Round(NW * (x[Mathf.Min(iMax, x.Length - 1)] / d.L));
-            int ym = eM + (int)Math.Round((vals[iMax] / maxA) * (NH / 2.0));
-            for (int gx = xm - 3; gx <= xm + 3; gx++)
-                for (int gy = ym - 3; gy <= ym + 3; gy++)
-                    if ((gx - xm) * (gx - xm) + (gy - ym) * (gy - ym) <= 9)
-                        tx.SetPixel(Mathf.Clamp(gx, 0, W - 1), Mathf.Clamp(gy, 0, H - 1), c);
+
+            for (int gx = PXL; gx <= PXL + NW; gx++)
+                tx.SetPixel(gx, H - PB + 3, new Color(0.27f, 0.27f, 0.33f, 1f));
+            tx.Apply();
+            diagramCache = tx;
+            diagramXCache = x; diagramNCache = N; diagramVCache = V; diagramMCache = M;
+            diagramWidthCache = W; diagramHeightCache = H;
+            diagramLengthCache = d.L;
         }
 
-        for (int gx = PXL; gx <= PXL + NW; gx++)
-            tx.SetPixel(gx, H - PB + 3, new Color(0.27f, 0.27f, 0.33f, 1f));
-
         var st = new GUIStyle();
-        st.fontSize = 10;
+        st.fontSize = 12;
         st.normal.textColor = new Color(0.55f, 0.6f, 0.68f, 1f);
         var st2 = new GUIStyle(st);
-        st2.fontSize = 11;
+        st2.fontSize = 13;
         st2.fontStyle = FontStyle.Bold;
         st2.normal.textColor = new Color(1f, 0.8f, 0.4f, 1f);
 
-        tx.Apply();
-        GUI.DrawTexture(rc, tx);
+        GUI.DrawTexture(rc, diagramCache);
 
         // Etiquetas numericas (overlay GUI, el texto no va en la textura)
         for (int s = 0; s < 3; s++)
@@ -506,14 +520,17 @@ public static class Plot2D
             maxA *= 1.15;
             string[] sn = { "N [kN]", "V [kN]", "M [kN-m]" };
             GUI.Label(new Rect(rc.x + PXL + 3, rc.y + py + 5, 90, 14), sn[s], st2);
-            GUI.Label(new Rect(rc.x + 6, rc.y + py + 6, PXL - 8, 14), "+" + maxA.ToString("F0"), st);
-            GUI.Label(new Rect(rc.x + 6, rc.y + py + NH - 8, PXL - 8, 14), "-" + maxA.ToString("F0"), st);
+            string upperBound = s == 2 ? "-" : "+";
+            string lowerBound = s == 2 ? "+" : "-";
+            GUI.Label(new Rect(rc.x + 3, rc.y + py + 6, PXL - 5, 16), upperBound + maxA.ToString("F0"), st);
+            GUI.Label(new Rect(rc.x + 3, rc.y + py + NH - 10, PXL - 5, 16), lowerBound + maxA.ToString("F0"), st);
             GUI.Label(new Rect(rc.x + 6, rc.y + mid - 3, PXL - 8, 14), "0", st);
             int iMax = 0;
             for (int i = 1; i < vals.Length; i++)
                 if (Math.Abs(vals[i]) > Math.Abs(vals[iMax])) iMax = i;
             int xxm = PXL + (int)Math.Round(NW * (x[Mathf.Min(iMax, x.Length - 1)] / d.L));
-            int yym = mid - (int)Math.Round((vals[iMax] / maxA) * (NH / 2.0));
+            double verticalSign = s == 2 ? -1.0 : 1.0;
+            int yym = mid - (int)Math.Round((verticalSign * vals[iMax] / maxA) * (NH / 2.0));
             GUI.Label(new Rect(rc.x + xxm + 5, rc.y + yym - 8, 70, 14), vals[iMax].ToString("F0"),
                       new GUIStyle(st) { normal = { textColor = cols[s] } });
         }

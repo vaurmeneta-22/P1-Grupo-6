@@ -263,7 +263,8 @@ public class ARBeamPlacement : MonoBehaviour
             GUI.color = Color.white;
         }
         float panelHeight = Mathf.Min(beamRoot != null ? 360f : 180f, height * 0.47f);
-        GUILayout.BeginArea(new Rect(8f, height - panelHeight - 8f, 404f, panelHeight), GUI.skin.box);
+        float bottomGap = MobileLabMenu.Instance != null ? 58f : 8f;
+        GUILayout.BeginArea(new Rect(8f, height - panelHeight - bottomGap, 404f, panelHeight), GUI.skin.box);
         scroll = GUILayout.BeginScrollView(scroll);
         GUI.enabled = !busy;
 #if USE_AR_FOUNDATION

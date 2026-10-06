@@ -448,7 +448,7 @@ public class PickHighlight : MonoBehaviour
 
     // Criterio del visor: columna 70 usa su curva, luego borde, muros[sec],
     // luego '70x70'->columna, '30x356'->muro y steel[sec].
-    Dictionary<string, object> CapacityCur(AnalysisMap.ElementInfo meta)
+    public static Dictionary<string, object> CapacityCur(AnalysisMap.ElementInfo meta)
     {
         if (AnalysisMap.Capacidad == null) return null;
         Dictionary<string, object> C = AnalysisMap.Capacidad;
@@ -511,7 +511,7 @@ public class PickHighlight : MonoBehaviour
     // demandaColumnaMuro() del HTML: extremo de mayor |M|, P = axial proyectado
     // sobre el eje del elemento, M = flexion TRANSVERSAL al eje. Las vistas y
     // fuerzas usan (x, y=altura, z) = OpenSees (X, h, Y) -> indice (0,2,1).
-    void DemandaPM(AnalysisMap.EndForces f, AnalysisMap.ElementInfo meta, out double P, out double M)
+    public static void DemandaPM(AnalysisMap.EndForces f, AnalysisMap.ElementInfo meta, out double P, out double M)
     {
         P = 0;
         M = 0;

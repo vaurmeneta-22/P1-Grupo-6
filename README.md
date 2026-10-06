@@ -5,9 +5,11 @@
 ## Descripción
 
 Laboratorio estructural digital que combina:
+
 - Análisis estructural 3D con OpenSeesPy
 - Visualización e interacción en Unity
 - Realidad aumentada con AR Foundation
+- Realidad virtual con Google Cardboard: recorrido de los pisos 1 a 4 y consulta de resultados estructurales
 
 ## Tecnologías
 
@@ -15,7 +17,8 @@ Laboratorio estructural digital que combina:
 |-----------|-----------|
 | Análisis | Python + OpenSeesPy |
 | Visualización | Unity + C# (Unity 6, 6000.x) |
-| AR | AR Foundation + Image Tracking |
+| AR | AR Foundation + ARCore, detección de planos y ARAnchor |
+| VR | Google Cardboard XR Plugin, estéreo y seguimiento de orientación |
 | Datos | JSON (contrato OpenSees↔Unity) |
 
 ## Funcionalidades del visor Unity
@@ -104,7 +107,7 @@ En Unity las capas se alternan con las casillas del panel izquierdo o con las te
 │   ├── 09_demanda_capacidad/      # demanda_capacidad_*.png + critica.json
 │   ├── 10_figuras/                # Diagramas 2D/3D y marco_3d interactivo
 │   ├── 11_mapa_visor/             # analysis_map.json, tributary_map.js, mapas del visor
-├── reports/              # Entregables semana01/02/03/04 y plan de empalmes
+├── reports/              # Informes hasta Semana 7, Honor Tracks H1/H4 y documentación AR
 ├── Unity/                # Proyecto Unity
 │   └── Assets/
 │       ├── Scripts/      # EdificioLoader.cs, AnalysisMap.cs, AnalysisMode.cs,
@@ -328,8 +331,8 @@ la estabilidad del seguimiento se validan en un teléfono compatible con ARCore.
 
 ## Realidad aumentada: Viga AR v4 — Semana 6
 
-La entrada **AR Foundation + Image Tracking** de la tabla de tecnologías describe
-el prototipo inicial con marcador. **La app vigente utiliza detección de planos,
+El prototipo inicial utilizó AR Foundation con Image Tracking y marcador.
+**La app vigente utiliza detección de planos,
 colocación manual y ARAnchor.** La viga está asociada al ID 185 y no requiere
 imprimir un QR ni un marker para colocarla.
 
@@ -399,12 +402,88 @@ mientras la geometría permanece a escala real. Los desplazamientos se unen
 linealmente entre nodos y las flechas de peso propio no incluyen las cargas de
 los elementos vecinos.
 
+## App móvil: AR + Visualizador VR de los pisos 1 a 4
+
+Esta app implementa **H1 — Google Cardboard VR — hasta +4**. La versión actual
+es **v11 (0.6.1, código Android 11)**; reúne AR y VR en un mismo APK.
+El procedimiento de AR v4 de la sección anterior se conserva como referencia
+de esa versión; para la app combinada vigente se usa la compilación siguiente.
+
+La versión móvil v11 incluye **Visualizador VR** en la esquina inferior derecha del
+menú y del modo AR. El recorrido inicia en el piso 3 e incluye botones para cambiar
+a los pisos 1, 2, 3 y 4, debajo de las flechas de movimiento. El panel se mantiene
+fijo al bajar la mirada hacia el selector. Cada piso tiene su geometría, techo y
+paso libre sobre la junta de dilatación, conservando muros y huecos de escaleras.
+Usa Google Cardboard, cuatro flechas, selección
+por mirada/pulsador y fichas OpenSees G/Q/EX/EY/COMBO. Incluye diagramas N/V/M
+en dos planos, curvas P-M disponibles y referencia momento-curvatura de columna
+70×70 a P=0. La geometría y la construcción de diagramas se comparten con el visor.
+El teléfono lee `Edificio.json` y `analysis_map.json` incluidos en el APK;
+OpenSees calcula previamente en el computador. El recorrido VR no utiliza
+el backend de H4 ni ejecuta un nuevo análisis estructural.
+
+| Requisito H1 | Función disponible |
+|---|---|
+| Render estereoscópico | Vista para ambos ojos y distorsión óptica del SDK Cardboard; controles y gráficos en 3D. |
+| Head tracking | Giro de cámara según la orientación de la cabeza/teléfono y recentrado. |
+| Locomoción | Cuatro flechas, colisiones, apoyo sobre losas y cambio de piso a una posición segura. |
+| Selección de elementos | Mira, permanencia de mirada o pulsador; ID y ficha del elemento original. |
+| Resultados OpenSees | Consulta G/Q/EX/EY/COMBO con unidades físicas. |
+| Diagramas/capacidad | N/V/M, dos planos, muestras, P-M disponible y referencia momento-curvatura identificada. |
+
+Los momentos se representan con **negativos arriba y positivos abajo**, tanto
+en VR como en el diagrama My de la viga AR; los valores mantienen su signo real.
+El paso sobre la junta es una ayuda de navegación exclusiva de VR, calculada
+por piso: no altera los elementos, cargas ni resultados del modelo estructural.
+
+APK: `Unity/Builds/P1_Grupo6_AR_VR_v11.apk`. Mantiene el paquete Android de la app
+AR para instalarse como actualización. En el teléfono se cambia a horizontal
+al entrar en VR y se vuelve a vertical al regresar al menú o AR.
+
+Cerrar el editor Unity y compilar desde la raíz:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_mobile_vr.ps1
+```
+
+Este constructor registra ARCore y Cardboard y configura la app para iniciar
+solo el proveedor del modo elegido. Así se realiza el cambio AR ↔ VR desde el
+menú, conservando la misma aplicación instalada.
+
+Uso, arquitectura, verificación y alcance de la prueba física:
+[H1 — Cardboard VR](reports/H1_Cardboard_VR.md).
+
+1. Instalar el APK v11 como actualización y abrir **Visualizador VR**.
+2. Poner el teléfono horizontal; configurar el visor mediante su QR si Cardboard
+   lo solicita. En Editor la vista previa se identifica como **sin estéreo**.
+3. Mirar una flecha **0.7 s** para moverse; dejar de mirarla detiene el movimiento.
+4. Elegir **Piso 1 / 2 / 3 / 4**, debajo de las flechas, por mirada de **1.1 s** o
+   pulsador. Apuntar al selector mantiene fijo el panel y no desplaza al visitante;
+   el cambio de piso se realiza al activar el botón.
+5. Mirar un elemento **1 s** o usar el pulsador para consultar su ficha. La consulta
+   pausa la locomoción; **Recorrer piso** vuelve a los controles.
+6. **Centrar panel** recupera los controles, **Volver al inicio** restablece la
+   ubicación del piso actual e **Inicio** regresa al menú AR/VR.
+
+**Validación:** Play Mode y compilación v11 aprobados para los cuatro pisos,
+incluidos cambios repetidos, selección estable, resultados y cruce de juntas en
+ambos sentidos. Las comprobaciones por nivel quedan en
+`Unity/Builds/H1_floor1_checks.json` a `H1_floor4_checks.json`; los registros son
+`H1_v11_play.log` y `AR_VR_v11_build.log` en la misma carpeta. Las salidas de
+Builds se generan localmente al verificar/compilar.
+
+El usuario confirmó el funcionamiento del recorrido inicial en el teléfono.
+Queda confirmar la versión final v11 y archivar la prueba de imagen estéreo y
+head tracking con visor Cardboard antes de declarar H1 validado físicamente.
+El [informe de Semana 7](reports/semana07.md) reúne H4 y la implementación de H1.
+
 ## Documentación complementaria
 
 - [Avance Semana 1](reports/semana01.md) — benchmark y convenciones.
 - [Avance Semana 2](reports/semana02.md) — modelo y áreas tributarias.
 - [Avance Semana 5](reports/semana05.md) — laboratorio interactivo, modificaciones y superposición.
 - [Avance Semana 6](reports/semana06.md) — flujo AR, transformaciones, precisión, resultados, QA y errores conocidos.
-- [Avance Semana 7](reports/semana07.md) — reanálisis OpenSees desde Unity, backend local, casos A/B/C y evidencia de validación.
+- [Avance Semana 7](reports/semana07.md) — H4: reanálisis OpenSees y backend local; H1: Google Cardboard VR, pisos 1–4, interacción y evidencia de validación.
+- [H1 — Google Cardboard VR](reports/H1_Cardboard_VR.md) — uso, controles, junta de dilatación, compilación y evolución del APK.
 - [AR: colocación v2](reports/AR_Colocacion_v2.md) — colocación, ajuste y anclaje.
 - [AR: diagramas v3](reports/AR_Diagramas_v3.md) — diagramas M/V y verificación de resultados.

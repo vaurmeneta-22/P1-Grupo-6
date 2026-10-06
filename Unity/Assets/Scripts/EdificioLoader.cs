@@ -95,6 +95,27 @@ public class EdificioLoader : MonoBehaviour
     // Grupo raiz de los solidos (para el hover/doble-clic del PickHighlight).
     public GameObject ElementsGroup { get { return elementsGroup; } }
 
+    // Reuse the same geometry and visual corrections in the mobile floor tour.
+    // The caller disables this component: no desktop HUD, keyboard or file I/O.
+    public GameObject BuildSolids(EdificioData data, Transform parent)
+    {
+        if (columnMat == null) CreateMaterials();
+        elementsGroup = new GameObject("Elementos VR");
+        elementsGroup.transform.SetParent(parent, false);
+        columnGroup = new GameObject("Columnas");
+        beamXGroup = new GameObject("VigasX");
+        beamYGroup = new GameObject("VigasY");
+        wallGroup = new GameObject("Muros");
+        lozaGroup = new GameObject("Losas");
+        steelGroup = new GameObject("Metalicas");
+        axesGroup = new GameObject("Ejes");
+        foreach (var group in new[] { columnGroup, beamXGroup, beamYGroup, wallGroup, lozaGroup, steelGroup, axesGroup })
+            group.transform.SetParent(elementsGroup.transform, false);
+        foreach (var element in data.elements) CreateElement(element, data.nodes, data.elements);
+        axesGroup.SetActive(false);
+        return elementsGroup;
+    }
+
     void Start()
     {
         QualitySettings.antiAliasing = 4;
@@ -610,7 +631,7 @@ public class EdificioLoader : MonoBehaviour
         }
         if (type == "wall")
         {
-            CreateWall(elem, wallGroup);
+            CreateWall(elem, wallGroup, allElements);
             return;
         }
         if (type == "steel_column" || type == "steel_beam")
@@ -767,7 +788,7 @@ public class EdificioLoader : MonoBehaviour
         lr.SetPosition(3, new Vector3(center.x - w * 0.5f, y, center.z + d * 0.5f));
     }
 
-    void CreateWall(ElementData elem, GameObject parent)
+    void CreateWall(ElementData elem, GameObject parent, List<ElementData> allElements)
     {
         // Muro/pantalla. El visor distingue alma (avanza en X) y ala (avanza en Y).
         // Guardamos coordenadas directas igual que loza.
@@ -791,6 +812,20 @@ public class EdificioLoader : MonoBehaviour
                 System.Globalization.CultureInfo.InvariantCulture, out widthCm)
                 && widthCm > 0f && !float.IsInfinity(widthCm))
                 h = widthCm * scale;
+        }
+
+        // Los muros 329 y 334 continúan respectivamente a los muros 328 y 333.
+        // Sus datos de sección superior tienen dimensiones visuales inconsistentes;
+        // usar el perfil del tramo inferior para que ambos niveles queden pareados.
+        int pairedWallId = elem.id == 329 ? 328 : (elem.id == 334 ? 333 : -1);
+        if (pairedWallId >= 0 && allElements != null)
+        {
+            ElementData pairedWall = allElements.Find(e => e.id == pairedWallId && e.type == "wall");
+            if (pairedWall != null)
+            {
+                b = pairedWall.b * scale;
+                h = pairedWall.h * scale;
+            }
         }
 
         GameObject box = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -820,8 +855,8 @@ public class EdificioLoader : MonoBehaviour
         tag.elementId = elem.id;
         tag.type = elem.type;
         tag.section = elem.section;
-        tag.bCm = elem.b;
-        tag.hCm = elem.h;
+        tag.bCm = b / scale;
+        tag.hCm = h / scale;
         tag.start = a;
         tag.end = top;
         tag.niNode = elem.node_i;

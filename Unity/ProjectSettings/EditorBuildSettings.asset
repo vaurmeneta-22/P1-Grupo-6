@@ -11,6 +11,15 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/ARViga185.unity
     guid: d34480066f905c34f8508c9d74cbab7e
+  - enabled: 1
+    path: Assets/Scenes/MobileLabMenu.unity
+    guid: 346c2682046573a4583e2ea0b2d3294f
+  - enabled: 1
+    path: Assets/Scenes/ARBeamPlacement.unity
+    guid: c9b0c63d6d9074f4dbd4c647a7c5f149
+  - enabled: 1
+    path: Assets/Scenes/VRFloor3.unity
+    guid: 9b660ac8277e12a48b38700468e5cfc5
   m_configObjects:
     UnityEditor.XR.ARCore.ARCoreSettings: {fileID: 11400000, guid: c20b873988419934e88542f64b1e3150, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

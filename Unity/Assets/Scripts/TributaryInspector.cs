@@ -263,7 +263,7 @@ public class TributaryInspector : MonoBehaviour
                               " m · " + r.tramos + (r.tramos == 1 ? " tramo FE" : " tramos FE") +
                               " · q = " + r.q.ToString("F3", CultureInfo.InvariantCulture) + " kN/m");
 
-        Rect rc = GUILayoutUtility.GetRect(10, 216, GUILayout.ExpandWidth(true));
+        Rect rc = GUILayoutUtility.GetRect(10, 350, GUILayout.ExpandWidth(true));
         GUI.BeginGroup(rc);
         GUI.BeginClip(new Rect(0, 0, rc.width, rc.height));
         Plot2D.DrawDiag(new Rect(0, 0, rc.width, rc.height), r.diag);

@@ -109,7 +109,12 @@ public class ARBeamDiagrams : MonoBehaviour
     double[] Values(AnalysisMap.DiagInfo d) { return mode == 1 ? d.M : mode == 2 ? d.V : d.N; }
     string Unit { get { return mode == 1 ? "kN·m" : "kN"; } }
     Vector3 Point(double x, double value)
-    { return new Vector3((float)x, amplitude + 0.65f + (peak > 1e-10 ? (float)(value / peak) * amplitude : 0f), -0.45f); }
+    {
+        // Invert only the moment's visual ordinate; keep OpenSees signs and colours.
+        float ordinate = peak > 1e-10 ? (float)(value / peak) * amplitude : 0f;
+        if (mode == 1) ordinate = -ordinate;
+        return new Vector3((float)x, amplitude + 0.65f + ordinate, -0.45f);
+    }
 
     void Refresh()
     {
@@ -302,7 +307,10 @@ public class ARBeamDiagrams : MonoBehaviour
         GUILayout.Label((mode == 1 ? "Momento My" : mode == 2 ? "Corte Vz" : "Axial N") + " | " + cases[caseIndex] + " | " + Unit, label);
         GUILayout.Label("Inicio: " + Number(values[0]) + " | Final: " + Number(values[values.Length - 1]), label);
         GUILayout.Label("Min: " + Number(values[minIndex]) + " (x=" + Number(d.x[minIndex]) + " m)\nMax: " + Number(values[maxIndex]) + " (x=" + Number(d.x[maxIndex]) + " m)", label);
-        GUILayout.Label("Cian: positivo arriba. Naranja: negativo abajo.\nAltura amplificada; longitud real de 10 m.", label);
+        GUILayout.Label((mode == 1
+            ? "Naranja: negativo arriba. Cian: positivo abajo."
+            : "Cian: positivo arriba. Naranja: negativo abajo.")
+            + "\nAltura amplificada; longitud real de 10 m.", label);
         if (cases[caseIndex] == "COMBO" && AnalysisMap.Lambdas != null && AnalysisMap.Lambdas.Length >= 4)
             GUILayout.Label("COMBO: G=" + Number(AnalysisMap.Lambdas[0]) + " Q=" + Number(AnalysisMap.Lambdas[1]) + " EX=" + Number(AnalysisMap.Lambdas[2]) + " EY=" + Number(AnalysisMap.Lambdas[3]), label);
     }
