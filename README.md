@@ -141,16 +141,19 @@ El modelo actual contiene **536 nodos, 722 elementos** (118 columnas, 141 vigas 
 
 ## Ejecución
 
+Los comandos de esta sección y de **Verificaciones** se ejecutan desde la
+**raíz del repositorio**, donde están `Edificio.json`, `opensees/`, `scripts/`
+y `Unity/`. Instalar primero las dependencias de la guía de instalación.
+
 ### OpenSeesPy
 El FE principal es `opensees_edificio_v2.py`. Cada caso construye el modelo desde cero (`ops.wipe`) y exporta su archivo de resultados:
 
 ```bash
-cd opensees
-python opensees_edificio_v2.py --case G     # → resultados/01_casos_base/edificio_full_results.json
-python opensees_edificio_v2.py --case Q     # → resultados/01_casos_base/edificio_full_results_Q.json
-python opensees_edificio_v2.py --case EX    # → resultados/01_casos_base/edificio_full_results_EX.json
-python opensees_edificio_v2.py --case EY    # → resultados/01_casos_base/edificio_full_results_EY.json
-python opensees_edificio_v2.py --case COMBO --lambda-g 1.2 --lambda-q 1.0 --lambda-ex 1.4 --lambda-ey 1.4
+python opensees/opensees_edificio_v2.py --case G     # → resultados/01_casos_base/edificio_full_results.json
+python opensees/opensees_edificio_v2.py --case Q     # → resultados/01_casos_base/edificio_full_results_Q.json
+python opensees/opensees_edificio_v2.py --case EX    # → resultados/01_casos_base/edificio_full_results_EX.json
+python opensees/opensees_edificio_v2.py --case EY    # → resultados/01_casos_base/edificio_full_results_EY.json
+python opensees/opensees_edificio_v2.py --case COMBO --lambda-g 1.2 --lambda-q 1.0 --lambda-ex 1.4 --lambda-ey 1.4
                                             # → resultados/01_casos_base/edificio_full_results_COMBO.json
 ```
 
@@ -164,11 +167,17 @@ También disponible: `benchmark_3d.py` (módulo de prueba 2D/3D) y `superposicio
 Los resultados del análisis (deformada, M/N/V por caso y capacidad P-M) se exportan a `resultados/11_mapa_visor/analysis_map.json` para Unity. Regenerarlos tras un análisis nuevo:
 
 ```bash
-cd opensees
-python exportar_analysis_map.py
+python opensees/exportar_analysis_map.py
 ```
 
 La capacidad P-M se genera con `scripts/parte_d_fiber.py` (columna 70×70 y muro 30×356) y `scripts/parte_d_muros.py` (los **14 muros del contrato restantes**, con la enfierradura proporcional de `sections.muro_tipificado()`). Las curvas P-M y M-φ se escriben en `resultados/07_capacidad/` (`mom_curv/`, `pm_columnas/`, `pm_muros/`). Los diagramas P-M se dibujan como **diamante completo simétrico** (rama ±M, espejo por simetría de la sección). Para el acero, `exportar_analysis_map.py` calcula las curvas P-M de los tubos `300×300×20` y `300×300×50` (elásticas, fy=240 MPa, `A` y `Zp`) en `capacidad.steel`; el visor no las dibuja (los metálicos muestran N/V/M/DEF en su lugar). El visor busca cada curva por el nombre de sección del elemento.
+
+Para regenerar esas curvas, ejecutar desde la raíz:
+
+```bash
+python scripts/parte_d_fiber.py
+python scripts/parte_d_muros.py
+```
 
 Además, al regenerar resultados de capacidad se corre el resto del módulo de capacidad (`scripts/`), que sobrescribe `resultados/`:
 
@@ -178,12 +187,32 @@ python scripts/comparacion_rc.py           # verificación RC (bloque ACI/NCh vs
 python scripts/demanda_capacidad.py        # barre 128 columnas + 79 muros con el COMBO → 09_demanda_capacidad/
 ```
 
-Luego copiar/sincronizar el mapa con `Unity/Assets/StreamingAssets/analysis_map.json` y abrir Unity.
+Si se regeneró la capacidad, volver a ejecutar `python opensees/exportar_analysis_map.py`
+para incorporar las nuevas curvas al mapa. Para generar los CSV del **caso G**:
+
+```bash
+python opensees/exportar_resultados_csv.py
+```
+
+Este exportador lee `edificio_full_results.json` y escribe `reacciones.csv`,
+`desplazamientos.csv` y `fuerzas_elementos.csv` en las carpetas
+`resultados/02_reacciones/`, `03_desplazamientos/` y `04_fuerzas_elementos/`.
+
+Finalmente, sincronizar el modelo y el mapa para el visor. Desde la raíz en
+PowerShell, con Play Mode detenido:
+
+```powershell
+Copy-Item -LiteralPath .\Edificio.json -Destination .\Unity\Assets\StreamingAssets\Edificio.json -Force
+Copy-Item -LiteralPath .\resultados\11_mapa_visor\analysis_map.json -Destination .\Unity\Assets\StreamingAssets\analysis_map.json -Force
+```
+
+El flujo completo es: **analizar G/Q/EX/EY/COMBO → generar capacidad si cambió
+la sección → exportar el mapa y los CSV → sincronizar StreamingAssets → abrir el visor**.
 
 ### Unity
 1. Abrir `Unity/` como proyecto en Unity Hub con **Unity 6000.6.0f1** (ver la guía de instalación más abajo).
 2. Al abrir por primera vez Unity regenera `Library/` y los paquetes (toma unos minutos).
-3. Pulsar Play para ver el edificio: columnas, vigas, muros, lozas y los 6 diafragmas.
+3. Abrir `Assets/Scenes/SampleScene.unity` desde la ventana Project y pulsar **Play** para ver el edificio: columnas, vigas, muros, lozas y los 6 diafragmas.
 4. Usar las pestañas `Visualización`, `Modificaciones`, `Análisis` y `Datos`.
 5. En `Visualización`, buscar por tipo+ID o hacer clic en un elemento para abrir su inspector.
 6. En `Modificaciones`, aplicar `Base`, `Mod A`, `Mod B` o `Caso C` desde Unity.
@@ -218,14 +247,29 @@ python scripts/ejecutar_modificacion.py --restore
 
 ## Verificaciones
 
+Ejecutar la suite Python completa desde la **raíz del repositorio**:
+
 ```bash
-cd tests
-python test_equilibrium.py
-python test_superposicion.py
-python test_areas_tributarias.py
-python test_camino_carga.py
-python test_empalmes_viga_viga.py
-python test_fiber_sections.py
+python -m pytest tests -q
+```
+
+Debe terminar sin tests fallidos y con código de salida 0. Para revisar solo
+un módulo, por ejemplo las secciones de fibras:
+
+```bash
+python -m pytest tests/test_fiber_sections.py -v
+```
+
+Usar pytest: algunos archivos contienen funciones y fixtures de prueba que no
+se ejecutan al invocarlos simplemente con `python archivo.py`. La suite incluye
+equilibrio, superposición, áreas tributarias, camino de carga, empalmes,
+secciones de fibras y pruebas del backend/validación H4.
+
+La combinación de resultados del visor C# tiene una comprobación adicional
+para Windows, también desde la raíz:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\test_viewer_combination.ps1
 ```
 
 Además hay verificaciones *ad hoc* en `opensees/test_asymmetric.py`, `opensees/test_eleforce.py`, `opensees/verificador_camino_carga.py`, `fiber_sections/verification_ha.py` y en el módulo de capacidad (`scripts/sensibilidad_secciones.py`, `scripts/comparacion_rc.py`, `scripts/demanda_capacidad.py`). El detalle del modelo (masa por piso, momentos, equilibrios) queda auditado en consola por `opensees_edificio_v2.py`; resumen en `resultados/08_verificacion/verification.md`, con resultados RC en `verificacion_rc.json`.
@@ -597,8 +641,17 @@ Queda confirmar la versión final v11 y archivar la prueba de imagen estéreo y
 head tracking con visor Cardboard antes de declarar H1 validado físicamente.
 El [informe de Semana 7](reports/semana07.md) reúne H4 y la implementación de H1.
 
+## Entrega final
+
+La entrega se identifica con el tag **`v1.0.0`**. El APK Android AR/VR v11, el informe PDF, el informe Markdown y sus checksums se distribuyen desde la [Release final en GitHub](https://github.com/vaurmeneta-22/P1-Grupo-6/releases/tag/v1.0.0). El código fuente y las configuraciones corresponden al commit señalado por ese tag.
+
+Para instalar la app, descargar `P1_Grupo6_AR_VR_v11.apk` desde **Assets** de la Release. Usar Android 10 o superior, ARM64 y un teléfono compatible con ARCore para el modo AR. El APK no se almacena dentro del historial Git. Las instrucciones de escritorio, H4, análisis, tests y compilación están en las secciones anteriores.
+
 ## Documentación complementaria
 
+- [Informe final](reports/final.md) — informe Markdown con resultados, QA, contribuciones, H1/H4, limitaciones e instrucciones reproducibles.
+- [Informe final original en PDF](reports/Informe_Final_Grupo6_P1_MCOMP.pdf).
+- [Notas de la Release final](reports/release_final.md) — archivos de entrega, instrucciones de uso y comprobaciones del APK.
 - [Avance Semana 1](reports/semana01.md) — benchmark y convenciones.
 - [Avance Semana 2](reports/semana02.md) — modelo y áreas tributarias.
 - [Avance Semana 5](reports/semana05.md) — laboratorio interactivo, modificaciones y superposición.
